@@ -273,12 +273,39 @@ app.post('/api/cards', (req, res) => {
     tags: [],
     imageUrl: null,
     todos: [],
+    issues: [],
+    order: Date.now(),
     createdAt: now,
     updatedAt: now
   };
   data.cards.push(card);
   writeData(data);
   res.status(201).json(card);
+});
+
+app.put('/api/cards/reorder', (req, res) => {
+  const { column, order } = req.body;
+  if (!COLUMNS.includes(column)) {
+    return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
+  }
+  if (!Array.isArray(order)) {
+    return res.status(400).json({ error: 'order must be an array of card ids' });
+  }
+  const data = readData();
+  order.forEach((id, index) => {
+    const card = data.cards.find((c) => c.id === id);
+    if (!card) return;
+    if (card.column !== column) {
+      if (column === 'published') {
+        card.publishedAt = new Date().toISOString();
+      }
+      card.column = column;
+      card.updatedAt = new Date().toISOString();
+    }
+    card.order = index;
+  });
+  writeData(data);
+  res.json(readData());
 });
 
 app.post('/api/cards/:id/image', (req, res) => {
@@ -326,7 +353,7 @@ app.patch('/api/cards/:id', (req, res) => {
   const card = data.cards.find((c) => c.id === req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
 
-  const { title, description, column, status, rejectionReason, tags, todos } = req.body;
+  const { title, description, column, status, rejectionReason, tags, todos, issues } = req.body;
   if (title !== undefined) {
     if (typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({ error: 'title must be a non-empty string' });
@@ -350,6 +377,15 @@ app.patch('/api/cards/:id', (req, res) => {
       return res.status(400).json({ error: `todos must be an array of { id, text, status } where status is one of: ${TODO_STATUSES.join(', ')}` });
     }
     card.todos = todos.map((t) => ({ id: t.id, text: t.text.trim(), status: t.status }));
+  }
+  if (issues !== undefined) {
+    const valid = Array.isArray(issues) && issues.every(
+      (t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim()
+    );
+    if (!valid) {
+      return res.status(400).json({ error: 'issues must be an array of { id, text }' });
+    }
+    card.issues = issues.map((t) => ({ id: t.id, text: t.text.trim() }));
   }
   if (column !== undefined) {
     if (!COLUMNS.includes(column)) {

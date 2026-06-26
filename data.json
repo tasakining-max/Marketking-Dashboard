@@ -40,9 +40,17 @@
       "status": "active",
       "rejectionReason": "",
       "createdAt": "2026-06-25T06:26:47.211Z",
-      "updatedAt": "2026-06-26T01:58:34.636Z",
+      "updatedAt": "2026-06-26T02:38:00.171Z",
       "tags": [
         "office"
+      ],
+      "order": 1,
+      "todos": [],
+      "issues": [
+        {
+          "id": "384b6d64-2c5a-4e7a-b69c-710406384d0f",
+          "text": "ขอคิว ขอความรู้ สัมภาษณ์ วิศวกร ได้มั้ยคะ?"
+        }
       ]
     },
     {
@@ -56,7 +64,8 @@
       "updatedAt": "2026-06-25T08:44:54.046Z",
       "tags": [
         "archive"
-      ]
+      ],
+      "order": 1
     },
     {
       "id": "3b23e7b3-fc4a-4d9c-b518-6ef03f092fb5",
@@ -66,7 +75,8 @@
       "status": "active",
       "rejectionReason": "",
       "createdAt": "2026-06-25T06:27:04.531Z",
-      "updatedAt": "2026-06-25T06:27:04.531Z"
+      "updatedAt": "2026-06-25T06:27:04.531Z",
+      "order": 0
     },
     {
       "id": "6499d908-9e43-44fc-b1fb-9973179d5802",
@@ -79,7 +89,8 @@
       "updatedAt": "2026-06-25T09:26:05.405Z",
       "tags": [
         "factory"
-      ]
+      ],
+      "order": 2
     },
     {
       "id": "1d6df026-0c20-4b43-9e28-46551175a67d",
@@ -93,7 +104,7 @@
         "motion"
       ],
       "createdAt": "2026-06-25T08:37:51.025Z",
-      "updatedAt": "2026-06-26T01:58:37.495Z",
+      "updatedAt": "2026-06-26T02:26:41.523Z",
       "imageUrl": "/uploads/1d6df026-0c20-4b43-9e28-46551175a67d-1782379163628.png",
       "todos": [
         {
@@ -109,7 +120,7 @@
         {
           "id": "b4ed01f9-5c7d-4254-8f4f-6e8b90a7e989",
           "text": "ค้นหาวิดีโอ dealer เด็ดๆมาตัดต่อ",
-          "status": "plan"
+          "status": "in_progress"
         },
         {
           "id": "8046bb0c-9aff-4562-a2f7-c14486ff41ea",
@@ -121,7 +132,8 @@
           "text": "ส่งพี่ดาตรวจสอบ รอการอนุมัติ",
           "status": "plan"
         }
-      ]
+      ],
+      "order": 0
     }
   ]
 }

@@ -61,6 +61,7 @@
     <aside id="websiteChangelogPanel" class="key-messages-panel right-panel collapsible-panel">
       <div class="panel-header-row">
         <h2><span class="panel-icon">🌐</span><span class="panel-title-text"> Tasaki Website Updates</span></h2>
+        <button id="websiteChangelogRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
         <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
       </div>
       <p class="key-messages-hint">ความคืบหน้าของเว็บไซต์ <a id="websiteChangelogLink" href="#" target="_blank" rel="noopener">tasaki-web-cyan.vercel.app</a></p>
@@ -70,6 +71,7 @@
     <aside id="marketingChangelogPanel" class="key-messages-panel right-panel collapsible-panel">
       <div class="panel-header-row">
         <h2><span class="panel-icon">🛠</span><span class="panel-title-text"> Marketing System Updates</span></h2>
+        <button id="marketingChangelogRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
         <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
       </div>
       <p class="key-messages-hint">ความคืบหน้าของเครื่องมือนี้เอง (localhost:5050)</p>
@@ -123,6 +125,14 @@
         <div class="todo-add-row">
           <input type="text" id="cardTodoInput" placeholder="เพิ่มสิ่งที่ต้องทำ..." maxlength="200" />
           <button type="button" id="cardTodoAddBtn">+ Add</button>
+        </div>
+      </fieldset>
+      <fieldset id="cardIssueLabel" class="todo-fieldset issue-fieldset" hidden>
+        <legend>⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ</legend>
+        <div id="cardIssueList" class="todo-list"></div>
+        <div class="todo-add-row">
+          <input type="text" id="cardIssueInput" placeholder="เพิ่มปัญหา หรือสิ่งที่ต้องการความช่วยเหลือ..." maxlength="200" />
+          <button type="button" id="cardIssueAddBtn">+ Add</button>
         </div>
       </fieldset>
       <div class="dialog-actions">

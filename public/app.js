@@ -31,6 +31,10 @@ const todoLabel = document.getElementById('cardTodoLabel');
 const todoListEl = document.getElementById('cardTodoList');
 const todoInput = document.getElementById('cardTodoInput');
 const todoAddBtn = document.getElementById('cardTodoAddBtn');
+const issueLabel = document.getElementById('cardIssueLabel');
+const issueListEl = document.getElementById('cardIssueList');
+const issueInput = document.getElementById('cardIssueInput');
+const issueAddBtn = document.getElementById('cardIssueAddBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const lightboxDialog = document.getElementById('lightboxDialog');
 const lightboxImage = document.getElementById('lightboxImage');
@@ -61,10 +65,12 @@ let draggingId = null;
 let pendingImageDataUrl = null;
 let removeImageRequested = false;
 let pendingTodos = [];
+let pendingIssues = [];
+let draggingIssueId = null;
 
 function signature(data) {
   return JSON.stringify(
-    data.cards.map((c) => [c.id, c.title, c.description, c.column, c.status, c.rejectionReason, c.tags, c.imageUrl, c.todos, c.updatedAt])
+    data.cards.map((c) => [c.id, c.title, c.description, c.column, c.status, c.rejectionReason, c.tags, c.imageUrl, c.todos, c.issues, c.order, c.updatedAt])
   );
 }
 
@@ -78,6 +84,10 @@ async function fetchCards() {
   }
 }
 
+function orderValue(card) {
+  return card.order ?? new Date(card.createdAt).getTime();
+}
+
 function render(cards) {
   const active = cards.filter((c) => c.status !== 'rejected');
   for (const column of COLUMNS) {
@@ -85,7 +95,7 @@ function render(cards) {
     container.innerHTML = '';
     active
       .filter((c) => c.column === column)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .sort((a, b) => orderValue(a) - orderValue(b))
       .forEach((card) => container.appendChild(renderCard(card)));
   }
   renderRejected(cards.filter((c) => c.status === 'rejected'));
@@ -231,6 +241,14 @@ function renderCard(card) {
     el.appendChild(progressWrap);
   }
 
+  if (card.column === 'clip' && Array.isArray(card.issues) && card.issues.length) {
+    const issueBadge = document.createElement('div');
+    issueBadge.className = 'issue-badge';
+    issueBadge.textContent = `⚠️ ${card.issues.length} ปัญหา`;
+    issueBadge.title = card.issues.map((i) => i.text).join('\n');
+    el.appendChild(issueBadge);
+  }
+
   if (isPublished) {
     const publishedLabel = document.createElement('p');
     publishedLabel.className = 'published-date';
@@ -345,18 +363,42 @@ function renderCard(card) {
     draggingId = null;
     el.classList.remove('dragging');
   });
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggingId || draggingId === card.id) return;
+    const container = el.parentElement;
+    const column = container.dataset.columnCards;
+    const ids = Array.from(container.children).map((c) => c.dataset.id);
+    const fromIdx = ids.indexOf(draggingId);
+    if (fromIdx !== -1) ids.splice(fromIdx, 1);
+    const toIdx = ids.indexOf(card.id);
+    ids.splice(toIdx, 0, draggingId);
+    await reorderCards(column, ids);
+  });
 
   return el;
 }
 
-async function moveCard(id, column) {
-  await fetch(`/api/cards/${id}`, {
-    method: 'PATCH',
+async function reorderCards(column, ids) {
+  await fetch('/api/cards/reorder', {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ column })
+    body: JSON.stringify({ column, order: ids })
   });
   lastSignature = null;
   fetchCards();
+}
+
+async function moveCard(id, column) {
+  const container = board.querySelector(`[data-column-cards="${column}"]`);
+  const ids = Array.from(container.children).map((c) => c.dataset.id).filter((i) => i !== id);
+  ids.push(id);
+  await reorderCards(column, ids);
 }
 
 board.querySelectorAll('.column').forEach((columnEl) => {
@@ -500,6 +542,78 @@ todoInput.addEventListener('keydown', (e) => {
   }
 });
 
+function renderIssueList() {
+  issueListEl.innerHTML = '';
+  pendingIssues.forEach((issue) => {
+    const item = document.createElement('div');
+    item.className = 'todo-item';
+    item.draggable = true;
+    item.dataset.id = issue.id;
+
+    const handle = document.createElement('span');
+    handle.className = 'todo-drag-handle';
+    handle.setAttribute('aria-label', 'Drag to reorder');
+    handle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>';
+    item.appendChild(handle);
+
+    const text = document.createElement('span');
+    text.className = 'todo-text';
+    text.textContent = issue.text;
+    item.appendChild(text);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'todo-delete';
+    del.setAttribute('aria-label', 'Delete issue');
+    del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h1v-8H10zm3 0v8h1v-8h-1z"/></svg>';
+    del.addEventListener('click', () => {
+      pendingIssues = pendingIssues.filter((i) => i.id !== issue.id);
+      renderIssueList();
+    });
+    item.appendChild(del);
+
+    item.addEventListener('dragstart', () => {
+      draggingIssueId = issue.id;
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => {
+      draggingIssueId = null;
+      item.classList.remove('dragging');
+    });
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!draggingIssueId || draggingIssueId === issue.id) return;
+      const fromIdx = pendingIssues.findIndex((i) => i.id === draggingIssueId);
+      const toIdx = pendingIssues.findIndex((i) => i.id === issue.id);
+      const [moved] = pendingIssues.splice(fromIdx, 1);
+      pendingIssues.splice(toIdx, 0, moved);
+      renderIssueList();
+    });
+
+    issueListEl.appendChild(item);
+  });
+}
+
+function addIssue() {
+  const text = issueInput.value.trim();
+  if (!text) return;
+  pendingIssues.push({ id: crypto.randomUUID(), text });
+  issueInput.value = '';
+  renderIssueList();
+  issueInput.focus();
+}
+
+issueAddBtn.addEventListener('click', addIssue);
+issueInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addIssue();
+  }
+});
+
 function openDialog(card) {
   editingId = card ? card.id : null;
   dialogTitle.textContent = card ? 'Edit Card' : 'New Idea';
@@ -513,6 +627,10 @@ function openDialog(card) {
   pendingTodos = ((card && card.todos) || []).map((t) => ({ ...t }));
   todoInput.value = '';
   renderTodoList();
+  issueLabel.hidden = !(card && card.column === 'clip');
+  pendingIssues = ((card && card.issues) || []).map((i) => ({ ...i }));
+  issueInput.value = '';
+  renderIssueList();
   cardImageInput.value = '';
   pendingImageDataUrl = null;
   removeImageRequested = false;
@@ -551,6 +669,9 @@ form.addEventListener('submit', async (e) => {
   }
   if (!todoLabel.hidden) {
     payload.todos = pendingTodos;
+  }
+  if (!issueLabel.hidden) {
+    payload.issues = pendingIssues;
   }
   let cardId = editingId;
   if (editingId) {
@@ -760,7 +881,7 @@ function renderChangelogEntries(container, entries) {
     container.innerHTML = '<p class="empty-state">No updates logged yet.</p>';
     return;
   }
-  entries.forEach((entry) => {
+  [...entries].reverse().forEach((entry) => {
     const item = document.createElement('div');
     item.className = 'changelog-entry';
     const date = document.createElement('p');
@@ -782,6 +903,19 @@ function renderWebsiteChangelog(entries) {
 fetchWebsiteChangelog();
 setInterval(fetchWebsiteChangelog, POLL_INTERVAL_MS);
 
+function spinRefreshBtn(btn) {
+  btn.classList.add('spinning');
+  setTimeout(() => btn.classList.remove('spinning'), 500);
+}
+
+const websiteChangelogRefreshBtn = document.getElementById('websiteChangelogRefreshBtn');
+websiteChangelogRefreshBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  spinRefreshBtn(websiteChangelogRefreshBtn);
+  websiteChangelogSignature = null;
+  fetchWebsiteChangelog();
+});
+
 const marketingChangelogList = document.getElementById('marketingChangelogList');
 let marketingChangelogSignature = null;
 
@@ -797,6 +931,14 @@ async function fetchMarketingChangelog() {
 
 fetchMarketingChangelog();
 setInterval(fetchMarketingChangelog, POLL_INTERVAL_MS);
+
+const marketingChangelogRefreshBtn = document.getElementById('marketingChangelogRefreshBtn');
+marketingChangelogRefreshBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  spinRefreshBtn(marketingChangelogRefreshBtn);
+  marketingChangelogSignature = null;
+  fetchMarketingChangelog();
+});
 
 const summaryBtn = document.getElementById('summaryBtn');
 const summaryDialog = document.getElementById('summaryDialog');
@@ -836,43 +978,65 @@ async function buildSummary() {
   const websiteUpdatesToday = (changelogRes.entries || []).filter((e) => e.date === todayKey());
   const marketingUpdatesToday = (marketingChangelogRes.entries || []).filter((e) => e.date === todayKey());
 
+  const activeClips = cards.filter((c) => c.column === 'clip' && c.status !== 'rejected');
+  const clipsWithTodos = activeClips.filter((c) => Array.isArray(c.todos) && c.todos.length);
+  const clipsWithIssues = activeClips.filter((c) => Array.isArray(c.issues) && c.issues.length);
+
   const lines = [];
   lines.push(`📅 สรุปงานวันนี้ — ${thaiDateToday()}`);
   lines.push('');
 
   if (publishedToday.length) {
-    lines.push(`✅ เผยแพร่คอนเทนต์แล้ว (${publishedToday.length})`);
+    lines.push(`✅ ลงคอนเทนต์เสร็จแล้ววันนี้ (${publishedToday.length})`);
     publishedToday.forEach((c) => lines.push(`- ${c.title}`));
     lines.push('');
   }
   if (movedToClip.length) {
-    lines.push(`🎬 เข้าสู่ขั้นตอนถ่ายคลิป (${movedToClip.length})`);
+    lines.push(`🎬 เริ่มทำคลิปวันนี้ (${movedToClip.length})`);
     movedToClip.forEach((c) => lines.push(`- ${c.title}`));
     lines.push('');
   }
+  if (clipsWithTodos.length) {
+    lines.push(`🎬 ความคืบหน้าคลิปที่กำลังทำอยู่ (${clipsWithTodos.length})`);
+    clipsWithTodos.forEach((c) => {
+      const total = c.todos.length;
+      const done = c.todos.filter((t) => t.status === 'done').length;
+      const statusText = done === total ? 'ทำเสร็จหมดแล้ว รอตรวจ' : `ทำไปแล้ว ${done} จาก ${total} เรื่อง`;
+      lines.push(`- ${c.title} (${statusText})`);
+    });
+    lines.push('');
+  }
+  if (clipsWithIssues.length) {
+    lines.push(`🆘 มีเรื่องต้องขอความช่วยเหลือ (${clipsWithIssues.length} คลิป)`);
+    clipsWithIssues.forEach((c) => {
+      lines.push(`- ${c.title}:`);
+      c.issues.forEach((i) => lines.push(`   • ${i.text}`));
+    });
+    lines.push('');
+  }
   if (newIdeas.length) {
-    lines.push(`💡 ไอเดียคอนเทนต์ใหม่ (${newIdeas.length})`);
+    lines.push(`💡 ไอเดียใหม่วันนี้ (${newIdeas.length})`);
     newIdeas.forEach((c) => lines.push(`- ${c.title}`));
     lines.push('');
   }
   if (rejectedToday.length) {
-    lines.push(`🗑 ไอเดีย ai ที่ไม่ผ่าน (สั่งให้เรียนรู้) (${rejectedToday.length})`);
+    lines.push(`🗑 ไอเดียที่ตีกลับวันนี้ (${rejectedToday.length})`);
     rejectedToday.forEach((c) => lines.push(`- ${c.title} (เหตุผล: ${c.rejectionReason})`));
     lines.push('');
   }
   if (websiteUpdatesToday.length) {
-    lines.push(`🌐 อัปเดตเว็บไซต์ Tasaki (${websiteUpdatesToday.length})`);
+    lines.push(`🌐 อัปเดตเว็บไซต์วันนี้ (${websiteUpdatesToday.length})`);
     websiteUpdatesToday.forEach((e) => lines.push(`- ${e.feature}`));
     lines.push('');
   }
   if (marketingUpdatesToday.length) {
-    lines.push(`🛠 Marketing System Updates (${marketingUpdatesToday.length})`);
+    lines.push(`🛠 ปรับปรุงเครื่องมือทำงานวันนี้ (${marketingUpdatesToday.length})`);
     marketingUpdatesToday.forEach((e) => lines.push(`- ${e.feature}`));
     lines.push('');
   }
 
   if (lines.length === 2) {
-    lines.push('ยังไม่มีความเคลื่อนไหวในวันนี้');
+    lines.push('วันนี้ยังไม่มีความเคลื่อนไหว');
   }
 
   return lines.join('\n').trim();
