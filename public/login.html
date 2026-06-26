@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Login — Marketing Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f5f7;
+  }
+  .login-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 16px rgba(9,30,66,0.12);
+    padding: 32px;
+    width: min(360px, 90vw);
+  }
+  .login-card h1 {
+    font-size: 18px;
+    margin: 0 0 4px;
+    color: #172b4d;
+  }
+  .login-card p {
+    font-size: 13px;
+    color: #5e6c84;
+    margin: 0 0 20px;
+  }
+  .login-card input {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px;
+    border: 1px solid #dfe1e6;
+    border-radius: 6px;
+    margin-bottom: 12px;
+  }
+  .login-card button {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    background: #0079bf;
+    color: white;
+    cursor: pointer;
+  }
+  .login-card button:hover { background: #026aa7; }
+  .error-msg {
+    color: #c0392b;
+    font-size: 13px;
+    margin: 0 0 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div class="login-card">
+    <h1>📋 Marketing Pipeline</h1>
+    <p>กรอกรหัสผ่านเพื่อเข้าดูแดชบอร์ด</p>
+    <p class="error-msg" id="errorMsg">รหัสผ่านไม่ถูกต้อง</p>
+    <form id="loginForm">
+      <input type="password" id="passwordInput" placeholder="Password" autofocus required />
+      <button type="submit">Log In</button>
+    </form>
+  </div>
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorMsg = document.getElementById('errorMsg');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+      const password = document.getElementById('passwordInput').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      if (res.ok) {
+        window.location.href = '/index.html';
+      } else {
+        errorMsg.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "marketing-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard for tracking marketing content: Idea Content -> Short Clip -> Published",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

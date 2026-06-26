@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mission Control</title>
+<link rel="stylesheet" href="control.css" />
+</head>
+<body>
+  <header>
+    <h1>Mission Control</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/control.html" class="nav-link active">🛰 Mission Control</a>
+    </nav>
+    <button id="logBtn" class="add-btn">+ Log Activity</button>
+  </header>
+
+  <main class="control-main">
+    <section class="status-row">
+      <div class="status-card">
+        <span class="status-label">Gateway</span>
+        <span id="gatewayStatus" class="status-value">
+          <span class="dot"></span> Checking...
+        </span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Last Restart</span>
+        <span id="lastRestart" class="status-value">—</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Last Activity</span>
+        <span id="lastActivity" class="status-value">—</span>
+      </div>
+    </section>
+
+    <section class="control-panel">
+      <h2>🤖 Agent Bots</h2>
+      <div id="botList" class="bot-list"></div>
+    </section>
+
+    <section class="control-panel">
+      <h2>⏰ Scheduled Jobs</h2>
+      <div id="cronList" class="cron-list"></div>
+    </section>
+
+    <section class="control-panel">
+      <div class="panel-header">
+        <h2>📜 Activity Feed</h2>
+        <button id="clearBtn" class="clear-btn">Clear log</button>
+      </div>
+      <div id="activityFeed" class="activity-feed"></div>
+    </section>
+  </main>
+
+  <dialog id="logDialog">
+    <form id="logForm">
+      <h3>Log Activity</h3>
+      <label>Message<textarea id="logMessage" rows="3" required></textarea></label>
+      <label>Type
+        <select id="logType">
+          <option value="info">Info</option>
+          <option value="success">Success</option>
+          <option value="warning">Warning</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="logCancelBtn">Cancel</button>
+        <button type="submit">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="control.js"></script>
+</body>
+</html>
