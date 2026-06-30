@@ -18,12 +18,46 @@
     <h1>Marketing Pipeline</h1>
     <nav class="top-nav">
       <a href="/index.html" class="nav-link active">📋 Marketing Pipeline</a>
+      <a href="/report.html" class="nav-link">📊 Reports</a>
       <a href="/control.html" class="nav-link">🛰 Mission Control</a>
     </nav>
     <button id="addBtn" class="add-btn">+ New Idea</button>
     <button id="summaryBtn" class="add-btn" type="button">📋 สรุปงานวันนี้</button>
     <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+    <button id="profileBtn" class="profile-header-btn" type="button" title="Edit profile" aria-label="Edit profile">
+      <span id="profileHeaderAvatar" class="profile-avatar-sm"></span>
+    </button>
   </header>
+
+  <dialog id="profileDialog">
+    <form id="profileForm">
+      <h3>Your Profile</h3>
+      <div class="profile-avatar-picker">
+        <div class="profile-avatar-picker-wrap">
+          <span id="profilePreviewAvatar" class="profile-avatar-lg" title="Click to change photo"></span>
+          <span class="profile-avatar-camera">📷</span>
+        </div>
+        <input type="file" id="profileImageInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+        <p class="profile-photo-hint">แตะรูปเพื่อเปลี่ยนภาพ</p>
+      </div>
+      <div class="profile-field">
+        <label for="profileName">ชื่อที่แสดง</label>
+        <input type="text" id="profileName" maxlength="40" placeholder="กรอกชื่อของคุณ" required />
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="profileCancelBtn">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+    <div class="profile-switcher">
+      <p class="profile-switcher-label">Team Profiles</p>
+      <div id="profileSwitcherList" class="profile-switcher-list"></div>
+      <div class="profile-add-row">
+        <input type="text" id="profileAddName" placeholder="Add person name…" maxlength="40" />
+        <button type="button" id="profileAddBtn">+ Add</button>
+      </div>
+    </div>
+  </dialog>
 
   <div class="layout">
     <aside id="keyMessagesPanel" class="key-messages-panel collapsible-panel">
@@ -45,6 +79,11 @@
         <section class="column" data-column="clip">
           <h2>🎬 Short Clip</h2>
           <div class="cards" data-column-cards="clip"></div>
+        </section>
+        <!-- youtube column hidden for now -->
+        <section class="column" data-column="youtube" hidden>
+          <h2>🎥 Youtube</h2>
+          <div class="cards" data-column-cards="youtube"></div>
         </section>
         <section class="column" data-column="published">
           <h2>✅ Published (Done)</h2>
@@ -103,40 +142,80 @@
 
   <dialog id="cardDialog">
     <form id="cardForm">
-      <h3 id="dialogTitle">New Idea</h3>
-      <label>Title<input type="text" id="cardTitle" required maxlength="200" /></label>
-      <label>Description / Notes<textarea id="cardDescription" rows="4"></textarea></label>
-      <label>Image<input type="file" id="cardImageInput" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
-      <div id="cardImagePreviewWrap" class="card-image-preview-wrap" hidden>
-        <img id="cardImagePreview" class="card-image-preview" alt="Preview" title="Click to view full size" draggable="false" />
-        <button type="button" id="cardImageRemoveBtn" class="danger">Remove image</button>
+      <div class="card-form-header">
+        <h3 id="dialogTitle">New Idea</h3>
       </div>
-      <fieldset id="cardTagLabel" class="tag-fieldset" hidden>
-        <legend>Clip type (เลือกได้มากกว่า 1)</legend>
-        <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="factory" /> 🏭 ถ่ายที่โรงงาน</label>
-        <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="office" /> 🏢 ถ่ายที่ออฟฟิศ</label>
-        <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="ai" /> 🤖 AI VDO</label>
-        <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="archive" /> 🗂 ใช้รูป/วิดีโอเก่า</label>
-        <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="motion" /> 🎨 Motion Graphic</label>
-      </fieldset>
-      <fieldset id="cardTodoLabel" class="todo-fieldset" hidden>
-        <legend>To-do list</legend>
-        <div id="cardTodoList" class="todo-list"></div>
-        <div class="todo-add-row">
-          <input type="text" id="cardTodoInput" placeholder="เพิ่มสิ่งที่ต้องทำ..." maxlength="200" />
-          <button type="button" id="cardTodoAddBtn">+ Add</button>
+      <div class="card-form-body">
+        <div class="card-form-left">
+          <label>Title<input type="text" id="cardTitle" required maxlength="200" /></label>
+          <label>Description / Notes<textarea id="cardDescription" rows="4"></textarea></label>
+          <label>Image<input type="file" id="cardImageInput" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
+          <div id="cardImagePreviewWrap" class="card-image-preview-wrap" hidden>
+            <img id="cardImagePreview" class="card-image-preview" alt="Preview" title="Click to view full size" draggable="false" />
+            <button type="button" id="cardImageRemoveBtn" class="danger">Remove image</button>
+          </div>
+          <fieldset id="cardIdeaTagLabel" class="tag-fieldset" hidden>
+            <legend>Content type (เลือกได้ 1 อย่าง)</legend>
+            <label class="tag-checkbox"><input type="radio" name="cardIdeaTag" value="knowledge" /> 🧠 ความรู้</label>
+            <label class="tag-checkbox"><input type="radio" name="cardIdeaTag" value="product" /> 📦 สินค้า</label>
+            <label class="tag-checkbox"><input type="radio" name="cardIdeaTag" value="trend" /> 🔥 เทรนด์</label>
+            <label class="tag-checkbox"><input type="radio" name="cardIdeaTag" value="branding" /> 🛡️ ความน่าเชื่อถือ/แบรนดิ้ง</label>
+          </fieldset>
+          <fieldset id="cardTagLabel" class="tag-fieldset" hidden>
+            <legend>Clip type (เลือกได้มากกว่า 1)</legend>
+            <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="factory" /> 🏭 ถ่ายที่โรงงาน</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="office" /> 🏢 ถ่ายที่ออฟฟิศ</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="ai" /> 🤖 AI VDO</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="archive" /> 🗂 ใช้รูป/วิดีโอเก่า</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardTag" value="motion" /> 🎨 Motion Graphic</label>
+          </fieldset>
+          <fieldset id="cardPlatformLabel" class="tag-fieldset" hidden>
+            <legend>Platform (เลือกได้มากกว่า 1)</legend>
+            <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="facebook" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/facebook.png" alt="" /></span> Facebook</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="instagram" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/instagram.jpeg" alt="" /></span> Instagram</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="tiktok" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/tiktok.jpg" alt="" /></span> TikTok</label>
+            <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="youtube" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/youtube.png" alt="" /></span> YouTube</label>
+          </fieldset>
+          <fieldset id="cardTodoLabel" class="todo-fieldset" hidden>
+            <legend>To-do list</legend>
+            <div id="cardTodoList" class="todo-list"></div>
+            <div class="todo-add-row">
+              <input type="text" id="cardTodoInput" placeholder="เพิ่มสิ่งที่ต้องทำ..." maxlength="200" />
+              <button type="button" id="cardTodoAddBtn">+ Add</button>
+            </div>
+          </fieldset>
+          <fieldset class="link-fieldset">
+            <legend>🔗 Links</legend>
+            <div id="cardLinkList" class="link-list"></div>
+            <div class="link-add-row">
+              <input type="text" id="cardLinkLabel" placeholder="Label (optional)" maxlength="80" />
+              <input type="url" id="cardLinkUrl" placeholder="https://..." maxlength="2000" />
+              <button type="button" id="cardLinkAddBtn">+ Add</button>
+            </div>
+          </fieldset>
+          <fieldset id="cardIssueLabel" class="todo-fieldset issue-fieldset" hidden>
+            <legend>⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ</legend>
+            <div id="cardIssueList" class="todo-list"></div>
+            <div class="todo-add-row">
+              <input type="text" id="cardIssueInput" placeholder="เพิ่มปัญหา หรือสิ่งที่ต้องการความช่วยเหลือ..." maxlength="200" />
+              <button type="button" id="cardIssueAddBtn">+ Add</button>
+            </div>
+          </fieldset>
         </div>
-      </fieldset>
-      <fieldset id="cardIssueLabel" class="todo-fieldset issue-fieldset" hidden>
-        <legend>⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ</legend>
-        <div id="cardIssueList" class="todo-list"></div>
-        <div class="todo-add-row">
-          <input type="text" id="cardIssueInput" placeholder="เพิ่มปัญหา หรือสิ่งที่ต้องการความช่วยเหลือ..." maxlength="200" />
-          <button type="button" id="cardIssueAddBtn">+ Add</button>
+        <div id="cardCommentLabel" class="card-form-right" hidden>
+          <div class="card-form-right-header">💬 Comments</div>
+          <div id="cardCommentList" class="comment-list"></div>
+          <div class="comment-add-row" style="position:relative;">
+            <span id="commentAuthorAvatar" class="profile-avatar-sm"></span>
+            <input type="text" id="cardCommentInput" placeholder="Add a comment… type @ to tag someone" maxlength="500" />
+            <button type="button" id="cardCommentAddBtn">Post</button>
+            <ul id="mentionDropdown" class="mention-dropdown" hidden></ul>
+          </div>
         </div>
-      </fieldset>
+      </div>
       <div class="dialog-actions">
         <button type="button" id="deleteBtn" class="danger" hidden>Delete</button>
+        <a id="backToReportBtn" href="/report.html" class="btn-back-report" hidden>← Back to Report</a>
         <button type="button" id="cancelBtn">Cancel</button>
         <button type="submit">Save</button>
       </div>
@@ -147,6 +226,7 @@
     <img id="lightboxImage" alt="Full size image" />
   </dialog>
 
+  <div id="toastContainer" class="toast-container"></div>
   <script src="app.js"></script>
 </body>
 </html>

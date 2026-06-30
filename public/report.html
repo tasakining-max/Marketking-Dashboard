@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reports — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>Reports</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/report.html" class="nav-link active">📊 Reports</a>
+      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <main class="report-main">
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📆 Calendar Published</h2>
+        <div class="report-nav">
+          <button id="calPrevBtn" class="report-nav-btn" type="button">←</button>
+          <span id="calMonthLabel" class="report-range-label"></span>
+          <button id="calNextBtn" class="report-nav-btn" type="button">→</button>
+        </div>
+      </div>
+      <div id="calendarGrid" class="cal-grid-wrap"></div>
+      <div id="calDayPopover" class="cal-day-popover" hidden>
+        <div class="cal-day-popover-header">
+          <span id="calDayPopoverTitle" class="cal-day-popover-date"></span>
+          <button id="calDayPopoverClose" class="cal-day-popover-close" type="button">✕</button>
+        </div>
+        <div id="calDayPopoverList" class="cal-day-popover-list"></div>
+      </div>
+    </section>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📅 รายงานรายสัปดาห์</h2>
+        <div class="report-nav">
+          <button id="weekPrevBtn" class="report-nav-btn" type="button">←</button>
+          <span id="weekRangeLabel" class="report-range-label"></span>
+          <button id="weekNextBtn" class="report-nav-btn" type="button">→</button>
+        </div>
+      </div>
+
+      <div class="report-goal-card">
+        <p class="report-goal-title">🎯 เป้าหมาย: คลิป Reel ลง Facebook + TikTok สัปดาห์ละ 3 ชิ้น</p>
+        <div class="progress-tank report-goal-tank">
+          <div id="weekGoalFill" class="progress-tank-fill done-fill" style="width:0%"></div>
+          <span id="weekGoalLabel" class="progress-tank-label">0/3</span>
+        </div>
+      </div>
+
+      <div id="weekPlatformGrid" class="report-platform-grid"></div>
+
+      <div class="report-list-wrap">
+        <h3>คอนเทนต์ที่เผยแพร่สัปดาห์นี้</h3>
+        <div id="weekPublishedList" class="report-published-list"></div>
+      </div>
+    </section>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>🗓 รายงานรายเดือน</h2>
+        <div class="report-nav">
+          <button id="monthPrevBtn" class="report-nav-btn" type="button">←</button>
+          <span id="monthRangeLabel" class="report-range-label"></span>
+          <button id="monthNextBtn" class="report-nav-btn" type="button">→</button>
+        </div>
+      </div>
+
+      <div class="report-goal-card">
+        <p class="report-goal-title">🎯 เป้าหมาย: วิดีโอยาวคุณภาพสูงลง YouTube เดือนละ 1 ชิ้น</p>
+        <div class="progress-tank report-goal-tank">
+          <div id="monthGoalFill" class="progress-tank-fill done-fill" style="width:0%"></div>
+          <span id="monthGoalLabel" class="progress-tank-label">0/1</span>
+        </div>
+      </div>
+
+      <div id="monthPlatformGrid" class="report-platform-grid"></div>
+
+      <div class="report-list-wrap">
+        <h3>คอนเทนต์ที่เผยแพร่เดือนนี้</h3>
+        <div id="monthPublishedList" class="report-published-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="report.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const ACTIVITY_FILE = path.join(__dirname, 'activity.json');
 const KEY_MESSAGES_FILE = path.join(__dirname, 'key-messages.json');
 const MARKETING_CHANGELOG_FILE = path.join(__dirname, 'marketing-changelog.json');
+const PROFILES_FILE = path.join(__dirname, 'profiles.json');
 const TASAKI_WEB_CHANGELOG_FILE = path.join(os.homedir(), 'Desktop', 'tasaki-web', 'data', 'changelog.ts');
 const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
 const GATEWAY_LOG_FILE = path.join(os.homedir(), '.openclaw', 'logs', 'gateway-restart.log');
@@ -17,8 +18,9 @@ const SESSIONS_FILE = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'se
 const AGENT_BOT_ASSETS_DIR = path.join(os.homedir(), '.openclaw', 'workspace', 'assets', 'agentBot');
 const AUTH_FILE = path.join(__dirname, 'auth.json');
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
-const COLUMNS = ['idea', 'clip', 'published'];
-const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion'];
+const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
+const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 'product', 'trend', 'branding'];
+const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
 const MAX_ACTIVITY = 100;
 const PUBLIC_PATHS = new Set(['/login.html', '/api/login']);
@@ -116,6 +118,15 @@ function readKeyMessages() {
 
 function writeKeyMessages(data) {
   fs.writeFileSync(KEY_MESSAGES_FILE, JSON.stringify(data, null, 2));
+}
+
+function readProfiles() {
+  if (!fs.existsSync(PROFILES_FILE)) return [];
+  return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
+}
+
+function writeProfiles(profiles) {
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2));
 }
 
 function readMarketingChangelog() {
@@ -271,9 +282,11 @@ app.post('/api/cards', (req, res) => {
     status: 'active',
     rejectionReason: '',
     tags: [],
+    platforms: [],
     imageUrl: null,
     todos: [],
     issues: [],
+    comments: [],
     order: Date.now(),
     createdAt: now,
     updatedAt: now
@@ -353,7 +366,7 @@ app.patch('/api/cards/:id', (req, res) => {
   const card = data.cards.find((c) => c.id === req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
 
-  const { title, description, column, status, rejectionReason, tags, todos, issues } = req.body;
+  const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links } = req.body;
   if (title !== undefined) {
     if (typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({ error: 'title must be a non-empty string' });
@@ -369,6 +382,12 @@ app.patch('/api/cards/:id', (req, res) => {
     }
     card.tags = [...new Set(tags)];
   }
+  if (platforms !== undefined) {
+    if (!Array.isArray(platforms) || platforms.some((p) => !PLATFORMS.includes(p))) {
+      return res.status(400).json({ error: `platforms must be an array of: ${PLATFORMS.join(', ')}` });
+    }
+    card.platforms = [...new Set(platforms)];
+  }
   if (todos !== undefined) {
     const valid = Array.isArray(todos) && todos.every(
       (t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim() && TODO_STATUSES.includes(t.status)
@@ -383,9 +402,28 @@ app.patch('/api/cards/:id', (req, res) => {
       (t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim()
     );
     if (!valid) {
-      return res.status(400).json({ error: 'issues must be an array of { id, text }' });
+      return res.status(400).json({ error: 'issues must be an array of { id, text, status? }' });
     }
-    card.issues = issues.map((t) => ({ id: t.id, text: t.text.trim() }));
+    card.issues = issues.map((t) => ({
+      id: t.id,
+      text: t.text.trim(),
+      status: t.status === 'solved' ? 'solved' : 'problem'
+    }));
+  }
+  if (comments !== undefined) {
+    const valid = Array.isArray(comments) && comments.every(
+      (c) => c && typeof c.id === 'string' && typeof c.text === 'string' && c.text.trim() && typeof c.authorName === 'string'
+    );
+    if (!valid) {
+      return res.status(400).json({ error: 'comments must be an array of { id, text, authorName, authorImage, createdAt }' });
+    }
+    card.comments = comments.map((c) => ({
+      id: c.id,
+      text: c.text.trim(),
+      authorName: c.authorName.trim(),
+      authorImage: typeof c.authorImage === 'string' ? c.authorImage : null,
+      createdAt: c.createdAt || new Date().toISOString()
+    }));
   }
   if (column !== undefined) {
     if (!COLUMNS.includes(column)) {
@@ -410,6 +448,13 @@ app.patch('/api/cards/:id', (req, res) => {
       card.rejectionReason = '';
     }
     card.status = status;
+  }
+  if (links !== undefined) {
+    const valid = Array.isArray(links) && links.every(
+      (l) => l && typeof l.id === 'string' && typeof l.url === 'string' && l.url.trim()
+    );
+    if (!valid) return res.status(400).json({ error: 'links must be an array of { id, label, url }' });
+    card.links = links.map((l) => ({ id: l.id, label: typeof l.label === 'string' ? l.label.trim() : '', url: l.url.trim() }));
   }
   card.updatedAt = new Date().toISOString();
   writeData(data);
@@ -539,6 +584,38 @@ app.get('/api/website-changelog', (req, res) => {
 
 app.get('/api/marketing-changelog', (req, res) => {
   res.json(readMarketingChangelog());
+});
+
+app.get('/api/profiles', (req, res) => {
+  const stored = readProfiles();
+  const storedNames = new Set(stored.map((p) => p.name));
+
+  // pull in anyone who has commented but isn't in profiles.json yet
+  const data = readData();
+  data.cards.forEach((c) => {
+    (c.comments || []).forEach((cm) => {
+      if (cm.authorName && !storedNames.has(cm.authorName)) {
+        stored.push({ name: cm.authorName, imageUrl: cm.authorImage || null });
+        storedNames.add(cm.authorName);
+      }
+    });
+  });
+
+  res.json(stored);
+});
+
+app.post('/api/profiles', (req, res) => {
+  const { name, imageUrl } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+  const profiles = readProfiles();
+  const idx = profiles.findIndex((p) => p.name === name.trim());
+  if (idx >= 0) {
+    profiles[idx] = { name: name.trim(), imageUrl: imageUrl || profiles[idx].imageUrl || null };
+  } else {
+    profiles.push({ name: name.trim(), imageUrl: imageUrl || null });
+  }
+  writeProfiles(profiles);
+  res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 5050;
