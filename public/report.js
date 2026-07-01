@@ -129,7 +129,7 @@ function renderPublishedList(container, cards) {
       if ((c.platforms || []).length) {
         const row = document.createElement('div');
         row.className = 'tag-row';
-        c.platforms.filter((p) => PLATFORM_LABELS[p]).forEach((p) => row.appendChild(createPlatformBadge(p)));
+        c.platforms.filter((p) => PLATFORM_LABELS[p]).forEach((p) => row.appendChild(createPlatformIcon(p)));
         item.appendChild(row);
       }
       const date = document.createElement('p');
@@ -190,7 +190,7 @@ function renderMonth() {
   renderPublishedList(monthPublishedList, cardsInMonth);
 }
 
-const CAL_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const CAL_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function renderCalendar() {
   const today = new Date();
@@ -230,8 +230,8 @@ function renderCalendar() {
     grid.appendChild(hdr);
   });
 
-  // start weekday: 0=Mon … 6=Sun
-  const firstWeekday = (start.getDay() + 6) % 7;
+  // start weekday: 0=Sun … 6=Sat
+  const firstWeekday = start.getDay();
   for (let i = 0; i < firstWeekday; i++) {
     const blank = document.createElement('div');
     blank.className = 'cal-cell cal-blank';

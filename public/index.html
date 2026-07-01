@@ -104,7 +104,22 @@
         <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
       </div>
       <p class="key-messages-hint">ความคืบหน้าของเว็บไซต์ <a id="websiteChangelogLink" href="#" target="_blank" rel="noopener">tasaki-web-cyan.vercel.app</a></p>
-      <div id="websiteChangelogList" class="key-messages-list"></div>
+
+      <div class="website-zone website-zone-issues">
+        <div class="website-zone-header">⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ <span id="websiteIssuesCount" class="website-issues-count"></span></div>
+        <div id="websiteIssuesZone" class="website-issues-list"></div>
+        <div class="website-issue-add-form">
+          <div class="website-issue-add-row">
+            <input id="websiteIssueAddInput" type="text" class="entry-issue-add-input" placeholder="เพิ่มปัญหา..." maxlength="300" />
+            <button id="websiteIssueAddBtn" type="button" class="entry-issue-add-btn">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="website-zone website-zone-updates">
+        <div class="website-zone-header">📋 โซนรวมอัพเดท</div>
+        <div id="websiteChangelogList" class="key-messages-list"></div>
+      </div>
     </aside>
 
     <aside id="marketingChangelogPanel" class="key-messages-panel right-panel collapsible-panel">

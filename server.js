@@ -9,6 +9,7 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const ACTIVITY_FILE = path.join(__dirname, 'activity.json');
 const KEY_MESSAGES_FILE = path.join(__dirname, 'key-messages.json');
 const MARKETING_CHANGELOG_FILE = path.join(__dirname, 'marketing-changelog.json');
+const WEBSITE_ISSUES_FILE = path.join(__dirname, 'website-issues.json');
 const PROFILES_FILE = path.join(__dirname, 'profiles.json');
 const TASAKI_WEB_CHANGELOG_FILE = path.join(os.homedir(), 'Desktop', 'tasaki-web', 'data', 'changelog.ts');
 const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
@@ -134,6 +135,19 @@ function readMarketingChangelog() {
   return JSON.parse(fs.readFileSync(MARKETING_CHANGELOG_FILE, 'utf8'));
 }
 
+function websiteEntryId(date, feature) {
+  return crypto.createHash('sha256').update(date + '|' + feature).digest('hex').slice(0, 16);
+}
+
+function readWebsiteIssues() {
+  if (!fs.existsSync(WEBSITE_ISSUES_FILE)) return {};
+  return JSON.parse(fs.readFileSync(WEBSITE_ISSUES_FILE, 'utf8'));
+}
+
+function writeWebsiteIssues(data) {
+  fs.writeFileSync(WEBSITE_ISSUES_FILE, JSON.stringify(data, null, 2));
+}
+
 function readWebsiteChangelog() {
   try {
     const src = fs.readFileSync(TASAKI_WEB_CHANGELOG_FILE, 'utf8');
@@ -141,7 +155,7 @@ function readWebsiteChangelog() {
     const re = /\{\s*date:\s*'([^']+)'\s*,\s*feature:\s*'((?:[^'\\]|\\.)*)'\s*\}/g;
     let match;
     while ((match = re.exec(src)) !== null) {
-      entries.push({ date: match[1], feature: match[2] });
+      entries.push({ id: websiteEntryId(match[1], match[2]), date: match[1], feature: match[2] });
     }
     return { entries, siteUrl: TASAKI_WEB_URL };
   } catch {
@@ -580,6 +594,118 @@ app.put('/api/key-messages/reorder', (req, res) => {
 
 app.get('/api/website-changelog', (req, res) => {
   res.json(readWebsiteChangelog());
+});
+
+app.get('/api/website-issues', (req, res) => {
+  res.json(readWebsiteIssues());
+});
+
+app.post('/api/website-issues/:entryId', (req, res) => {
+  const { text, authorName, authorImage } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  if (!authorName || typeof authorName !== 'string' || !authorName.trim()) {
+    return res.status(400).json({ error: 'authorName is required' });
+  }
+  const issues = readWebsiteIssues();
+  if (!issues[req.params.entryId]) issues[req.params.entryId] = [];
+  const issue = {
+    id: crypto.randomUUID(),
+    text: text.trim(),
+    authorName: authorName.trim(),
+    authorImage: typeof authorImage === 'string' ? authorImage : null,
+    createdAt: new Date().toISOString(),
+    comments: []
+  };
+  issues[req.params.entryId].push(issue);
+  writeWebsiteIssues(issues);
+  res.status(201).json(issue);
+});
+
+app.post('/api/website-issues/:entryId/:issueId/comments', (req, res) => {
+  const { text, authorName, authorImage } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  if (!authorName || typeof authorName !== 'string' || !authorName.trim()) return res.status(400).json({ error: 'authorName is required' });
+  const issues = readWebsiteIssues();
+  const list = issues[req.params.entryId] || [];
+  const issue = list.find((i) => i.id === req.params.issueId);
+  if (!issue) return res.status(404).json({ error: 'issue not found' });
+  if (!Array.isArray(issue.comments)) issue.comments = [];
+  const { link } = req.body;
+  const comment = {
+    id: crypto.randomUUID(),
+    text: text.trim(),
+    link: typeof link === 'string' && link.trim() ? link.trim() : null,
+    authorName: authorName.trim(),
+    authorImage: typeof authorImage === 'string' ? authorImage : null,
+    createdAt: new Date().toISOString()
+  };
+  issue.comments.push(comment);
+  writeWebsiteIssues(issues);
+  res.status(201).json(comment);
+});
+
+app.patch('/api/website-issues/:entryId/:issueId/comments/:commentId', (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  const issues = readWebsiteIssues();
+  const list = issues[req.params.entryId] || [];
+  const issue = list.find((i) => i.id === req.params.issueId);
+  if (!issue) return res.status(404).json({ error: 'issue not found' });
+  const comment = (issue.comments || []).find((c) => c.id === req.params.commentId);
+  if (!comment) return res.status(404).json({ error: 'comment not found' });
+  comment.text = text.trim();
+  comment.updatedAt = new Date().toISOString();
+  writeWebsiteIssues(issues);
+  res.json(comment);
+});
+
+app.delete('/api/website-issues/:entryId/:issueId/comments/:commentId', (req, res) => {
+  const issues = readWebsiteIssues();
+  const list = issues[req.params.entryId] || [];
+  const issue = list.find((i) => i.id === req.params.issueId);
+  if (!issue) return res.status(404).json({ error: 'issue not found' });
+  if (!Array.isArray(issue.comments)) return res.status(404).json({ error: 'comment not found' });
+  const idx = issue.comments.findIndex((c) => c.id === req.params.commentId);
+  if (idx === -1) return res.status(404).json({ error: 'comment not found' });
+  const [removed] = issue.comments.splice(idx, 1);
+  writeWebsiteIssues(issues);
+  res.json(removed);
+});
+
+app.patch('/api/website-issues/:entryId/:issueId', (req, res) => {
+  const { text, newEntryId } = req.body;
+  const issues = readWebsiteIssues();
+  const list = issues[req.params.entryId] || [];
+  const issue = list.find((i) => i.id === req.params.issueId);
+  if (!issue) return res.status(404).json({ error: 'issue not found' });
+  if (text && typeof text === 'string' && text.trim()) {
+    issue.text = text.trim();
+    issue.updatedAt = new Date().toISOString();
+  }
+  if (typeof req.body.solved === 'boolean') {
+    issue.solved = req.body.solved;
+    issue.updatedAt = new Date().toISOString();
+  }
+  if (newEntryId && typeof newEntryId === 'string' && newEntryId !== req.params.entryId) {
+    issues[req.params.entryId] = list.filter((i) => i.id !== req.params.issueId);
+    if (!issues[newEntryId]) issues[newEntryId] = [];
+    issues[newEntryId].push(issue);
+  }
+  writeWebsiteIssues(issues);
+  res.json(issue);
+});
+
+app.delete('/api/website-issues/:entryId/:issueId', (req, res) => {
+  const issues = readWebsiteIssues();
+  const list = issues[req.params.entryId] || [];
+  const idx = list.findIndex((i) => i.id === req.params.issueId);
+  if (idx === -1) return res.status(404).json({ error: 'issue not found' });
+  const [removed] = list.splice(idx, 1);
+  issues[req.params.entryId] = list;
+  writeWebsiteIssues(issues);
+  res.json(removed);
 });
 
 app.get('/api/marketing-changelog', (req, res) => {
