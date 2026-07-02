@@ -183,9 +183,7 @@ function renderMonth() {
   monthRangeLabel.textContent = `${THAI_MONTHS[start.getMonth()]} ${start.getFullYear() + 543}`;
 
   const cardsInMonth = allCards.filter((c) => publishedInRange(c, start, end));
-  const youtubeGoalCards = cardsInMonth.filter((c) => (c.platforms || []).includes('youtube'));
-
-  renderGoal(monthGoalFill, monthGoalLabel, youtubeGoalCards.length, 1);
+  renderGoal(monthGoalFill, monthGoalLabel, cardsInMonth.length, 12);
   renderPlatformGrid(monthPlatformGrid, platformCounts(cardsInMonth));
   renderPublishedList(monthPublishedList, cardsInMonth);
 }
@@ -217,6 +215,17 @@ function renderCalendar() {
     }
   });
 
+  const plannedDays = {};
+  allCards.forEach((c) => {
+    if (!c.plannedPublishDate || c.status === 'rejected') return;
+    const d = new Date(c.plannedPublishDate);
+    if (d >= start && d < end) {
+      const key = d.getDate();
+      if (!plannedDays[key]) plannedDays[key] = [];
+      plannedDays[key].push(c);
+    }
+  });
+
   const wrap = document.getElementById('calendarGrid');
   wrap.innerHTML = '';
 
@@ -243,10 +252,11 @@ function renderCalendar() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const cards = publishedDays[d] || [];
+    const planned = plannedDays[d] || [];
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
-    if (cards.length) cell.classList.add('cal-has-content');
+    if (cards.length || planned.length) cell.classList.add('cal-has-content');
 
     const num = document.createElement('span');
     num.className = 'cal-day-num';
@@ -258,7 +268,6 @@ function renderCalendar() {
       dot.className = 'cal-count-dot';
       dot.textContent = cards.length;
       cell.appendChild(dot);
-
       cell.addEventListener('click', () => openDayPopover(d, cards, display));
     }
 
@@ -267,6 +276,15 @@ function renderCalendar() {
       chip.className = 'cal-card-title';
       chip.textContent = c.title;
       chip.title = c.title;
+      chip.href = `/index.html?card=${c.id}`;
+      cell.appendChild(chip);
+    });
+
+    planned.forEach((c) => {
+      const chip = document.createElement('a');
+      chip.className = 'cal-card-planned';
+      chip.textContent = `📅 ${c.title}`;
+      chip.title = `Plan to Publish: ${c.title}`;
       chip.href = `/index.html?card=${c.id}`;
       cell.appendChild(chip);
     });

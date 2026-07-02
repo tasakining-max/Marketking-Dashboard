@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Card {
+  id                 String   @id @default(uuid())
+  title              String
+  description        String   @default("")
+  column             String   @default("idea")
+  status             String   @default("active")
+  rejectionReason    String   @default("")
+  tags               String[] @default([])
+  platforms          String[] @default([])
+  imageUrl           String?
+  todos              Json     @default("[]")
+  issues             Json     @default("[]")
+  comments           Json     @default("[]")
+  links              Json     @default("[]")
+  order              Float    @default(0)
+  pinned             Boolean  @default(false)
+  plannedPublishDate String?
+  publishedAt        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model KeyMessage {
+  id   String @id @default(uuid())
+  text String
+}
+
+model Profile {
+  id       String @id @default(uuid())
+  name     String @unique
+  imageUrl String @db.Text
+}
+
+model ActivityEntry {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model CronJob {
+  id       String  @id @default(uuid())
+  name     String
+  schedule String
+  command  String
+  enabled  Boolean @default(true)
+}
+
+model WebsiteIssue {
+  id      String @id
+  date    String
+  feature String
+  issues  Json   @default("[]")
+}
+
+model MarketingChangelog {
+  id        String   @id @default(uuid())
+  text      String
+  date      DateTime @default(now())
+}

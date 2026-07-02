@@ -86,8 +86,16 @@
           <div class="cards" data-column-cards="youtube"></div>
         </section>
         <section class="column" data-column="published">
-          <h2>✅ Published (Done)</h2>
+          <div class="published-col-header">
+            <h2>✅ Published (Done)</h2>
+            <button id="publishedToggleBtn" type="button" class="column-toggle-btn">▸ ดูทั้งหมด</button>
+          </div>
+          <p class="published-week-label">สัปดาห์นี้</p>
           <div class="cards" data-column-cards="published"></div>
+          <div id="publishedOlderSection" hidden>
+            <p class="published-older-label">ก่อนหน้านี้</p>
+            <div class="cards" id="publishedOlderCards"></div>
+          </div>
         </section>
       </main>
 
@@ -191,6 +199,13 @@
             <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="tiktok" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/tiktok.jpg" alt="" /></span> TikTok</label>
             <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="youtube" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/youtube.png" alt="" /></span> YouTube</label>
           </fieldset>
+          <div id="cardPlanDateLabel" class="plan-date-label" hidden>
+            <span>📅 Plan to Publish</span>
+            <div class="plan-date-row">
+              <input type="date" id="cardPlanDate" />
+              <button type="button" id="cardPlanDateClearBtn" class="plan-date-clear-btn">✕ Clear</button>
+            </div>
+          </div>
           <fieldset id="cardTodoLabel" class="todo-fieldset" hidden>
             <legend>To-do list</legend>
             <div id="cardTodoList" class="todo-list"></div>

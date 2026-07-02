@@ -1,52 +1,40 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const crypto = require('crypto');
-const { execSync } = require('child_process');
+import 'dotenv/config';
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { PrismaClient } from '@prisma/client';
+import { PrismaNeon } from '@prisma/adapter-neon';
+import { put, del } from '@vercel/blob';
 
-const DATA_FILE = path.join(__dirname, 'data.json');
-const ACTIVITY_FILE = path.join(__dirname, 'activity.json');
-const KEY_MESSAGES_FILE = path.join(__dirname, 'key-messages.json');
-const MARKETING_CHANGELOG_FILE = path.join(__dirname, 'marketing-changelog.json');
-const WEBSITE_ISSUES_FILE = path.join(__dirname, 'website-issues.json');
-const PROFILES_FILE = path.join(__dirname, 'profiles.json');
-const TASAKI_WEB_CHANGELOG_FILE = path.join(os.homedir(), 'Desktop', 'tasaki-web', 'data', 'changelog.ts');
-const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
-const GATEWAY_LOG_FILE = path.join(os.homedir(), '.openclaw', 'logs', 'gateway-restart.log');
-const OPENCLAW_CONFIG_FILE = path.join(os.homedir(), '.openclaw', 'openclaw.json');
-const SESSIONS_FILE = path.join(os.homedir(), '.openclaw', 'agents', 'main', 'sessions', 'sessions.json');
-const AGENT_BOT_ASSETS_DIR = path.join(os.homedir(), '.openclaw', 'workspace', 'assets', 'agentBot');
-const AUTH_FILE = path.join(__dirname, 'auth.json');
-const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
+
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
 const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 'product', 'trend', 'branding'];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
 const MAX_ACTIVITY = 100;
 const PUBLIC_PATHS = new Set(['/login.html', '/api/login']);
-const IMAGE_MIME_EXT = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif'
-};
+const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
+const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 
-function readAuthPassword() {
-  try {
-    return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8')).password;
-  } catch {
-    return null;
-  }
+// ─── Auth ────────────────────────────────────────────────────────────────────
+function getPassword() {
+  return process.env.DASHBOARD_PASSWORD || null;
 }
 
 function parseCookies(req) {
-  const header = req.headers.cookie;
   const cookies = {};
-  if (!header) return cookies;
-  header.split(';').forEach((pair) => {
+  (req.headers.cookie || '').split(';').forEach((pair) => {
     const idx = pair.indexOf('=');
     if (idx === -1) return;
     cookies[pair.slice(0, idx).trim()] = decodeURIComponent(pair.slice(idx + 1).trim());
@@ -59,7 +47,7 @@ app.use(express.json({ limit: '15mb' }));
 
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.has(req.path)) return next();
-  const password = readAuthPassword();
+  const password = getPassword();
   const cookies = parseCookies(req);
   if (!password || cookies.dashboard_token === password) return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
@@ -68,10 +56,8 @@ app.use((req, res, next) => {
 
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
-  const actual = readAuthPassword();
-  if (!actual || password !== actual) {
-    return res.status(401).json({ error: 'Invalid password' });
-  }
+  const actual = getPassword();
+  if (!actual || password !== actual) return res.status(401).json({ error: 'Invalid password' });
   res.setHeader('Set-Cookie', `dashboard_token=${encodeURIComponent(password)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`);
   res.json({ ok: true });
 });
@@ -82,669 +68,438 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/agent-assets', express.static(AGENT_BOT_ASSETS_DIR));
 
-function readData() {
-  if (!fs.existsSync(DATA_FILE)) return { cards: [] };
-  const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  data.cards.forEach((card) => {
-    if (!Array.isArray(card.todos)) return;
-    card.todos.forEach((t) => {
-      if (!TODO_STATUSES.includes(t.status)) {
-        t.status = t.done ? 'done' : 'plan';
-      }
-      delete t.done;
-    });
-  });
-  return data;
+// ─── Cards ───────────────────────────────────────────────────────────────────
+function serializeCard(c) {
+  return {
+    ...c,
+    createdAt: c.createdAt?.toISOString?.() ?? c.createdAt,
+    updatedAt: c.updatedAt?.toISOString?.() ?? c.updatedAt,
+  };
 }
 
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-function readActivity() {
-  if (!fs.existsSync(ACTIVITY_FILE)) return { activity: [], cronJobs: [] };
-  return JSON.parse(fs.readFileSync(ACTIVITY_FILE, 'utf8'));
-}
-
-function writeActivity(data) {
-  fs.writeFileSync(ACTIVITY_FILE, JSON.stringify(data, null, 2));
-}
-
-function readKeyMessages() {
-  if (!fs.existsSync(KEY_MESSAGES_FILE)) return { messages: [] };
-  return JSON.parse(fs.readFileSync(KEY_MESSAGES_FILE, 'utf8'));
-}
-
-function writeKeyMessages(data) {
-  fs.writeFileSync(KEY_MESSAGES_FILE, JSON.stringify(data, null, 2));
-}
-
-function readProfiles() {
-  if (!fs.existsSync(PROFILES_FILE)) return [];
-  return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
-}
-
-function writeProfiles(profiles) {
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2));
-}
-
-function readMarketingChangelog() {
-  if (!fs.existsSync(MARKETING_CHANGELOG_FILE)) return { entries: [] };
-  return JSON.parse(fs.readFileSync(MARKETING_CHANGELOG_FILE, 'utf8'));
-}
-
-function websiteEntryId(date, feature) {
-  return crypto.createHash('sha256').update(date + '|' + feature).digest('hex').slice(0, 16);
-}
-
-function readWebsiteIssues() {
-  if (!fs.existsSync(WEBSITE_ISSUES_FILE)) return {};
-  return JSON.parse(fs.readFileSync(WEBSITE_ISSUES_FILE, 'utf8'));
-}
-
-function writeWebsiteIssues(data) {
-  fs.writeFileSync(WEBSITE_ISSUES_FILE, JSON.stringify(data, null, 2));
-}
-
-function readWebsiteChangelog() {
+app.get('/api/cards', async (req, res) => {
   try {
-    const src = fs.readFileSync(TASAKI_WEB_CHANGELOG_FILE, 'utf8');
-    const entries = [];
-    const re = /\{\s*date:\s*'([^']+)'\s*,\s*feature:\s*'((?:[^'\\]|\\.)*)'\s*\}/g;
-    let match;
-    while ((match = re.exec(src)) !== null) {
-      entries.push({ id: websiteEntryId(match[1], match[2]), date: match[1], feature: match[2] });
-    }
-    return { entries, siteUrl: TASAKI_WEB_URL };
-  } catch {
-    return { entries: [], siteUrl: TASAKI_WEB_URL };
-  }
-}
-
-function isGatewayRunning() {
-  try {
-    execSync('pgrep -f "openclaw.*gateway"', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function lastGatewayRestart() {
-  if (!fs.existsSync(GATEWAY_LOG_FILE)) return null;
-  const lines = fs.readFileSync(GATEWAY_LOG_FILE, 'utf8').trim().split('\n');
-  const lastDone = lines.reverse().find((l) => l.includes('restart done'));
-  if (!lastDone) return null;
-  const match = lastDone.match(/^\[(.+?)\]/);
-  return match ? match[1] : null;
-}
-
-function readDefaultModel() {
-  try {
-    const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_FILE, 'utf8'));
-    return (config.agents && config.agents.defaults && config.agents.defaults.model && config.agents.defaults.model.primary) || null;
-  } catch {
-    return null;
-  }
-}
-
-function readAgentModel(agentId, fallback) {
-  try {
-    const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_FILE, 'utf8'));
-    const list = (config.agents && config.agents.list) || [];
-    const agent = list.find((a) => a.id === agentId);
-    return (agent && agent.model) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function readBotModel(sessions, accountId) {
-  let best = null;
-  for (const key in sessions) {
-    if (key.includes(':subagent:')) continue;
-    const s = sessions[key];
-    if (s.channel === 'discord' && s.route && s.route.accountId === accountId) {
-      if (!best || (s.lastInteractionAt || 0) > (best.lastInteractionAt || 0)) best = s;
-    }
-  }
-  if (!best) return { model: null, live: false };
-  const model = best.modelOverride || best.model;
-  if (!model) return { model: null, live: false };
-  return { model: best.modelProvider ? `${best.modelProvider}/${model}` : model, live: true };
-}
-
-function readBots() {
-  let discord;
-  try {
-    const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_FILE, 'utf8'));
-    discord = config.channels && config.channels.discord;
-  } catch {
-    discord = null;
-  }
-  if (!discord) return [];
-
-  let sessions = {};
-  try {
-    sessions = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
-  } catch {
-    sessions = {};
-  }
-  const defaultModel = readDefaultModel();
-
-  const channelEnabled = !!discord.enabled;
-  const defaultGuildCount = discord.guilds ? Object.keys(discord.guilds).length : 0;
-  const mainagent = discord.accounts && discord.accounts.mainagent;
-  const mainagentGuildCount = mainagent && mainagent.guilds ? Object.keys(mainagent.guilds).length : 0;
-  const videobot = discord.accounts && discord.accounts.videobot;
-  const videobotGuildCount = videobot && videobot.guilds ? Object.keys(videobot.guilds).length : 0;
-
-  // Confirmed via Discord client logs (account token identity, not just the "mainagent"/"default" key names):
-  // accountId "default" (the unnamed top-level account) runs the bot @Takujung.
-  // accountId "mainagent" runs the bot @MainAgent.
-  const takujungModel = readBotModel(sessions, 'default');
-  const mainAgentModel = readBotModel(sessions, 'mainagent');
-  const videobotModel = readBotModel(sessions, 'videobot');
-
-  return [
-    {
-      name: 'Takujung',
-      role: 'รอบรู้เรื่อง ทาซากิ สินค้า คู่มือ error code ค้นคว้า คิดคอนเทนต์',
-      guildCount: defaultGuildCount,
-      configured: channelEnabled,
-      model: takujungModel.model || defaultModel,
-      modelIsLive: takujungModel.live
-    },
-    {
-      name: 'Main agent',
-      role: 'ควบคุม ตั้งค่า Agent',
-      guildCount: mainagentGuildCount,
-      configured: channelEnabled && !!mainagent,
-      model: mainAgentModel.model || defaultModel,
-      modelIsLive: mainAgentModel.live
-    },
-    {
-      name: 'Video Creator',
-      role: 'สร้าง VDO',
-      guildCount: videobotGuildCount,
-      configured: channelEnabled && !!videobot,
-      model: videobotModel.model || readAgentModel('videobot', defaultModel),
-      modelIsLive: videobotModel.live
-    }
-  ];
-}
-
-app.get('/api/cards', (req, res) => {
-  res.json(readData());
+    const where = req.query.column ? { column: req.query.column } : {};
+    const cards = await prisma.card.findMany({ where, orderBy: { order: 'asc' } });
+    res.json({ cards: cards.map(serializeCard) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/cards', (req, res) => {
+app.post('/api/cards', async (req, res) => {
   const { title, description, column } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
-  const col = COLUMNS.includes(column) ? column : 'idea';
-  const data = readData();
-  const now = new Date().toISOString();
-  const card = {
-    id: crypto.randomUUID(),
-    title: title.trim(),
-    description: typeof description === 'string' ? description.trim() : '',
-    column: col,
-    status: 'active',
-    rejectionReason: '',
-    tags: [],
-    platforms: [],
-    imageUrl: null,
-    todos: [],
-    issues: [],
-    comments: [],
-    order: Date.now(),
-    createdAt: now,
-    updatedAt: now
-  };
-  data.cards.push(card);
-  writeData(data);
-  res.status(201).json(card);
+  try {
+    const card = await prisma.card.create({
+      data: {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        description: typeof description === 'string' ? description.trim() : '',
+        column: COLUMNS.includes(column) ? column : 'idea',
+        order: Date.now(),
+      },
+    });
+    res.status(201).json(serializeCard(card));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/cards/reorder', (req, res) => {
+app.put('/api/cards/reorder', async (req, res) => {
   const { column, order } = req.body;
-  if (!COLUMNS.includes(column)) {
-    return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
-  }
-  if (!Array.isArray(order)) {
-    return res.status(400).json({ error: 'order must be an array of card ids' });
-  }
-  const data = readData();
-  order.forEach((id, index) => {
-    const card = data.cards.find((c) => c.id === id);
-    if (!card) return;
-    if (card.column !== column) {
-      if (column === 'published') {
-        card.publishedAt = new Date().toISOString();
+  if (!COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of card ids' });
+  try {
+    const now = new Date().toISOString();
+    await Promise.all(order.map(async (id, index) => {
+      const card = await prisma.card.findUnique({ where: { id } });
+      if (!card) return;
+      const data = { order: index, updatedAt: new Date() };
+      if (card.column !== column) {
+        data.column = column;
+        if (column === 'published') data.publishedAt = now;
       }
-      card.column = column;
-      card.updatedAt = new Date().toISOString();
-    }
-    card.order = index;
-  });
-  writeData(data);
-  res.json(readData());
-});
-
-app.post('/api/cards/:id/image', (req, res) => {
-  const data = readData();
-  const card = data.cards.find((c) => c.id === req.params.id);
-  if (!card) return res.status(404).json({ error: 'card not found' });
-
-  const { image } = req.body;
-  const match = typeof image === 'string' && image.match(/^data:(image\/[a-z]+);base64,(.+)$/i);
-  if (!match || !IMAGE_MIME_EXT[match[1].toLowerCase()]) {
-    return res.status(400).json({ error: 'image must be a base64 data URL (png, jpg, webp, or gif)' });
-  }
-
-  if (card.imageUrl) {
-    const oldPath = path.join(__dirname, 'public', card.imageUrl);
-    fs.rm(oldPath, { force: true }, () => {});
-  }
-
-  const ext = IMAGE_MIME_EXT[match[1].toLowerCase()];
-  const fileName = `${card.id}-${Date.now()}.${ext}`;
-  fs.writeFileSync(path.join(UPLOADS_DIR, fileName), Buffer.from(match[2], 'base64'));
-
-  card.imageUrl = `/uploads/${fileName}`;
-  card.updatedAt = new Date().toISOString();
-  writeData(data);
-  res.json(card);
-});
-
-app.delete('/api/cards/:id/image', (req, res) => {
-  const data = readData();
-  const card = data.cards.find((c) => c.id === req.params.id);
-  if (!card) return res.status(404).json({ error: 'card not found' });
-
-  if (card.imageUrl) {
-    fs.rm(path.join(__dirname, 'public', card.imageUrl), { force: true }, () => {});
-  }
-  card.imageUrl = null;
-  card.updatedAt = new Date().toISOString();
-  writeData(data);
-  res.json(card);
-});
-
-app.patch('/api/cards/:id', (req, res) => {
-  const data = readData();
-  const card = data.cards.find((c) => c.id === req.params.id);
-  if (!card) return res.status(404).json({ error: 'card not found' });
-
-  const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links } = req.body;
-  if (title !== undefined) {
-    if (typeof title !== 'string' || !title.trim()) {
-      return res.status(400).json({ error: 'title must be a non-empty string' });
-    }
-    card.title = title.trim();
-  }
-  if (description !== undefined) {
-    card.description = typeof description === 'string' ? description.trim() : '';
-  }
-  if (tags !== undefined) {
-    if (!Array.isArray(tags) || tags.some((t) => !CLIP_TAGS.includes(t))) {
-      return res.status(400).json({ error: `tags must be an array of: ${CLIP_TAGS.join(', ')}` });
-    }
-    card.tags = [...new Set(tags)];
-  }
-  if (platforms !== undefined) {
-    if (!Array.isArray(platforms) || platforms.some((p) => !PLATFORMS.includes(p))) {
-      return res.status(400).json({ error: `platforms must be an array of: ${PLATFORMS.join(', ')}` });
-    }
-    card.platforms = [...new Set(platforms)];
-  }
-  if (todos !== undefined) {
-    const valid = Array.isArray(todos) && todos.every(
-      (t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim() && TODO_STATUSES.includes(t.status)
-    );
-    if (!valid) {
-      return res.status(400).json({ error: `todos must be an array of { id, text, status } where status is one of: ${TODO_STATUSES.join(', ')}` });
-    }
-    card.todos = todos.map((t) => ({ id: t.id, text: t.text.trim(), status: t.status }));
-  }
-  if (issues !== undefined) {
-    const valid = Array.isArray(issues) && issues.every(
-      (t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim()
-    );
-    if (!valid) {
-      return res.status(400).json({ error: 'issues must be an array of { id, text, status? }' });
-    }
-    card.issues = issues.map((t) => ({
-      id: t.id,
-      text: t.text.trim(),
-      status: t.status === 'solved' ? 'solved' : 'problem'
+      await prisma.card.update({ where: { id }, data });
     }));
-  }
-  if (comments !== undefined) {
-    const valid = Array.isArray(comments) && comments.every(
-      (c) => c && typeof c.id === 'string' && typeof c.text === 'string' && c.text.trim() && typeof c.authorName === 'string'
-    );
-    if (!valid) {
-      return res.status(400).json({ error: 'comments must be an array of { id, text, authorName, authorImage, createdAt }' });
-    }
-    card.comments = comments.map((c) => ({
-      id: c.id,
-      text: c.text.trim(),
-      authorName: c.authorName.trim(),
-      authorImage: typeof c.authorImage === 'string' ? c.authorImage : null,
-      createdAt: c.createdAt || new Date().toISOString()
-    }));
-  }
-  if (column !== undefined) {
-    if (!COLUMNS.includes(column)) {
-      return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
-    }
-    if (column === 'published' && card.column !== 'published') {
-      card.publishedAt = new Date().toISOString();
-    }
-    card.column = column;
-  }
-  if (status !== undefined) {
-    if (!['active', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'status must be active or rejected' });
-    }
-    if (status === 'rejected') {
-      const reason = typeof rejectionReason === 'string' ? rejectionReason.trim() : '';
-      if (!reason) {
-        return res.status(400).json({ error: 'rejectionReason is required when rejecting a card' });
+    const cards = await prisma.card.findMany({ orderBy: { order: 'asc' } });
+    res.json({ cards: cards.map(serializeCard) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    const contentType = req.headers['content-type'] || '';
+    const ext = IMAGE_MIME_EXT[contentType.split(';')[0].trim()];
+    if (!ext) return res.status(400).json({ error: 'unsupported image type' });
+
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', async () => {
+      try {
+        const buf = Buffer.concat(chunks);
+        const fileName = `${req.params.id}-${Date.now()}.${ext}`;
+        let imageUrl;
+
+        if (USE_BLOB) {
+          // Vercel Blob
+          const blob = await put(`cards/${fileName}`, buf, { access: 'public', contentType });
+          imageUrl = blob.url;
+          if (card.imageUrl && card.imageUrl.startsWith('https://')) {
+            try { await del(card.imageUrl); } catch {}
+          }
+        } else {
+          // Local filesystem
+          fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buf);
+          if (card.imageUrl && !card.imageUrl.startsWith('https://')) {
+            try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
+          }
+          imageUrl = `/uploads/${fileName}`;
+        }
+
+        const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl } });
+        res.json(serializeCard(updated));
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    if (card.imageUrl) {
+      if (USE_BLOB && card.imageUrl.startsWith('https://')) {
+        try { await del(card.imageUrl); } catch {}
+      } else {
+        try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
       }
-      card.rejectionReason = reason;
-    } else {
-      card.rejectionReason = '';
     }
-    card.status = status;
-  }
-  if (links !== undefined) {
-    const valid = Array.isArray(links) && links.every(
-      (l) => l && typeof l.id === 'string' && typeof l.url === 'string' && l.url.trim()
-    );
-    if (!valid) return res.status(400).json({ error: 'links must be an array of { id, label, url }' });
-    card.links = links.map((l) => ({ id: l.id, label: typeof l.label === 'string' ? l.label.trim() : '', url: l.url.trim() }));
-  }
-  card.updatedAt = new Date().toISOString();
-  writeData(data);
-  res.json(card);
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: null } });
+    res.json(serializeCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/cards/:id', (req, res) => {
-  const data = readData();
-  const idx = data.cards.findIndex((c) => c.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'card not found' });
-  const [removed] = data.cards.splice(idx, 1);
-  writeData(data);
-  if (removed.imageUrl) {
-    fs.rm(path.join(__dirname, 'public', removed.imageUrl), { force: true }, () => {});
-  }
-  res.json(removed);
+app.patch('/api/cards/:id', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+
+    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, pinned } = req.body;
+    const data = {};
+
+    if (title !== undefined) {
+      if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title must be a non-empty string' });
+      data.title = title.trim();
+    }
+    if (description !== undefined) data.description = typeof description === 'string' ? description.trim() : '';
+    if (tags !== undefined) {
+      if (!Array.isArray(tags) || tags.some((t) => !CLIP_TAGS.includes(t))) return res.status(400).json({ error: `tags must be an array of: ${CLIP_TAGS.join(', ')}` });
+      data.tags = [...new Set(tags)];
+    }
+    if (platforms !== undefined) {
+      if (!Array.isArray(platforms) || platforms.some((p) => !PLATFORMS.includes(p))) return res.status(400).json({ error: `platforms must be an array of: ${PLATFORMS.join(', ')}` });
+      data.platforms = [...new Set(platforms)];
+    }
+    if (todos !== undefined) {
+      const valid = Array.isArray(todos) && todos.every((t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim() && TODO_STATUSES.includes(t.status));
+      if (!valid) return res.status(400).json({ error: `todos must be an array of { id, text, status }` });
+      data.todos = todos.map((t) => ({ id: t.id, text: t.text.trim(), status: t.status }));
+    }
+    if (issues !== undefined) {
+      const valid = Array.isArray(issues) && issues.every((t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim());
+      if (!valid) return res.status(400).json({ error: 'issues must be an array of { id, text, status? }' });
+      data.issues = issues.map((t) => ({ id: t.id, text: t.text.trim(), status: t.status === 'solved' ? 'solved' : 'problem' }));
+    }
+    if (comments !== undefined) {
+      const valid = Array.isArray(comments) && comments.every((c) => c && typeof c.id === 'string' && typeof c.text === 'string' && c.text.trim() && typeof c.authorName === 'string');
+      if (!valid) return res.status(400).json({ error: 'comments must be an array of { id, text, authorName, authorImage, createdAt }' });
+      data.comments = comments.map((c) => ({ id: c.id, text: c.text.trim(), authorName: c.authorName.trim(), authorImage: typeof c.authorImage === 'string' ? c.authorImage : null, createdAt: c.createdAt || new Date().toISOString() }));
+    }
+    if (column !== undefined) {
+      if (!COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
+      if (column === 'published' && card.column !== 'published') data.publishedAt = new Date().toISOString();
+      data.column = column;
+    }
+    if (status !== undefined) {
+      if (!['active', 'rejected'].includes(status)) return res.status(400).json({ error: 'status must be active or rejected' });
+      if (status === 'rejected') {
+        const reason = typeof rejectionReason === 'string' ? rejectionReason.trim() : '';
+        if (!reason) return res.status(400).json({ error: 'rejectionReason is required when rejecting a card' });
+        data.rejectionReason = reason;
+      } else {
+        data.rejectionReason = '';
+      }
+      data.status = status;
+    }
+    if (links !== undefined) {
+      const valid = Array.isArray(links) && links.every((l) => l && typeof l.id === 'string' && typeof l.url === 'string' && l.url.trim());
+      if (!valid) return res.status(400).json({ error: 'links must be an array of { id, label, url }' });
+      data.links = links.map((l) => ({ id: l.id, label: typeof l.label === 'string' ? l.label.trim() : '', url: l.url.trim() }));
+    }
+    if (plannedPublishDate !== undefined) data.plannedPublishDate = plannedPublishDate || null;
+    if (pinned !== undefined) data.pinned = Boolean(pinned);
+
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data });
+    res.json(serializeCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/status', (req, res) => {
-  const activityData = readActivity();
-  const gatewayRunning = isGatewayRunning();
-  const bots = readBots().map((bot) => ({ ...bot, online: gatewayRunning && bot.configured }));
-  res.json({
-    gatewayRunning,
-    lastRestart: lastGatewayRestart(),
-    bots,
-    activity: activityData.activity,
-    cronJobs: activityData.cronJobs
-  });
+app.delete('/api/cards/:id', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    if (card.imageUrl) {
+      try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
+    }
+    await prisma.card.delete({ where: { id: req.params.id } });
+    res.json(serializeCard(card));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/activity', (req, res) => {
+// ─── Status / Bots (local-only — returns defaults on Vercel) ─────────────────
+app.get('/api/status', async (req, res) => {
+  try {
+    const activity = await prisma.activityEntry.findMany({ orderBy: { createdAt: 'desc' }, take: MAX_ACTIVITY });
+    const cronJobs = await prisma.cronJob.findMany();
+    res.json({ gatewayRunning: false, lastRestart: null, bots: [], activity, cronJobs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Activity ────────────────────────────────────────────────────────────────
+app.post('/api/activity', async (req, res) => {
   const { message, type } = req.body;
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    return res.status(400).json({ error: 'message is required' });
-  }
-  const activityData = readActivity();
-  const entry = {
-    id: crypto.randomUUID(),
-    message: message.trim(),
-    type: ['info', 'success', 'warning'].includes(type) ? type : 'info',
-    createdAt: new Date().toISOString()
-  };
-  activityData.activity.unshift(entry);
-  activityData.activity = activityData.activity.slice(0, MAX_ACTIVITY);
-  writeActivity(activityData);
-  res.status(201).json(entry);
+  if (!message || typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'message is required' });
+  try {
+    const entry = await prisma.activityEntry.create({
+      data: { id: crypto.randomUUID(), text: message.trim() },
+    });
+    res.status(201).json(entry);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/activity', (req, res) => {
-  const activityData = readActivity();
-  activityData.activity = [];
-  writeActivity(activityData);
-  res.json({ ok: true });
+app.delete('/api/activity', async (req, res) => {
+  try {
+    await prisma.activityEntry.deleteMany();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/cron-jobs', (req, res) => {
+app.put('/api/cron-jobs', async (req, res) => {
   const { jobs } = req.body;
-  if (!Array.isArray(jobs)) {
-    return res.status(400).json({ error: 'jobs must be an array' });
-  }
-  const activityData = readActivity();
-  activityData.cronJobs = jobs;
-  writeActivity(activityData);
-  res.json({ cronJobs: activityData.cronJobs });
+  if (!Array.isArray(jobs)) return res.status(400).json({ error: 'jobs must be an array' });
+  try {
+    await prisma.cronJob.deleteMany();
+    await prisma.cronJob.createMany({ data: jobs.map((j) => ({ id: j.id || crypto.randomUUID(), name: j.name || '', schedule: j.schedule || '', command: j.command || '', enabled: j.enabled !== false })) });
+    const cronJobs = await prisma.cronJob.findMany();
+    res.json({ cronJobs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/key-messages', (req, res) => {
-  res.json(readKeyMessages());
+// ─── Key Messages ─────────────────────────────────────────────────────────────
+app.get('/api/key-messages', async (req, res) => {
+  try {
+    const messages = await prisma.keyMessage.findMany();
+    res.json({ messages });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/key-messages', (req, res) => {
+app.post('/api/key-messages', async (req, res) => {
   const { text } = req.body;
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'text is required' });
-  }
-  const data = readKeyMessages();
-  const message = { id: crypto.randomUUID(), text: text.trim() };
-  data.messages.push(message);
-  writeKeyMessages(data);
-  res.status(201).json(message);
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  try {
+    const message = await prisma.keyMessage.create({ data: { id: crypto.randomUUID(), text: text.trim() } });
+    res.status(201).json(message);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/key-messages/:id', (req, res) => {
-  const data = readKeyMessages();
-  const message = data.messages.find((m) => m.id === req.params.id);
-  if (!message) return res.status(404).json({ error: 'message not found' });
+app.patch('/api/key-messages/:id', async (req, res) => {
   const { text } = req.body;
-  if (text !== undefined) {
-    if (typeof text !== 'string' || !text.trim()) {
-      return res.status(400).json({ error: 'text must be a non-empty string' });
-    }
-    message.text = text.trim();
-  }
-  writeKeyMessages(data);
-  res.json(message);
+  if (text !== undefined && (!typeof text === 'string' || !text.trim())) return res.status(400).json({ error: 'text must be a non-empty string' });
+  try {
+    const message = await prisma.keyMessage.update({ where: { id: req.params.id }, data: text ? { text: text.trim() } : {} });
+    res.json(message);
+  } catch { res.status(404).json({ error: 'message not found' }); }
 });
 
-app.delete('/api/key-messages/:id', (req, res) => {
-  const data = readKeyMessages();
-  const idx = data.messages.findIndex((m) => m.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'message not found' });
-  const [removed] = data.messages.splice(idx, 1);
-  writeKeyMessages(data);
-  res.json(removed);
+app.delete('/api/key-messages/:id', async (req, res) => {
+  try {
+    const removed = await prisma.keyMessage.delete({ where: { id: req.params.id } });
+    res.json(removed);
+  } catch { res.status(404).json({ error: 'message not found' }); }
 });
 
-app.put('/api/key-messages/reorder', (req, res) => {
+app.put('/api/key-messages/reorder', async (req, res) => {
   const { order } = req.body;
-  if (!Array.isArray(order)) {
-    return res.status(400).json({ error: 'order must be an array of message ids' });
-  }
-  const data = readKeyMessages();
-  const byId = new Map(data.messages.map((m) => [m.id, m]));
-  const reordered = order.map((id) => byId.get(id)).filter(Boolean);
-  if (reordered.length !== data.messages.length) {
-    return res.status(400).json({ error: 'order must include every existing message id exactly once' });
-  }
-  data.messages = reordered;
-  writeKeyMessages(data);
-  res.json(data);
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of message ids' });
+  try {
+    const messages = await prisma.keyMessage.findMany();
+    const byId = new Map(messages.map((m) => [m.id, m]));
+    const reordered = order.map((id) => byId.get(id)).filter(Boolean);
+    if (reordered.length !== messages.length) return res.status(400).json({ error: 'order must include every existing message id exactly once' });
+    res.json({ messages: reordered });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Website Changelog (read-only from DB) ───────────────────────────────────
 app.get('/api/website-changelog', (req, res) => {
-  res.json(readWebsiteChangelog());
+  res.json({ entries: [], siteUrl: TASAKI_WEB_URL });
 });
 
-app.get('/api/website-issues', (req, res) => {
-  res.json(readWebsiteIssues());
+// ─── Website Issues ───────────────────────────────────────────────────────────
+app.get('/api/website-issues', async (req, res) => {
+  try {
+    const rows = await prisma.websiteIssue.findMany();
+    const result = {};
+    rows.forEach((r) => { result[r.id] = r.issues; });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/website-issues/:entryId', (req, res) => {
-  const { text, authorName, authorImage } = req.body;
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'text is required' });
-  }
-  if (!authorName || typeof authorName !== 'string' || !authorName.trim()) {
-    return res.status(400).json({ error: 'authorName is required' });
-  }
-  const issues = readWebsiteIssues();
-  if (!issues[req.params.entryId]) issues[req.params.entryId] = [];
-  const issue = {
-    id: crypto.randomUUID(),
-    text: text.trim(),
-    authorName: authorName.trim(),
-    authorImage: typeof authorImage === 'string' ? authorImage : null,
-    createdAt: new Date().toISOString(),
-    comments: []
-  };
-  issues[req.params.entryId].push(issue);
-  writeWebsiteIssues(issues);
-  res.status(201).json(issue);
-});
-
-app.post('/api/website-issues/:entryId/:issueId/comments', (req, res) => {
+app.post('/api/website-issues/:entryId', async (req, res) => {
   const { text, authorName, authorImage } = req.body;
   if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
   if (!authorName || typeof authorName !== 'string' || !authorName.trim()) return res.status(400).json({ error: 'authorName is required' });
-  const issues = readWebsiteIssues();
-  const list = issues[req.params.entryId] || [];
-  const issue = list.find((i) => i.id === req.params.issueId);
-  if (!issue) return res.status(404).json({ error: 'issue not found' });
-  if (!Array.isArray(issue.comments)) issue.comments = [];
-  const { link } = req.body;
-  const comment = {
-    id: crypto.randomUUID(),
-    text: text.trim(),
-    link: typeof link === 'string' && link.trim() ? link.trim() : null,
-    authorName: authorName.trim(),
-    authorImage: typeof authorImage === 'string' ? authorImage : null,
-    createdAt: new Date().toISOString()
-  };
-  issue.comments.push(comment);
-  writeWebsiteIssues(issues);
-  res.status(201).json(comment);
+  try {
+    let row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    const issue = { id: crypto.randomUUID(), text: text.trim(), authorName: authorName.trim(), authorImage: typeof authorImage === 'string' ? authorImage : null, createdAt: new Date().toISOString(), comments: [] };
+    if (!row) {
+      row = await prisma.websiteIssue.create({ data: { id: req.params.entryId, date: '', feature: '', issues: [issue] } });
+    } else {
+      const issues = Array.isArray(row.issues) ? row.issues : [];
+      issues.push(issue);
+      row = await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    }
+    res.status(201).json(issue);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/website-issues/:entryId/:issueId/comments/:commentId', (req, res) => {
+app.post('/api/website-issues/:entryId/:issueId/comments', async (req, res) => {
+  const { text, authorName, authorImage, link } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  if (!authorName || typeof authorName !== 'string' || !authorName.trim()) return res.status(400).json({ error: 'authorName is required' });
+  try {
+    const row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    const issues = Array.isArray(row?.issues) ? [...row.issues] : [];
+    const issue = issues.find((i) => i.id === req.params.issueId);
+    if (!issue) return res.status(404).json({ error: 'issue not found' });
+    if (!Array.isArray(issue.comments)) issue.comments = [];
+    const comment = { id: crypto.randomUUID(), text: text.trim(), link: typeof link === 'string' && link.trim() ? link.trim() : null, authorName: authorName.trim(), authorImage: typeof authorImage === 'string' ? authorImage : null, createdAt: new Date().toISOString() };
+    issue.comments.push(comment);
+    await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    res.status(201).json(comment);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/website-issues/:entryId/:issueId/comments/:commentId', async (req, res) => {
   const { text } = req.body;
   if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
-  const issues = readWebsiteIssues();
-  const list = issues[req.params.entryId] || [];
-  const issue = list.find((i) => i.id === req.params.issueId);
-  if (!issue) return res.status(404).json({ error: 'issue not found' });
-  const comment = (issue.comments || []).find((c) => c.id === req.params.commentId);
-  if (!comment) return res.status(404).json({ error: 'comment not found' });
-  comment.text = text.trim();
-  comment.updatedAt = new Date().toISOString();
-  writeWebsiteIssues(issues);
-  res.json(comment);
+  try {
+    const row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    const issues = Array.isArray(row?.issues) ? [...row.issues] : [];
+    const issue = issues.find((i) => i.id === req.params.issueId);
+    if (!issue) return res.status(404).json({ error: 'issue not found' });
+    const comment = (issue.comments || []).find((c) => c.id === req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'comment not found' });
+    comment.text = text.trim();
+    comment.updatedAt = new Date().toISOString();
+    await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    res.json(comment);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/website-issues/:entryId/:issueId/comments/:commentId', (req, res) => {
-  const issues = readWebsiteIssues();
-  const list = issues[req.params.entryId] || [];
-  const issue = list.find((i) => i.id === req.params.issueId);
-  if (!issue) return res.status(404).json({ error: 'issue not found' });
-  if (!Array.isArray(issue.comments)) return res.status(404).json({ error: 'comment not found' });
-  const idx = issue.comments.findIndex((c) => c.id === req.params.commentId);
-  if (idx === -1) return res.status(404).json({ error: 'comment not found' });
-  const [removed] = issue.comments.splice(idx, 1);
-  writeWebsiteIssues(issues);
-  res.json(removed);
+app.delete('/api/website-issues/:entryId/:issueId/comments/:commentId', async (req, res) => {
+  try {
+    const row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    const issues = Array.isArray(row?.issues) ? [...row.issues] : [];
+    const issue = issues.find((i) => i.id === req.params.issueId);
+    if (!issue || !Array.isArray(issue.comments)) return res.status(404).json({ error: 'comment not found' });
+    const idx = issue.comments.findIndex((c) => c.id === req.params.commentId);
+    if (idx === -1) return res.status(404).json({ error: 'comment not found' });
+    const [removed] = issue.comments.splice(idx, 1);
+    await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    res.json(removed);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/website-issues/:entryId/:issueId', (req, res) => {
+app.patch('/api/website-issues/:entryId/:issueId', async (req, res) => {
   const { text, newEntryId } = req.body;
-  const issues = readWebsiteIssues();
-  const list = issues[req.params.entryId] || [];
-  const issue = list.find((i) => i.id === req.params.issueId);
-  if (!issue) return res.status(404).json({ error: 'issue not found' });
-  if (text && typeof text === 'string' && text.trim()) {
-    issue.text = text.trim();
-    issue.updatedAt = new Date().toISOString();
-  }
-  if (typeof req.body.solved === 'boolean') {
-    issue.solved = req.body.solved;
-    issue.updatedAt = new Date().toISOString();
-  }
-  if (newEntryId && typeof newEntryId === 'string' && newEntryId !== req.params.entryId) {
-    issues[req.params.entryId] = list.filter((i) => i.id !== req.params.issueId);
-    if (!issues[newEntryId]) issues[newEntryId] = [];
-    issues[newEntryId].push(issue);
-  }
-  writeWebsiteIssues(issues);
-  res.json(issue);
+  try {
+    const row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    let issues = Array.isArray(row?.issues) ? [...row.issues] : [];
+    const issue = issues.find((i) => i.id === req.params.issueId);
+    if (!issue) return res.status(404).json({ error: 'issue not found' });
+    if (text && typeof text === 'string' && text.trim()) { issue.text = text.trim(); issue.updatedAt = new Date().toISOString(); }
+    if (typeof req.body.solved === 'boolean') { issue.solved = req.body.solved; issue.updatedAt = new Date().toISOString(); }
+    if (newEntryId && typeof newEntryId === 'string' && newEntryId !== req.params.entryId) {
+      issues = issues.filter((i) => i.id !== req.params.issueId);
+      await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+      let target = await prisma.websiteIssue.findUnique({ where: { id: newEntryId } });
+      const targetIssues = Array.isArray(target?.issues) ? [...target.issues, issue] : [issue];
+      if (!target) await prisma.websiteIssue.create({ data: { id: newEntryId, date: '', feature: '', issues: targetIssues } });
+      else await prisma.websiteIssue.update({ where: { id: newEntryId }, data: { issues: targetIssues } });
+    } else {
+      await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    }
+    res.json(issue);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/website-issues/:entryId/:issueId', (req, res) => {
-  const issues = readWebsiteIssues();
-  const list = issues[req.params.entryId] || [];
-  const idx = list.findIndex((i) => i.id === req.params.issueId);
-  if (idx === -1) return res.status(404).json({ error: 'issue not found' });
-  const [removed] = list.splice(idx, 1);
-  issues[req.params.entryId] = list;
-  writeWebsiteIssues(issues);
-  res.json(removed);
+app.delete('/api/website-issues/:entryId/:issueId', async (req, res) => {
+  try {
+    const row = await prisma.websiteIssue.findUnique({ where: { id: req.params.entryId } });
+    const issues = Array.isArray(row?.issues) ? [...row.issues] : [];
+    const idx = issues.findIndex((i) => i.id === req.params.issueId);
+    if (idx === -1) return res.status(404).json({ error: 'issue not found' });
+    const [removed] = issues.splice(idx, 1);
+    await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    res.json(removed);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/marketing-changelog', (req, res) => {
-  res.json(readMarketingChangelog());
+// ─── Marketing Changelog ──────────────────────────────────────────────────────
+app.get('/api/marketing-changelog', async (req, res) => {
+  try {
+    const entries = await prisma.marketingChangelog.findMany({ orderBy: { date: 'desc' } });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/profiles', (req, res) => {
-  const stored = readProfiles();
-  const storedNames = new Set(stored.map((p) => p.name));
-
-  // pull in anyone who has commented but isn't in profiles.json yet
-  const data = readData();
-  data.cards.forEach((c) => {
-    (c.comments || []).forEach((cm) => {
-      if (cm.authorName && !storedNames.has(cm.authorName)) {
-        stored.push({ name: cm.authorName, imageUrl: cm.authorImage || null });
-        storedNames.add(cm.authorName);
-      }
+// ─── Profiles ─────────────────────────────────────────────────────────────────
+app.get('/api/profiles', async (req, res) => {
+  try {
+    const profiles = await prisma.profile.findMany();
+    const cards = await prisma.card.findMany({ select: { comments: true } });
+    const stored = new Set(profiles.map((p) => p.name));
+    const extras = [];
+    cards.forEach((c) => {
+      (Array.isArray(c.comments) ? c.comments : []).forEach((cm) => {
+        if (cm.authorName && !stored.has(cm.authorName)) {
+          extras.push({ name: cm.authorName, imageUrl: cm.authorImage || null });
+          stored.add(cm.authorName);
+        }
+      });
     });
-  });
-
-  res.json(stored);
+    res.json([...profiles, ...extras]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/profiles', (req, res) => {
+app.post('/api/profiles', async (req, res) => {
   const { name, imageUrl } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
-  const profiles = readProfiles();
-  const idx = profiles.findIndex((p) => p.name === name.trim());
-  if (idx >= 0) {
-    profiles[idx] = { name: name.trim(), imageUrl: imageUrl || profiles[idx].imageUrl || null };
-  } else {
-    profiles.push({ name: name.trim(), imageUrl: imageUrl || null });
-  }
-  writeProfiles(profiles);
-  res.json({ ok: true });
+  try {
+    await prisma.profile.upsert({
+      where: { name: name.trim() },
+      update: { imageUrl: imageUrl || '' },
+      create: { id: crypto.randomUUID(), name: name.trim(), imageUrl: imageUrl || '' },
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, () => {
-  console.log(`Marketing dashboard running at http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Dashboard running at http://localhost:${PORT}`));
+
+export default app;

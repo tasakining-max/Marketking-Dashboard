@@ -31,6 +31,9 @@ const cardImageInput = document.getElementById('cardImageInput');
 const cardImagePreviewWrap = document.getElementById('cardImagePreviewWrap');
 const cardImagePreview = document.getElementById('cardImagePreview');
 const cardImageRemoveBtn = document.getElementById('cardImageRemoveBtn');
+const planDateLabel = document.getElementById('cardPlanDateLabel');
+const planDateInput = document.getElementById('cardPlanDate');
+const planDateClearBtn = document.getElementById('cardPlanDateClearBtn');
 const todoLabel = document.getElementById('cardTodoLabel');
 const todoListEl = document.getElementById('cardTodoList');
 const todoInput = document.getElementById('cardTodoInput');
@@ -68,6 +71,10 @@ const rejectedList = document.getElementById('rejectedList');
 const rejectedCount = document.getElementById('rejectedCount');
 
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
+const NAV_COLUMNS = COLUMNS.filter((col) => {
+  const sec = document.querySelector(`[data-column="${col}"]`);
+  return sec && !sec.hidden;
+});
 const TAG_LABELS = {
   factory: '🏭 ถ่ายที่โรงงาน',
   office: '🏢 ถ่ายที่ออฟฟิศ',
@@ -114,8 +121,10 @@ let editingId = null;
 let rejectingId = null;
 let lastSignature = null;
 let draggingId = null;
+let publishedShowAll = false;
 let pendingImageDataUrl = null;
 let removeImageRequested = false;
+let planDateClearRequested = false;
 let pendingTodos = [];
 let pendingComments = [];
 let profilePendingImageDataUrl = null;
@@ -358,6 +367,13 @@ async function fetchCards() {
   }
 }
 
+function getWeekStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
 function orderValue(card) {
   return card.order ?? new Date(card.createdAt).getTime();
 }
@@ -365,14 +381,43 @@ function orderValue(card) {
 function render(cards) {
   const active = cards.filter((c) => c.status !== 'rejected');
   for (const column of COLUMNS) {
+    if (column === 'published') continue;
     const container = board.querySelector(`[data-column-cards="${column}"]`);
     container.innerHTML = '';
     active
       .filter((c) => c.column === column)
-      .sort((a, b) => orderValue(a) - orderValue(b))
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return orderValue(a) - orderValue(b);
+      })
       .forEach((card) => container.appendChild(renderCard(card)));
   }
+  renderPublished(active.filter((c) => c.column === 'published'));
   renderRejected(cards.filter((c) => c.status === 'rejected'));
+}
+
+function renderPublished(cards) {
+  const sorted = cards.sort((a, b) => orderValue(a) - orderValue(b));
+  const weekStart = getWeekStart();
+  const thisWeek = sorted.filter((c) => c.publishedAt && new Date(c.publishedAt) >= weekStart);
+  const older = sorted.filter((c) => !c.publishedAt || new Date(c.publishedAt) < weekStart);
+
+  const weekContainer = board.querySelector('[data-column-cards="published"]');
+  weekContainer.innerHTML = '';
+  thisWeek.forEach((card) => weekContainer.appendChild(renderCard(card)));
+
+  const olderSection = document.getElementById('publishedOlderSection');
+  const olderContainer = document.getElementById('publishedOlderCards');
+  olderContainer.innerHTML = '';
+  older.forEach((card) => olderContainer.appendChild(renderCard(card)));
+  olderSection.hidden = older.length === 0 || !publishedShowAll;
+
+  const toggleBtn = document.getElementById('publishedToggleBtn');
+  if (toggleBtn) {
+    toggleBtn.textContent = publishedShowAll ? '▾ ซ่อน' : `▸ ดูทั้งหมด (${older.length})`;
+    toggleBtn.hidden = older.length === 0;
+  }
 }
 
 function renderRejected(cards) {
@@ -447,7 +492,7 @@ function formatPublished(iso) {
 
 function renderCard(card) {
   const el = document.createElement('div');
-  el.className = 'card';
+  el.className = card.pinned ? 'card pinned' : 'card';
   el.draggable = true;
   el.dataset.id = card.id;
 
@@ -584,10 +629,30 @@ function renderCard(card) {
   expandable.hidden = isPublished;
 
   if (card.description) {
+    const descWrap = document.createElement('div');
+    descWrap.className = 'desc-wrap';
+
     const desc = document.createElement('p');
-    desc.className = 'desc';
+    desc.className = 'desc desc-collapsed';
     desc.textContent = card.description;
-    expandable.appendChild(desc);
+    descWrap.appendChild(desc);
+
+    const lines = card.description.split('\n').length;
+    const long = lines > 3 || card.description.length > 180;
+    if (long) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'desc-toggle';
+      toggle.textContent = 'See more';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const collapsed = desc.classList.toggle('desc-collapsed');
+        toggle.textContent = collapsed ? 'See more' : 'See less';
+      });
+      descWrap.appendChild(toggle);
+    }
+
+    expandable.appendChild(descWrap);
   }
 
   if (Array.isArray(card.todos) && card.todos.length) {
@@ -695,8 +760,27 @@ function renderCard(card) {
   el.appendChild(expandable);
 
   const colIndex = COLUMNS.indexOf(card.column);
+  const navIndex = NAV_COLUMNS.indexOf(card.column);
   const moveRow = document.createElement('div');
   moveRow.className = 'move-row';
+
+  const pinBtn = document.createElement('button');
+  pinBtn.className = card.pinned ? 'pin-btn pinned' : 'pin-btn';
+  pinBtn.type = 'button';
+  pinBtn.title = card.pinned ? 'Unpin card' : 'Pin to top';
+  pinBtn.setAttribute('aria-label', card.pinned ? 'Unpin card' : 'Pin to top');
+  pinBtn.textContent = '📌';
+  pinBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await fetch(`/api/cards/${card.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned: !card.pinned })
+    });
+    lastSignature = null;
+    fetchCards();
+  });
+  moveRow.appendChild(pinBtn);
 
   const detailBtn = document.createElement('button');
   detailBtn.className = 'detail-btn';
@@ -710,31 +794,40 @@ function renderCard(card) {
   });
   moveRow.appendChild(detailBtn);
 
-  if (colIndex > 0) {
-    const back = document.createElement('button');
-    back.className = 'move-btn';
-    back.type = 'button';
-    back.title = `Move back to ${COLUMNS[colIndex - 1]}`;
-    back.textContent = '←';
-    back.addEventListener('click', (e) => {
-      e.stopPropagation();
-      moveCard(card.id, COLUMNS[colIndex - 1]);
-    });
-    moveRow.appendChild(back);
+  // 2×2 grid: row1=[← →] row2=[↑ ↓]
+  const navGrid = document.createElement('div');
+  navGrid.className = 'nav-grid';
+
+  function makeNavBtn(text, title, onClick, disabled) {
+    const btn = document.createElement('button');
+    btn.className = 'move-btn';
+    btn.type = 'button';
+    btn.title = title;
+    btn.textContent = text;
+    if (disabled) { btn.disabled = true; }
+    else { btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); }); }
+    return btn;
   }
 
-  if (colIndex < COLUMNS.length - 1) {
-    const forward = document.createElement('button');
-    forward.className = 'move-btn';
-    forward.type = 'button';
-    forward.title = `Move to ${COLUMNS[colIndex + 1]}`;
-    forward.textContent = '→';
-    forward.addEventListener('click', (e) => {
-      e.stopPropagation();
-      moveCard(card.id, COLUMNS[colIndex + 1]);
-    });
-    moveRow.appendChild(forward);
-  }
+  // Row 1: [←] [→]
+  navGrid.appendChild(makeNavBtn('←', `← ${NAV_COLUMNS[navIndex - 1] || ''}`, () => moveCard(card.id, NAV_COLUMNS[navIndex - 1]), navIndex === 0));
+  navGrid.appendChild(makeNavBtn('→', `→ ${NAV_COLUMNS[navIndex + 1] || ''}`, () => moveCard(card.id, NAV_COLUMNS[navIndex + 1]), navIndex === NAV_COLUMNS.length - 1));
+
+  // Row 2: [↑] [↓]
+  navGrid.appendChild(makeNavBtn('↑', 'Move up', () => {
+    const container = board.querySelector(`[data-column-cards="${card.column}"]`);
+    const ids = Array.from(container.children).map((c) => c.dataset.id);
+    const idx = ids.indexOf(card.id);
+    if (idx > 0) { [ids[idx - 1], ids[idx]] = [ids[idx], ids[idx - 1]]; reorderCards(card.column, ids); }
+  }));
+  navGrid.appendChild(makeNavBtn('↓', 'Move down', () => {
+    const container = board.querySelector(`[data-column-cards="${card.column}"]`);
+    const ids = Array.from(container.children).map((c) => c.dataset.id);
+    const idx = ids.indexOf(card.id);
+    if (idx < ids.length - 1) { [ids[idx], ids[idx + 1]] = [ids[idx + 1], ids[idx]]; reorderCards(card.column, ids); }
+  }));
+
+  moveRow.appendChild(navGrid);
 
   if (card.column === 'idea') {
     const reject = document.createElement('button');
@@ -764,7 +857,7 @@ function renderCard(card) {
   });
   moveRow.appendChild(deleteBtnEl);
 
-  expandable.appendChild(moveRow);
+  el.appendChild(moveRow);
 
   el.addEventListener('dragstart', () => {
     draggingId = card.id;
@@ -1056,6 +1149,11 @@ function addIssue() {
   renderIssueList();
   issueInput.focus();
 }
+
+planDateClearBtn.addEventListener('click', () => {
+  planDateInput.value = '';
+  planDateClearRequested = true;
+});
 
 issueAddBtn.addEventListener('click', addIssue);
 issueInput.addEventListener('keydown', (e) => {
@@ -1365,6 +1463,9 @@ function openDialog(card) {
   platformLabel.hidden = !(card && card.column === 'published');
   const cardPlatforms = (card && card.platforms) || [];
   platformCheckboxes.forEach((cb) => { cb.checked = cardPlatforms.includes(cb.value); });
+  planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
+  planDateInput.value = (card && card.plannedPublishDate) ? card.plannedPublishDate.slice(0, 10) : '';
+  planDateClearRequested = false;
   todoLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
   pendingTodos = ((card && card.todos) || []).map((t) => ({ ...t }));
   todoInput.value = '';
@@ -1428,6 +1529,9 @@ form.addEventListener('submit', async (e) => {
   }
   if (!platformLabel.hidden) {
     payload.platforms = platformCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+  }
+  if (!todoLabel.hidden) {
+    payload.plannedPublishDate = planDateClearRequested ? null : (planDateInput.value || null);
   }
   if (!todoLabel.hidden) {
     payload.todos = pendingTodos;
@@ -1524,6 +1628,12 @@ async function fetchCardsAndOpenParam() {
     window.history.replaceState({}, '', '/index.html');
   }
 }
+
+document.getElementById('publishedToggleBtn').addEventListener('click', () => {
+  publishedShowAll = !publishedShowAll;
+  lastSignature = null;
+  fetchCards();
+});
 
 fetchCardsAndOpenParam();
 setInterval(fetchCards, POLL_INTERVAL_MS);
@@ -2173,79 +2283,67 @@ function thaiDateToday() {
 }
 
 async function buildSummary() {
-  const [cardsRes, changelogRes, marketingChangelogRes] = await Promise.all([
+  const [cardsRes, issuesRes] = await Promise.all([
     fetch('/api/cards').then((r) => r.json()),
-    fetch('/api/website-changelog').then((r) => r.json()),
-    fetch('/api/marketing-changelog').then((r) => r.json())
+    fetch('/api/website-issues').then((r) => r.json())
   ]);
 
   const cards = cardsRes.cards;
-  const newIdeas = cards.filter((c) => c.column === 'idea' && c.status !== 'rejected' && isToday(c.createdAt));
   const publishedToday = cards.filter((c) => c.column === 'published' && isToday(c.publishedAt));
-  const movedToClip = cards.filter((c) => (c.column === 'clip' || c.column === 'youtube') && isToday(c.updatedAt));
-  const rejectedToday = cards.filter((c) => c.status === 'rejected' && isToday(c.updatedAt));
-  const websiteUpdatesToday = (changelogRes.entries || []).filter((e) => e.date === todayKey());
-  const marketingUpdatesToday = (marketingChangelogRes.entries || []).filter((e) => e.date === todayKey());
-
   const activeClips = cards.filter((c) => (c.column === 'clip' || c.column === 'youtube') && c.status !== 'rejected');
-  const clipsWithTodos = activeClips.filter((c) => Array.isArray(c.todos) && c.todos.length);
-  const clipsWithIssues = activeClips.filter((c) => Array.isArray(c.issues) && c.issues.length);
+  const newIdeas = cards.filter((c) => c.column === 'idea' && c.status !== 'rejected' && isToday(c.createdAt));
 
   const lines = [];
-  lines.push(`📅 สรุปงานวันนี้ — ${thaiDateToday()}`);
+  lines.push(`📅 สรุปงาน — ${thaiDateToday()}`);
   lines.push('');
 
+  // Help needed — top priority
+  const helpLines = [];
+  activeClips.forEach((c) => {
+    (c.issues || []).filter((i) => i.status !== 'solved').forEach((i) => {
+      helpLines.push(`- [คลิป] ${c.title}: ${i.text}`);
+    });
+  });
+  Object.values(issuesRes).flat().forEach((i) => {
+    helpLines.push(`- [เว็บ] ${i.text}`);
+  });
+  if (helpLines.length) {
+    lines.push(`🆘 ขอความช่วยเหลือ (${helpLines.length})`);
+    helpLines.forEach((h) => lines.push(h));
+    lines.push('');
+  }
+
+  // In progress
+  if (activeClips.length) {
+    lines.push(`🎬 กำลังทำ (${activeClips.length})`);
+    activeClips.forEach((c) => {
+      if (Array.isArray(c.todos) && c.todos.length) {
+        const done = c.todos.filter((t) => t.status === 'done').length;
+        const nextTodo = c.todos.find((t) => t.status !== 'done');
+        const tag = done === c.todos.length ? ' — เสร็จแล้ว รอตรวจ' : ` (${done}/${c.todos.length})`;
+        const current = nextTodo ? ` → กำลัง${nextTodo.text}` : '';
+        lines.push(`- ${c.title}${tag}${current}`);
+      } else {
+        lines.push(`- ${c.title}`);
+      }
+    });
+    lines.push('');
+  }
+
+  // Done today
   if (publishedToday.length) {
-    lines.push(`✅ ลงคอนเทนต์เสร็จแล้ววันนี้ (${publishedToday.length})`);
-    publishedToday.forEach((c) => lines.push(`- ${c.title}`));
+    lines.push(`✅ เผยแพร่วันนี้: ${publishedToday.map((c) => c.title).join(', ')}`);
     lines.push('');
   }
-  if (movedToClip.length) {
-    lines.push(`🎬 เริ่มทำคลิปวันนี้ (${movedToClip.length})`);
-    movedToClip.forEach((c) => lines.push(`- ${c.title}`));
-    lines.push('');
-  }
-  if (clipsWithTodos.length) {
-    lines.push(`🎬 ความคืบหน้าคลิปที่กำลังทำอยู่ (${clipsWithTodos.length})`);
-    clipsWithTodos.forEach((c) => {
-      const total = c.todos.length;
-      const done = c.todos.filter((t) => t.status === 'done').length;
-      const statusText = done === total ? 'ทำเสร็จหมดแล้ว รอตรวจ' : `ทำไปแล้ว ${done} จาก ${total} เรื่อง`;
-      lines.push(`- ${c.title} (${statusText})`);
-    });
-    lines.push('');
-  }
-  if (clipsWithIssues.length) {
-    lines.push(`🆘 มีเรื่องต้องขอความช่วยเหลือ (${clipsWithIssues.length} คลิป)`);
-    clipsWithIssues.forEach((c) => {
-      lines.push(`- ${c.title}:`);
-      c.issues.forEach((i) => lines.push(`   • ${i.text}`));
-    });
-    lines.push('');
-  }
+
+  // New ideas today
   if (newIdeas.length) {
-    lines.push(`💡 ไอเดียใหม่วันนี้ (${newIdeas.length})`);
-    newIdeas.forEach((c) => lines.push(`- ${c.title}`));
-    lines.push('');
-  }
-  if (rejectedToday.length) {
-    lines.push(`🗑 ไอเดียที่ตีกลับวันนี้ (${rejectedToday.length})`);
-    rejectedToday.forEach((c) => lines.push(`- ${c.title} (เหตุผล: ${c.rejectionReason})`));
-    lines.push('');
-  }
-  if (websiteUpdatesToday.length) {
-    lines.push(`🌐 อัปเดตเว็บไซต์วันนี้ (${websiteUpdatesToday.length})`);
-    websiteUpdatesToday.forEach((e) => lines.push(`- ${e.feature}`));
-    lines.push('');
-  }
-  if (marketingUpdatesToday.length) {
-    lines.push(`🛠 ปรับปรุงเครื่องมือทำงานวันนี้ (${marketingUpdatesToday.length})`);
-    marketingUpdatesToday.forEach((e) => lines.push(`- ${e.feature}`));
+    lines.push(`💡 ไอเดียใหม่: ${newIdeas.length} อัน`);
     lines.push('');
   }
 
   if (lines.length === 2) {
-    lines.push('วันนี้ยังไม่มีความเคลื่อนไหว');
+    lines.push('ยังไม่มีความเคลื่อนไหววันนี้');
   }
 
   return lines.join('\n').trim();
