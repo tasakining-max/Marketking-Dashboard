@@ -127,20 +127,10 @@ app.post('/api/cards/:id/image', async (req, res) => {
   try {
     const card = await prisma.card.findUnique({ where: { id: req.params.id } });
     if (!card) return res.status(404).json({ error: 'card not found' });
-    const contentType = req.headers['content-type'] || '';
-    const mime = contentType.split(';')[0].trim();
-    if (!IMAGE_MIME_EXT[mime]) return res.status(400).json({ error: 'unsupported image type' });
-
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', async () => {
-      try {
-        const buf = Buffer.concat(chunks);
-        const imageUrl = `data:${mime};base64,${buf.toString('base64')}`;
-        const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl } });
-        res.json(serializeCard(updated));
-      } catch (e) { res.status(500).json({ error: e.message }); }
-    });
+    const { image } = req.body;
+    if (!image || !image.startsWith('data:image/')) return res.status(400).json({ error: 'invalid image data' });
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: image } });
+    res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
