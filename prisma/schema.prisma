@@ -15,7 +15,7 @@ model Card {
   rejectionReason    String   @default("")
   tags               String[] @default([])
   platforms          String[] @default([])
-  imageUrl           String?
+  imageUrl           String?  @db.Text
   todos              Json     @default("[]")
   issues             Json     @default("[]")
   comments           Json     @default("[]")

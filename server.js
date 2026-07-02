@@ -6,9 +6,6 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
-import { put, del } from '@vercel/blob';
-
-const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,33 +128,15 @@ app.post('/api/cards/:id/image', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id } });
     if (!card) return res.status(404).json({ error: 'card not found' });
     const contentType = req.headers['content-type'] || '';
-    const ext = IMAGE_MIME_EXT[contentType.split(';')[0].trim()];
-    if (!ext) return res.status(400).json({ error: 'unsupported image type' });
+    const mime = contentType.split(';')[0].trim();
+    if (!IMAGE_MIME_EXT[mime]) return res.status(400).json({ error: 'unsupported image type' });
 
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', async () => {
       try {
         const buf = Buffer.concat(chunks);
-        const fileName = `${req.params.id}-${Date.now()}.${ext}`;
-        let imageUrl;
-
-        if (USE_BLOB) {
-          // Vercel Blob
-          const blob = await put(`cards/${fileName}`, buf, { access: 'public', contentType });
-          imageUrl = blob.url;
-          if (card.imageUrl && card.imageUrl.startsWith('https://')) {
-            try { await del(card.imageUrl); } catch {}
-          }
-        } else {
-          // Local filesystem
-          fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buf);
-          if (card.imageUrl && !card.imageUrl.startsWith('https://')) {
-            try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
-          }
-          imageUrl = `/uploads/${fileName}`;
-        }
-
+        const imageUrl = `data:${mime};base64,${buf.toString('base64')}`;
         const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl } });
         res.json(serializeCard(updated));
       } catch (e) { res.status(500).json({ error: e.message }); }
@@ -169,13 +148,6 @@ app.delete('/api/cards/:id/image', async (req, res) => {
   try {
     const card = await prisma.card.findUnique({ where: { id: req.params.id } });
     if (!card) return res.status(404).json({ error: 'card not found' });
-    if (card.imageUrl) {
-      if (USE_BLOB && card.imageUrl.startsWith('https://')) {
-        try { await del(card.imageUrl); } catch {}
-      } else {
-        try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
-      }
-    }
     const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: null } });
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -250,9 +222,6 @@ app.delete('/api/cards/:id', async (req, res) => {
   try {
     const card = await prisma.card.findUnique({ where: { id: req.params.id } });
     if (!card) return res.status(404).json({ error: 'card not found' });
-    if (card.imageUrl) {
-      try { fs.rmSync(path.join(__dirname, 'public', card.imageUrl), { force: true }); } catch {}
-    }
     await prisma.card.delete({ where: { id: req.params.id } });
     res.json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }
