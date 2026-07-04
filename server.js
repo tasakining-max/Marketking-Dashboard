@@ -302,8 +302,12 @@ app.put('/api/key-messages/reorder', async (req, res) => {
 });
 
 // ─── Website Changelog (read-only from DB) ───────────────────────────────────
-app.get('/api/website-changelog', (req, res) => {
-  res.json({ entries: [], siteUrl: TASAKI_WEB_URL });
+app.get('/api/website-changelog', async (req, res) => {
+  try {
+    const rows = await prisma.websiteChangelog.findMany({ orderBy: { date: 'desc' } });
+    const entries = rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
+    res.json({ entries, siteUrl: TASAKI_WEB_URL });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Website Issues ───────────────────────────────────────────────────────────
@@ -420,7 +424,8 @@ app.delete('/api/website-issues/:entryId/:issueId', async (req, res) => {
 // ─── Marketing Changelog ──────────────────────────────────────────────────────
 app.get('/api/marketing-changelog', async (req, res) => {
   try {
-    const entries = await prisma.marketingChangelog.findMany({ orderBy: { date: 'desc' } });
+    const rows = await prisma.marketingChangelog.findMany({ orderBy: { date: 'desc' } });
+    const entries = rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
     res.json({ entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -65,3 +65,9 @@ model MarketingChangelog {
   text      String
   date      DateTime @default(now())
 }
+
+model WebsiteChangelog {
+  id        String   @id @default(uuid())
+  text      String
+  date      DateTime @default(now())
+}

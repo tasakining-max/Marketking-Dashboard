@@ -133,17 +133,29 @@ async function main() {
   const { entries: clEntries = [] } = readJson('marketing-changelog.json', { entries: [] });
   console.log(`\nMigrating ${clEntries.length} changelog entries...`);
   for (const e of clEntries) {
+    const text = e.feature || e.text || '';
+    const date = new Date(e.datetime || e.date || Date.now());
     await prisma.marketingChangelog.upsert({
       where: { id: e.id || crypto.randomUUID() },
-      update: {},
-      create: {
-        id: e.id || crypto.randomUUID(),
-        text: e.text || '',
-        date: e.date ? new Date(e.date) : new Date(),
-      },
+      update: { text, date },
+      create: { id: e.id || crypto.randomUUID(), text, date },
     });
   }
   console.log('✓ Marketing changelog done');
+
+  // ===== WEBSITE CHANGELOG =====
+  const { entries: wcEntries = [] } = readJson('website-changelog.json', { entries: [] });
+  console.log(`\nMigrating ${wcEntries.length} website changelog entries...`);
+  for (const e of wcEntries) {
+    const text = e.feature || e.text || '';
+    const date = new Date(e.datetime || e.date || Date.now());
+    await prisma.websiteChangelog.upsert({
+      where: { id: e.id || crypto.randomUUID() },
+      update: { text, date },
+      create: { id: e.id || crypto.randomUUID(), text, date },
+    });
+  }
+  console.log('✓ Website changelog done');
 
   console.log('\n✅ Migration complete!');
 }
