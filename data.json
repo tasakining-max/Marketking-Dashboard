@@ -75,11 +75,11 @@
       "status": "active",
       "rejectionReason": "",
       "createdAt": "2026-06-25T06:26:47.211Z",
-      "updatedAt": "2026-07-01T07:21:54.102Z",
+      "updatedAt": "2026-07-02T04:48:43.776Z",
       "tags": [
         "office"
       ],
-      "order": 1,
+      "order": 2,
       "todos": [
         {
           "id": "8124d6b4-dc58-401c-bba7-7cc0c94d703f",
@@ -93,7 +93,12 @@
         },
         {
           "id": "2adc69ef-664d-4421-88f5-4d3f2e894f8d",
-          "text": "พี่ดาตวรจสคริปคำถาม",
+          "text": "รอพี่ดาตวรจสคริปคำถาม",
+          "status": "done"
+        },
+        {
+          "id": "2685bb0b-909d-429c-8282-a452f68c9428",
+          "text": "รอพี่ดาพูดคุย นัดวันสัมภาษณ์",
           "status": "in_progress"
         },
         {
@@ -125,7 +130,9 @@
         }
       ],
       "comments": [],
-      "links": []
+      "links": [],
+      "plannedPublishDate": null,
+      "publishedAt": "2026-07-02T04:18:21.387Z"
     },
     {
       "id": "039f9ab1-956d-4da1-a203-0147fc7caebd",
@@ -135,7 +142,7 @@
       "status": "active",
       "rejectionReason": "",
       "createdAt": "2026-06-25T06:27:04.519Z",
-      "updatedAt": "2026-07-01T08:30:09.035Z",
+      "updatedAt": "2026-07-02T01:55:06.124Z",
       "tags": [
         "office",
         "archive"
@@ -150,7 +157,7 @@
         {
           "id": "14269055-1359-4268-9d09-fae691cf1f8e",
           "text": "ค้นหาคลิป/รูปเก่าที่เกี่ยวข้อง",
-          "status": "plan"
+          "status": "in_progress"
         },
         {
           "id": "96babe08-ecef-433d-a0b0-3d7e674a4493",
@@ -191,7 +198,7 @@
       "status": "active",
       "rejectionReason": "",
       "createdAt": "2026-06-25T06:27:04.549Z",
-      "updatedAt": "2026-07-01T06:18:58.219Z",
+      "updatedAt": "2026-07-02T04:49:32.996Z",
       "tags": [
         "factory"
       ],
@@ -204,7 +211,12 @@
         },
         {
           "id": "00166c2a-c866-4c73-8bc7-078b46b5c416",
-          "text": "พี่ดาตรวจสคริป",
+          "text": "รอพี่ดาตรวจสคริป",
+          "status": "done"
+        },
+        {
+          "id": "bbd25589-0d55-4797-9161-f91703fb9e79",
+          "text": "รอพี่ดาพูดคุยกับทีม QA และนัดวันถ่ายทำ",
           "status": "in_progress"
         },
         {
@@ -235,7 +247,8 @@
       ],
       "issues": [],
       "comments": [],
-      "links": []
+      "links": [],
+      "plannedPublishDate": null
     },
     {
       "id": "1d6df026-0c20-4b43-9e28-46551175a67d",
@@ -323,18 +336,26 @@
     {
       "id": "3b0406ee-70b4-476b-b14f-0bc77891f039",
       "title": "Inverter vs Non-Inverter ต่างกันแค่ไหน",
-      "description": "คลิปเปรียบเทียบ ไม่มีตัวร้าย เน้น \"เหมาะกับคุณแบบไหน\"\nFormat: Gen AI Motor Visual + Narration / 9:16 บน-ล่างตลอดคลิป\n\nLayout\n┌─────────────────┐\n│  NON-INVERTER   │  โทนเงิน / metallic white\n├────── VS ───────┤  เส้นขาว บน bg น้ำเงินเข้ม\n│    INVERTER     │  โทนน้ำเงิน Tasaki #0055B3\n└─────────────────┘\n\n4 ช่วงเปรียบเทียบ\n\n1. การทำงานของมอเตอร์\n   บน : สตาร์ทเต็มกำลัง ทำความเย็นเร็ว\n   ล่าง : ปรับรอบอัตโนมัติ เย็นสม่ำเสมอ\n\n2. ราคาและการลงทุน\n   บน : ราคาเข้าถึงง่าย ติดตั้งง่าย\n   ล่าง : ลงทุนสูงกว่า แต่ค่าไฟถูกลงในระยะยาว\n\n3. เหมาะกับห้องแบบไหน\n   บน : เปิดไม่นาน วันละ 3-4 ชั่วโมง\n   ล่าง : เปิดทั้งวัน หรือเปิดตลอดคืน\n\n4. การดูแลรักษา\n   บน : ระบบเรียบง่าย ซ่อมง่าย หาช่างได้ทั่วไป\n   ล่าง : เทคโนโลยีสูง แนะนำช่างเฉพาะทาง\n\nGen AI Prompt\nบน : industrial AC motor, powerful, silver metallic glow, clean white, professional, cinematic\nล่าง : industrial AC motor, smooth rotation, deep navy blue glow, Tasaki blue #0055B3, hi-tech precision, cinematic\n\nCTA ปิดคลิป : เลือกให้เหมาะกับไลฟ์สไตล์ของคุณ",
+      "description": "คลิปเปรียบเทียบ ไม่มีตัวร้าย เน้น \"เหมาะกับคุณแบบไหน\"\nFormat: Gen AI Motor Visual + Narration / 9:16 บน-ล่างตลอดคลิป\n\nLayout\n┌─────────────────┐\n│    INVERTER     │  โทนน้ำเงิน Tasaki #0055B3\n├────── VS ───────┤  เส้นขาว บน bg น้ำเงินเข้ม\n│  NON-INVERTER   │  โทนเงิน / metallic white\n└─────────────────┘\n\n4 ช่วงเปรียบเทียบ\n\n1. การทำงานของมอเตอร์\n   บน : ปรับรอบอัตโนมัติ เย็นสม่ำเสมอ\n   ล่าง : สตาร์ทเต็มกำลัง ทำความเย็นเร็ว\n\n2. ราคาและการลงทุน\n   บน : ลงทุนสูงกว่า แต่ค่าไฟถูกลงในระยะยาว\n   ล่าง : ราคาเข้าถึงง่าย ติดตั้งง่าย\n\n3. เหมาะกับห้องแบบไหน\n   บน : เปิดทั้งวัน หรือเปิดตลอดคืน\n   ล่าง : เปิดไม่นาน วันละ 3-4 ชั่วโมง\n\n4. การดูแลรักษา\n   บน : เทคโนโลยีสูง แนะนำช่างเฉพาะทาง\n   ล่าง : ระบบเรียบง่าย ซ่อมง่าย หาช่างได้ทั่วไป\n\nGen AI Prompt\nบน : industrial AC motor, smooth rotation, deep navy blue glow, Tasaki blue #0055B3, hi-tech precision, cinematic\nล่าง : industrial AC motor, powerful, silver metallic glow, clean white, professional, cinematic\n\nCTA ปิดคลิป : เลือกให้เหมาะกับไลฟ์สไตล์ของคุณ",
       "column": "clip",
       "status": "active",
       "rejectionReason": "",
-      "tags": [],
+      "tags": [
+        "ai",
+        "archive"
+      ],
       "platforms": [],
-      "imageUrl": null,
+      "imageUrl": "/uploads/3b0406ee-70b4-476b-b14f-0bc77891f039-1782975010927.png",
       "todos": [
+        {
+          "id": "c76e19f2-d2d6-4cc6-9667-b1deddac61c8",
+          "text": "ศึกษาวิธีการทำ Motion Graphic by Claude code แบบฟรีๆ ใน Youtube",
+          "status": "done"
+        },
         {
           "id": "e3afe77f-a859-4ba6-9e56-5ebdbb24fbb6",
           "text": "หารูปภาพ แอร์ Inverter and Non-Inverter",
-          "status": "plan"
+          "status": "done"
         },
         {
           "id": "c8735163-adc1-489b-aa13-9edb4fbf6681",
@@ -344,7 +365,7 @@
         {
           "id": "f126413e-e049-4c9a-8843-138d376dd245",
           "text": "Gen รูป / VDO AI",
-          "status": "plan"
+          "status": "done"
         },
         {
           "id": "1df2f4e9-f201-4e30-aa8a-e9698be0d4fd",
@@ -358,7 +379,7 @@
         },
         {
           "id": "59087e2d-8ea8-49aa-a694-2fa23b983ce9",
-          "text": "พี่ดาตวรจสอบความถูกต้อง",
+          "text": "รอพี่ดาตวรจสอบความถูกต้อง",
           "status": "plan"
         },
         {
@@ -372,13 +393,20 @@
           "id": "2ecdd358-79ba-4e02-8b66-9022557f42a6",
           "text": "อยากได้รูปแยกของมอเตอร์ ทั้ง 2 ชนิด Invertor กับ Non-Invertor ชี้แนวทางหน่อยค่ะ",
           "status": "problem"
+        },
+        {
+          "id": "2cb5fc6f-0f76-440f-ae7c-ac8969e908ab",
+          "text": "ฝากพี่ดาจีบคุณเบนซ์ พากษ์เสียง Takujung ให้หน่อยนะคะ",
+          "status": "problem"
         }
       ],
-      "order": 2,
+      "order": 1,
       "createdAt": "2026-06-29T02:47:04.142Z",
-      "updatedAt": "2026-07-01T06:16:38.626Z",
+      "updatedAt": "2026-07-02T07:56:29.838Z",
       "comments": [],
-      "links": []
+      "links": [],
+      "plannedPublishDate": "2026-07-03",
+      "pinned": true
     },
     {
       "id": "9b10e304-f02c-478a-a005-60e61e321820",
@@ -418,39 +446,89 @@
     },
     {
       "id": "15f15b82-f672-4c1e-ac9f-5f06bbd2cb36",
-      "title": "อมพระมาพูดก็ไม่เชื่อ - ค่าไฟ 0 บาทจริงเหรอ",
-      "description": "ใช้ซาวด์ไวรัลจากซีรีส์ทนายปีศาจ เปิดด้วยคนไม่เชื่อว่า Solar Hybrid ประหยัดไฟได้จริง แล้วโชว์หลักฐาน",
-      "column": "idea",
+      "title": "อมพระมาพูดก็ไม่เชื่อ - แอร์ไทยอะไหล่พร้อมกว่า",
+      "description": "ใช้ซาวด์ไวรัลจากซีรีส์ทนายปีศาจ เปิดด้วยคนไม่เชื่อว่า \"แอร์ไทยอะไหล่พร้อมกว่า\"\n\nซีน หนิงร่วมกับ ทีม Service(ชุดยูนิฟอร์ม) 2-3 คน  เดินเปิดประตูออกมา ทำหน้าส่ะใจ เยาะเย้ย  ขึ้นข้อความ \"POV : ซื้อแอร์ถูกๆ แต่ไม่มีอะไหล่บริการ\"",
+      "column": "clip",
       "status": "active",
       "rejectionReason": "",
-      "tags": [
-        "trend"
-      ],
+      "tags": [],
       "platforms": [],
       "imageUrl": null,
-      "todos": [],
+      "todos": [
+        {
+          "id": "8f9eac59-bb5a-4fe0-8be1-0e2a109ee97c",
+          "text": "รอพี่ดาประสานงานขอความร่วมมือ กับ ทีม Service",
+          "status": "in_progress"
+        },
+        {
+          "id": "af0fff38-e7a2-48dc-a212-8f703d2c5ff7",
+          "text": "ถ่ายคอนเทนต์",
+          "status": "plan"
+        },
+        {
+          "id": "b0456609-27e4-40a5-8d78-7793417da8cf",
+          "text": "ตัดต่อวิดีโอ",
+          "status": "plan"
+        },
+        {
+          "id": "cbfb836c-b59f-40a2-96ce-fd913ab18a8d",
+          "text": "รอพี่ดาตรวจ",
+          "status": "plan"
+        },
+        {
+          "id": "8e0be851-0fc0-4d06-b99a-b35c4bc2f3e1",
+          "text": "ตั้งเวลาโพส",
+          "status": "plan"
+        }
+      ],
       "issues": [],
-      "order": 7,
+      "order": 5,
       "createdAt": "2026-06-29T02:47:04.150Z",
-      "updatedAt": "2026-06-29T02:47:04.151Z"
+      "updatedAt": "2026-07-02T04:50:11.576Z",
+      "comments": [],
+      "links": [],
+      "plannedPublishDate": null
     },
     {
       "id": "309edb66-9dc1-4f35-8a75-0206061fdc5b",
-      "title": "6-7 เปรียบเทียบบิลค่าไฟเก่า vs Solar Hybrid",
-      "description": "ใช้มีม 6-7 เปรียบเทียบแบบขำๆ",
-      "column": "idea",
+      "title": "6-7",
+      "description": "ใช้มีม 6-7 เพลงฮิต\n\nเพลงฮิต .. Hello Girl  What's your name My name is Belli\n\nแนะนำช่องทางติดต่อ Line OA rich menu",
+      "column": "clip",
       "status": "active",
       "rejectionReason": "",
-      "tags": [
-        "trend"
-      ],
+      "tags": [],
       "platforms": [],
       "imageUrl": null,
-      "todos": [],
+      "todos": [
+        {
+          "id": "f171b067-c007-40d4-9efd-02bb05cc2f0f",
+          "text": "ถ่ายวิดีโอ",
+          "status": "plan"
+        },
+        {
+          "id": "6685d555-88ab-401d-b363-28781080b246",
+          "text": "ตัดต่อ",
+          "status": "plan"
+        },
+        {
+          "id": "2cba1280-fef5-43cf-8b55-091853a80c7a",
+          "text": "รอพี่ดาตรวจสอบ",
+          "status": "plan"
+        },
+        {
+          "id": "05ea3c4e-b60e-4784-b38f-d761b2ce6fca",
+          "text": "ตั้งเวลาโพส",
+          "status": "plan"
+        }
+      ],
       "issues": [],
-      "order": 8,
+      "order": 0,
       "createdAt": "2026-06-29T02:47:04.152Z",
-      "updatedAt": "2026-06-29T02:47:04.153Z"
+      "updatedAt": "2026-07-02T04:54:14.306Z",
+      "comments": [],
+      "links": [],
+      "plannedPublishDate": "2026-07-04",
+      "pinned": false
     },
     {
       "id": "fe3bb517-5b55-4db5-8e2d-8db123a5a884",
@@ -525,43 +603,6 @@
       "updatedAt": "2026-06-29T02:47:04.160Z"
     },
     {
-      "id": "31662146-ef3e-41ea-b92a-b94dd4bc6610",
-      "title": "แอร์มีปัญหา เช็ค/แก้เองได้ก่อนเรียกช่าง (คลิปยาว)",
-      "description": "คลิปยาว YouTube สำหรับคนที่ใช้แอร์อยู่แล้วแต่มีปัญหา ทำคนเดียวได้ (พูดอธิบาย+กราฟิก ไม่ต้องมีแอร์ตัวอย่าง)\n\n1. แอร์มีน้ำหยด ปกติหรือเสีย\n   สาเหตุ: ปกติคือควบแน่นจากท่อน้ำทิ้งด้านนอก ผิดปกติคือท่อน้ำทิ้งอุดตัน/ติดตั้งเอียงผิดทาง/น้ำยาแอร์รั่วจนน้ำแข็งจับคอยล์\n   วิธีแก้: เป่า/ดูดล้างท่อน้ำทิ้งที่อุดตันเองได้ — ถ้าเอียงผิดทางหรือสงสัยน้ำยารั่ว ต้องเรียกช่าง ห้ามแก้เอง\n\n2. แอร์เปิดแล้วไม่เย็น เช็ค 5 จุดด้วยตัวเองก่อนเรียกช่าง\n   สาเหตุ: ฟิลเตอร์สกปรก / คอยล์ร้อนมีสิ่งกีดขวาง / ตั้งโหมด-อุณหภูมิผิด / น้ำยาแอร์รั่ว / BTU เล็กไม่พอห้อง\n   วิธีแก้: ถอดล้างฟิลเตอร์เอง (ล้างน้ำ ผึ่งแห้ง) + เคลียร์สิ่งกีดขวางหน้าคอยล์ร้อน + เช็คว่าตั้งโหมด COOL ไม่ใช่ FAN — ถ้ายังไม่เย็นสงสัยน้ำยารั่วหรือ BTU ไม่พอ ต้องเรียกช่าง\n\n3. แอร์มีกลิ่นเหม็น เกิดจากอะไร แก้เองได้ไหม\n   สาเหตุ: เชื้อรา/แบคทีเรียสะสมที่คอยล์เย็นจากความชื้น + ฟิลเตอร์สกปรก\n   วิธีแก้: ล้างฟิลเตอร์เป็นประจำ + เปิดโหมด Clean/Self-clean ถ้ามี + เปิดพัดลมเป่าคอยล์ให้แห้งหลังปิดแอร์ — ถ้าเหม็นมากไม่หายต้องเรียกช่างล้างใหญ่ทั้งระบบ\n\n4. แอร์มีเสียงดังผิดปกติหรือเปล่า\n   สาเหตุ: น็อต/ขาแขวนเครื่องหลวม / สิ่งแปลกปลอมติดใบพัดลม / ท่อน้ำยาสัมผัสผนังสั่นสะเทือน / ปัญหาคอมเพรสเซอร์\n   วิธีแก้: ขันน็อต/ขาแขวนให้แน่น + รองยางกันสะเทือนที่ท่อน้ำยา — ถ้าเสียงดังจากตัวคอมเพรสเซอร์ ต้องเรียกช่างเช็ค ห้ามเปิดเองเด็ดขาด",
-      "column": "youtube",
-      "status": "active",
-      "rejectionReason": "",
-      "tags": [],
-      "platforms": [],
-      "imageUrl": null,
-      "todos": [
-        {
-          "id": "9d363b71-a3b6-4b2b-a7e6-099a2c6893f4",
-          "text": "หาความรู้",
-          "status": "done"
-        },
-        {
-          "id": "e5217f92-a72c-478e-9f0f-476252a67836",
-          "text": "โทรเช็คหาแอร์ Wall Type ในบริษัท พบที่คลังสินค้า",
-          "status": "done"
-        },
-        {
-          "id": "9a18f987-711f-4eaa-bf3f-49826dc55b15",
-          "text": "ถ่ายคลิป",
-          "status": "plan"
-        },
-        {
-          "id": "fceb48e8-6154-4025-ae6e-33bdebb1b213",
-          "text": "ตัดต่อใน Capcut",
-          "status": "plan"
-        }
-      ],
-      "issues": [],
-      "order": 0,
-      "createdAt": "2026-06-29T03:22:24.686Z",
-      "updatedAt": "2026-06-29T08:49:22.042Z"
-    },
-    {
       "id": "4cdda1bd-8606-4167-adae-398a1b808f89",
       "title": "เปิดแอร์ไฟฟรี จากแดด",
       "description": "คอนเทนต์โปรโมท Hero Product Solar Hybrid ภายใต้ธีมภาพ \"เย็นกายสบายกระเป๋า\" — เปิดแอร์ไฟฟรี จากแดด\nฝนตก แดดไม่ออก \nสลับใช้ไฟบ้าน อินเวอร์เตอร์\nไม่ง้อแบตเตอรี่\n\nแคปชั่น\n☀️ แดดแรง = ค่าไฟถูกลง\n\nSolar Hybrid ดูดพลังงานจากแดด มาช่วยจ่ายค่าไฟแทนคุณ\nเปิดแอร์เย็นฉ่ำ บิลเบาลง ทุกวันที่แดดออก ❄️\n\n#TasakiAir #ลดค่าไฟ #โซล่าเซลล์",
@@ -618,6 +659,23 @@
       "comments": [],
       "links": [],
       "publishedAt": "2026-07-01T03:08:40.087Z"
+    },
+    {
+      "id": "a4d16604-943e-4f0b-921d-e6af0cf24cb3",
+      "title": "Inverter vs Non-Inverter ต่างกันแค่ไหน",
+      "description": "IMAGE PROMPT — 9:16 Split Screen\n\n━━━ TOP 50% — INVERTER ━━━\nProduct: ไดคัท Inverter (แถบเทากลางตัวเครื่อง) วางกึ่งกลาง ทิศทางเดิมห้ามเปลี่ยน\nBackground: Navy gradient — ซ้ายอ่อน #0A2952 → กลาง #001A3A → ขวาเข้ม #000D1F\nแสง: Soft diffused จากซ้ายบน 10 นาฬิกา frontal 0° — blend กับขอบซ้ายที่สว่างอยู่แล้ว\nEffect: Cyan glow #00C8E0 ลอยหลังตัวเครื่อง (premium/tech feel)\nText: \"INVERTER\" bold white + ⚡\nSub: \"ปรับความเร็วอัตโนมัติ ประหยัดไฟกว่า\"\n\n━━━ BOTTOM 50% — NON-INVERTER ━━━\nProduct: ไดคัท Non-Inverter (Tasaki logo ซ้ายล่าง + สติ๊กเกอร์ 5 ดาว กฟผ. ขวา) ทิศทางเดิม\nBackground: Charcoal gradient — ซ้าย #2A2A2A → กลาง #1A1A1A → ขวา #0F0F0F\nแสง: ทิศเดียวกัน (10 นาฬิกา frontal) แต่ flat กว่า ไม่มี glow\nText: \"NON-INVERTER\" white/gray same font\nSub: \"ความเร็วคงที่ เปิด-ปิดซ้ำ\"\n\n━━━ DIVIDER ━━━\nเส้น 2px สี Tasaki Cyan #00C8E0 แนวนอนกลางภาพ\nแบดจ์วงกลม \"VS\" ตรงกลางเส้น — ขอบขาว พื้นดำ\n\n━━━ STYLE ━━━\n9:16 vertical | Tasaki logo มุมบนซ้าย\nBrand colors: Navy + Cyan #00C8E0 + White + Charcoal\nClean minimal premium Japanese appliance — focus product only\n\n━━━ MIDJOURNEY PROMPT ━━━\n/imagine split screen 9:16 vertical, TOP half white split-type indoor AC unit die-cut on deep navy gradient background lighter-left #0A2952 darker-right #000D1F, soft diffused frontal light from upper-left 10 o-clock position, subtle cyan glow #00C8E0 behind unit, bold white text \"INVERTER\" lightning bolt icon, BOTTOM half same white AC unit die-cut on dark charcoal gradient lighter-left #2A2A2A darker-right #0F0F0F, same frontal light direction flat no glow, white-gray text \"NON-INVERTER\", thin 2px cyan #00C8E0 horizontal divider line \"VS\" badge circle white border black fill centered on divider, Tasaki logo top-left corner, clean minimal Japanese premium appliance commercial product photo no clutter no props --ar 9:16 --style raw --v 6",
+      "column": "clip",
+      "status": "active",
+      "rejectionReason": "",
+      "tags": [],
+      "platforms": [],
+      "imageUrl": null,
+      "todos": [],
+      "issues": [],
+      "comments": [],
+      "order": 1782973313756,
+      "createdAt": "2026-07-02T06:21:53.751Z",
+      "updatedAt": "2026-07-02T06:21:53.751Z"
     }
   ]
 }

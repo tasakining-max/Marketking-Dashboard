@@ -1,0 +1,20 @@
+{
+  "name": "tasaki-clips",
+  "version": "1.0.0",
+  "description": "Tasaki Air — Remotion video clips",
+  "scripts": {
+    "start": "npx remotion studio src/index.jsx --port 3030",
+    "build": "npx remotion render src/index.jsx InverterVsNonInverter out/inverter-vs-non-inverter.mp4",
+    "render:compressor": "npx remotion render src/index.jsx CompressorAnimation out/compressor.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.484",
+    "@remotion/player": "^4.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "remotion": "^4.0.484"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}
