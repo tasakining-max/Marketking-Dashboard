@@ -75,11 +75,46 @@ function serializeCard(c) {
   };
 }
 
+// List responses are polled every few seconds. Selecting the imageUrl column (a
+// large base64 @db.Text field) through the Neon driver adapter is drastically
+// slower regardless of value size (~10s+ vs ~1.5s omitted), so list queries omit
+// it entirely and use a lightweight id-only lookup to know which cards have one.
+// Comment author avatars (also base64, embedded in the comments Json column) are
+// swapped for small, cacheable URLs instead of re-sending the image bytes every poll.
+async function cardIdsWithImage() {
+  const rows = await prisma.$queryRaw`SELECT id FROM "Card" WHERE "imageUrl" IS NOT NULL`;
+  return new Set(rows.map((r) => r.id));
+}
+
+function serializeCardLite(c, hasImageIds) {
+  const card = serializeCard(c);
+  card.imageUrl = hasImageIds.has(c.id) ? `/api/cards/${c.id}/image?t=${new Date(c.updatedAt).getTime()}` : null;
+  card.comments = (Array.isArray(c.comments) ? c.comments : []).map((cm) => ({
+    ...cm,
+    authorImage: cm.authorImage ? `/api/cards/${c.id}/comments/${cm.id}/image` : null,
+  }));
+  return card;
+}
+
 app.get('/api/cards', async (req, res) => {
   try {
     const where = req.query.column ? { column: req.query.column } : {};
-    const cards = await prisma.card.findMany({ where, orderBy: { order: 'asc' } });
-    res.json({ cards: cards.map(serializeCard) });
+    const [cards, hasImageIds] = await Promise.all([
+      prisma.card.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
+      cardIdsWithImage(),
+    ]);
+    res.json({ cards: cards.map((c) => serializeCardLite(c, hasImageIds)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { imageUrl: true } });
+    const match = card?.imageUrl ? /^data:([^;]+);base64,(.+)$/.exec(card.imageUrl) : null;
+    if (!match) return res.status(404).end();
+    res.setHeader('Content-Type', match[1]);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.end(Buffer.from(match[2], 'base64'));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -109,43 +144,59 @@ app.put('/api/cards/reorder', async (req, res) => {
   try {
     const now = new Date().toISOString();
     await Promise.all(order.map(async (id, index) => {
-      const card = await prisma.card.findUnique({ where: { id } });
+      const card = await prisma.card.findUnique({ where: { id }, select: { column: true } });
       if (!card) return;
       const data = { order: index, updatedAt: new Date() };
       if (card.column !== column) {
         data.column = column;
         if (column === 'published') data.publishedAt = now;
       }
-      await prisma.card.update({ where: { id }, data });
+      await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
     }));
-    const cards = await prisma.card.findMany({ orderBy: { order: 'asc' } });
-    res.json({ cards: cards.map(serializeCard) });
+    const [cards, hasImageIds] = await Promise.all([
+      prisma.card.findMany({ orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
+      cardIdsWithImage(),
+    ]);
+    res.json({ cards: cards.map((c) => serializeCardLite(c, hasImageIds)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/cards/:id/comments/:commentId/image', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { comments: true } });
+    const comments = Array.isArray(card?.comments) ? card.comments : [];
+    const comment = comments.find((cm) => cm.id === req.params.commentId);
+    const match = comment?.authorImage ? /^data:([^;]+);base64,(.+)$/.exec(comment.authorImage) : null;
+    if (!match) return res.status(404).end();
+    res.setHeader('Content-Type', match[1]);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.end(Buffer.from(match[2], 'base64'));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/cards/:id/image', async (req, res) => {
   try {
-    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
     const { image } = req.body;
     if (!image || !image.startsWith('data:image/')) return res.status(400).json({ error: 'invalid image data' });
-    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: image } });
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: image }, omit: { imageUrl: true } });
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/cards/:id/image', async (req, res) => {
   try {
-    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
-    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: null } });
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: null }, omit: { imageUrl: true } });
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.patch('/api/cards/:id', async (req, res) => {
   try {
-    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
 
     const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, pinned } = req.body;
@@ -207,14 +258,14 @@ app.patch('/api/cards/:id', async (req, res) => {
     }
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
-    const updated = await prisma.card.update({ where: { id: req.params.id }, data });
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/cards/:id', async (req, res) => {
   try {
-    const card = await prisma.card.findUnique({ where: { id: req.params.id } });
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
     await prisma.card.delete({ where: { id: req.params.id } });
     res.json(serializeCard(card));
