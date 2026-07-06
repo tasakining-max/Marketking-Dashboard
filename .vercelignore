@@ -3,6 +3,7 @@ activity.json
 key-messages.json
 website-issues.json
 marketing-changelog.json
+website-changelog.json
 profiles.json
 auth.json
 .env

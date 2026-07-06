@@ -1,3 +1,13 @@
 {
-  "entries": []
+  "entries": [
+    { "id": "wc-1", "date": "2026-06-11", "feature": "เริ่มต้นโปรเจกต์เว็บไซต์ Tasaki Air" },
+    { "id": "wc-2", "date": "2026-06-12", "feature": "เพิ่มหมวดหมู่สินค้า (Product Type)" },
+    { "id": "wc-3", "date": "2026-06-15", "feature": "เพิ่มคู่มือ PDF และจัดระยะการแสดงชื่อสินค้า" },
+    { "id": "wc-4", "date": "2026-06-17", "feature": "เพิ่มระบบเลือกรุ่นตาม BTU และแก้ไขปัญหา Prisma/ขนาดไฟล์บน Vercel" },
+    { "id": "wc-5", "date": "2026-06-17", "feature": "เพิ่มหน้าตัวแทนจำหน่ายและการรับประกัน รีดีไซน์ธีมเงิน-ฟ้าหรูหรา เพิ่ม PDF Error Code" },
+    { "id": "wc-6", "date": "2026-06-19", "feature": "เพิ่มรูปสินค้าและจัดวางหน้าใหม่ แก้บั๊กมือถือ (retry เมื่อโหลดข้อมูลไม่สำเร็จ)" },
+    { "id": "wc-7", "date": "2026-06-22", "feature": "เพิ่มหน้า Repair & Parts, แก้ navigator, แก้ปัญหา PDF ไม่แสดงบน iOS Safari, เพิ่มภาพ Hero" },
+    { "id": "wc-8", "date": "2026-06-23", "feature": "เพิ่มฟังก์ชันจัดการ Banner, ปรับหน้า Contact, แก้ Error Code, ปรับ performance, เพิ่ม OG tags" },
+    { "id": "wc-9", "date": "2026-06-25", "feature": "เพิ่ม Dashboard สำหรับแอดมิน (Traffic, Inbox, Site Health)" }
+  ]
 }
