@@ -1465,10 +1465,10 @@ function openDialog(card) {
   platformLabel.hidden = !(card && card.column === 'published');
   const cardPlatforms = (card && card.platforms) || [];
   platformCheckboxes.forEach((cb) => { cb.checked = cardPlatforms.includes(cb.value); });
-  planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
+  planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube') && !card.publishedAt);
   planDateInput.value = (card && card.plannedPublishDate) ? card.plannedPublishDate.slice(0, 10) : '';
   planDateClearRequested = false;
-  publishedDateLabel.hidden = !(card && card.column === 'published');
+  publishedDateLabel.hidden = !(card && card.publishedAt);
   publishedDateInput.value = (card && card.publishedAt) ? card.publishedAt.slice(0, 10) : '';
   todoLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
   pendingTodos = ((card && card.todos) || []).map((t) => ({ ...t }));
@@ -1534,7 +1534,7 @@ form.addEventListener('submit', async (e) => {
   if (!platformLabel.hidden) {
     payload.platforms = platformCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
   }
-  if (!todoLabel.hidden) {
+  if (!planDateLabel.hidden) {
     payload.plannedPublishDate = planDateClearRequested ? null : (planDateInput.value || null);
   }
   if (!publishedDateLabel.hidden) {

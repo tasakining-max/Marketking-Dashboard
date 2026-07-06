@@ -149,7 +149,10 @@ app.put('/api/cards/reorder', async (req, res) => {
       const data = { order: index, updatedAt: new Date() };
       if (card.column !== column) {
         data.column = column;
-        if (column === 'published') data.publishedAt = now;
+        if (column === 'published') {
+          data.publishedAt = now;
+          data.plannedPublishDate = null;
+        }
       }
       await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
     }));
@@ -232,7 +235,10 @@ app.patch('/api/cards/:id', async (req, res) => {
     }
     if (column !== undefined) {
       if (!COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
-      if (column === 'published' && card.column !== 'published') data.publishedAt = new Date().toISOString();
+      if (column === 'published' && card.column !== 'published') {
+        data.publishedAt = new Date().toISOString();
+        data.plannedPublishDate = null;
+      }
       data.column = column;
     }
     if (status !== undefined) {
