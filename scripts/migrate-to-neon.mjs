@@ -112,19 +112,15 @@ async function main() {
   console.log('✓ Activity done');
 
   // ===== WEBSITE ISSUES =====
+  // Each value in website-issues.json is the issues array itself, keyed by entryId.
   const websiteIssues = readJson('website-issues.json', {});
   const entries = Object.entries(websiteIssues);
   console.log(`\nMigrating ${entries.length} website issue entries...`);
-  for (const [id, entry] of entries) {
+  for (const [id, issues] of entries) {
     await prisma.websiteIssue.upsert({
       where: { id },
-      update: { issues: entry.issues || [] },
-      create: {
-        id,
-        date: entry.date || '',
-        feature: entry.feature || '',
-        issues: entry.issues || [],
-      },
+      update: { issues },
+      create: { id, date: '', feature: '', issues },
     });
   }
   console.log('✓ Website issues done');
