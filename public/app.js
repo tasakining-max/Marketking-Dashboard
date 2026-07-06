@@ -34,6 +34,8 @@ const cardImageRemoveBtn = document.getElementById('cardImageRemoveBtn');
 const planDateLabel = document.getElementById('cardPlanDateLabel');
 const planDateInput = document.getElementById('cardPlanDate');
 const planDateClearBtn = document.getElementById('cardPlanDateClearBtn');
+const publishedDateLabel = document.getElementById('cardPublishedDateLabel');
+const publishedDateInput = document.getElementById('cardPublishedDate');
 const todoLabel = document.getElementById('cardTodoLabel');
 const todoListEl = document.getElementById('cardTodoList');
 const todoInput = document.getElementById('cardTodoInput');
@@ -1466,6 +1468,8 @@ function openDialog(card) {
   planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
   planDateInput.value = (card && card.plannedPublishDate) ? card.plannedPublishDate.slice(0, 10) : '';
   planDateClearRequested = false;
+  publishedDateLabel.hidden = !(card && card.column === 'published');
+  publishedDateInput.value = (card && card.publishedAt) ? card.publishedAt.slice(0, 10) : '';
   todoLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
   pendingTodos = ((card && card.todos) || []).map((t) => ({ ...t }));
   todoInput.value = '';
@@ -1532,6 +1536,9 @@ form.addEventListener('submit', async (e) => {
   }
   if (!todoLabel.hidden) {
     payload.plannedPublishDate = planDateClearRequested ? null : (planDateInput.value || null);
+  }
+  if (!publishedDateLabel.hidden) {
+    payload.publishedAt = publishedDateInput.value ? `${publishedDateInput.value}T12:00:00.000Z` : null;
   }
   if (!todoLabel.hidden) {
     payload.todos = pendingTodos;

@@ -148,7 +148,7 @@ app.patch('/api/cards/:id', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id } });
     if (!card) return res.status(404).json({ error: 'card not found' });
 
-    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, pinned } = req.body;
+    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, pinned } = req.body;
     const data = {};
 
     if (title !== undefined) {
@@ -201,6 +201,10 @@ app.patch('/api/cards/:id', async (req, res) => {
       data.links = links.map((l) => ({ id: l.id, label: typeof l.label === 'string' ? l.label.trim() : '', url: l.url.trim() }));
     }
     if (plannedPublishDate !== undefined) data.plannedPublishDate = plannedPublishDate || null;
+    if (publishedAt !== undefined) {
+      if (publishedAt !== null && isNaN(new Date(publishedAt).getTime())) return res.status(400).json({ error: 'publishedAt must be a valid date' });
+      data.publishedAt = publishedAt;
+    }
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data });
