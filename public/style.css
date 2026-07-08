@@ -2313,6 +2313,23 @@ main#board {
   cursor: default;
 }
 
+.move-btn.is-clicked {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  opacity: 1;
+  transform: scale(0.9);
+  transition: transform 0.1s;
+}
+
+.move-btn.is-error {
+  background: #c0392b;
+  color: white;
+  border-color: #c0392b;
+  opacity: 1;
+  transform: none;
+}
+
 .detail-btn {
   display: inline-flex;
   align-items: center;
@@ -2519,6 +2536,16 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   color: var(--text);
 }
 
+.form-error {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #c0392b 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, #c0392b 35%, var(--border));
+  color: #c0392b;
+  font-size: 13px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -2540,6 +2567,27 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   background: var(--accent);
   color: white;
   border-color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog-actions button[type="submit"]:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spinner-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spinner-spin {
+  to { transform: rotate(360deg); }
 }
 
 .dialog-actions .danger {
@@ -3061,6 +3109,8 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   margin-top: -2px;
 }
 .toast-close:hover { color: var(--text); }
+.toast.toast-error { border-left-color: #c0392b; }
+.toast.toast-error .toast-msg { color: #c0392b; }
 @media (max-width: 640px) {
   .toast-container { bottom: 16px; right: 12px; left: 12px; }
   .toast { min-width: 0; max-width: 100%; }

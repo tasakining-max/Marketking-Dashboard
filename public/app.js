@@ -18,6 +18,28 @@ themeToggleBtn.addEventListener('click', () => {
 const board = document.getElementById('board');
 const dialog = document.getElementById('cardDialog');
 const form = document.getElementById('cardForm');
+const cardSaveBtn = document.getElementById('cardSaveBtn');
+const cardSaveBtnLabel = document.getElementById('cardSaveBtnLabel');
+const cardSaveBtnSpinner = cardSaveBtn.querySelector('.btn-spinner');
+const cardFormError = document.getElementById('cardFormError');
+
+async function fetchOrThrow(url, opts) {
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (e) {
+    throw new Error('Network error — check your connection and try again.');
+  }
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data && data.error) message = data.error;
+    } catch (e) { /* response wasn't JSON */ }
+    throw new Error(message);
+  }
+  return res;
+}
 const titleInput = document.getElementById('cardTitle');
 const descInput = document.getElementById('cardDescription');
 const dialogTitle = document.getElementById('dialogTitle');
@@ -356,6 +378,31 @@ function dismissToast(toast) {
   toast.classList.remove('toast-show');
   toast.classList.add('toast-hide');
   setTimeout(() => toast.remove(), 300);
+}
+
+function showErrorToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-error';
+
+  const body = document.createElement('div');
+  body.className = 'toast-body';
+  const msgEl = document.createElement('p');
+  msgEl.className = 'toast-msg';
+  msgEl.textContent = message;
+  body.appendChild(msgEl);
+  toast.appendChild(body);
+
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.innerHTML = '×';
+  close.addEventListener('click', (e) => { e.stopPropagation(); dismissToast(toast); });
+  toast.appendChild(close);
+
+  document.getElementById('toastContainer').appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-show'));
+
+  const timer = setTimeout(() => dismissToast(toast), 5000);
+  toast._timer = timer;
 }
 
 async function fetchCards() {
@@ -807,7 +854,22 @@ function renderCard(card) {
     btn.title = title;
     btn.textContent = text;
     if (disabled) { btn.disabled = true; }
-    else { btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); }); }
+    else {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        btn.classList.add('is-clicked');
+        btn.disabled = true;
+        try {
+          await onClick();
+        } catch (err) {
+          btn.classList.add('is-error');
+          showErrorToast(err.message || 'Could not move the card. Please try again.');
+        } finally {
+          btn.disabled = false;
+          setTimeout(() => btn.classList.remove('is-clicked', 'is-error'), 400);
+        }
+      });
+    }
     return btn;
   }
 
@@ -884,14 +946,18 @@ function renderCard(card) {
     if (fromIdx !== -1) ids.splice(fromIdx, 1);
     const toIdx = ids.indexOf(card.id);
     ids.splice(toIdx, 0, draggingId);
-    await reorderCards(column, ids);
+    try {
+      await reorderCards(column, ids);
+    } catch (err) {
+      showErrorToast(err.message || 'Could not move the card. Please try again.');
+    }
   });
 
   return el;
 }
 
 async function reorderCards(column, ids) {
-  await fetch('/api/cards/reorder', {
+  await fetchOrThrow('/api/cards/reorder', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ column, order: ids })
@@ -920,7 +986,11 @@ board.querySelectorAll('.column').forEach((columnEl) => {
     e.preventDefault();
     columnEl.classList.remove('drag-over');
     if (!draggingId) return;
-    await moveCard(draggingId, newColumn);
+    try {
+      await moveCard(draggingId, newColumn);
+    } catch (err) {
+      showErrorToast(err.message || 'Could not move the card. Please try again.');
+    }
   });
 });
 
@@ -1493,6 +1563,8 @@ function openDialog(card) {
   pendingImageDataUrl = null;
   removeImageRequested = false;
   setImagePreview(card && card.imageUrl);
+  cardFormError.hidden = true;
+  setCardSaveLoading(false);
   dialog.showModal();
   titleInput.focus();
 }
@@ -1522,8 +1594,17 @@ cardImageRemoveBtn.addEventListener('click', () => {
   setImagePreview(null);
 });
 
+function setCardSaveLoading(isLoading) {
+  cardSaveBtn.disabled = isLoading;
+  cardSaveBtnSpinner.hidden = !isLoading;
+  cardSaveBtnLabel.textContent = isLoading ? 'Saving…' : 'Save';
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  cardFormError.hidden = true;
+  setCardSaveLoading(true);
+  try {
   const payload = { title: titleInput.value, description: descInput.value };
   if (!tagLabel.hidden) {
     payload.tags = tagCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
@@ -1552,14 +1633,14 @@ form.addEventListener('submit', async (e) => {
   payload.links = pendingLinks;
   let cardId = editingId;
   if (editingId) {
-    await fetch(`/api/cards/${editingId}`, {
+    await fetchOrThrow(`/api/cards/${editingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
   } else {
     payload.column = 'idea';
-    const created = await fetch('/api/cards', {
+    const created = await fetchOrThrow('/api/cards', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1567,17 +1648,23 @@ form.addEventListener('submit', async (e) => {
     cardId = created.id;
   }
   if (pendingImageDataUrl) {
-    await fetch(`/api/cards/${cardId}/image`, {
+    await fetchOrThrow(`/api/cards/${cardId}/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: pendingImageDataUrl })
     });
   } else if (removeImageRequested) {
-    await fetch(`/api/cards/${cardId}/image`, { method: 'DELETE' });
+    await fetchOrThrow(`/api/cards/${cardId}/image`, { method: 'DELETE' });
   }
   dialog.close();
   lastSignature = null;
   fetchCards();
+  } catch (err) {
+    cardFormError.textContent = err.message || 'Could not save. Please try again.';
+    cardFormError.hidden = false;
+  } finally {
+    setCardSaveLoading(false);
+  }
 });
 
 deleteBtn.addEventListener('click', async () => {

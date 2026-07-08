@@ -19,6 +19,7 @@
     "@vercel/blob": "^2.5.0",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
+    "nodemailer": "^9.0.3",
     "prisma": "^7.8.0",
     "ws": "^8.21.0"
   },

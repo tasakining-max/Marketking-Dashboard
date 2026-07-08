@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
+import nodemailer from 'nodemailer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,41 @@ const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
 const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 
 try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
+
+// ─── Planner sync ────────────────────────────────────────────────────────────
+// Mirrors cards with a plan date or that have been published into Microsoft
+// Planner via a Power Automate flow triggered by "When a new email arrives"
+// (a standard, non-premium Outlook trigger). We mail the card as base64 JSON
+// so the flow can decode + Parse JSON without HTML-mangling the payload.
+const plannerMailer = process.env.SMTP_USER && process.env.SMTP_PASS
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.office365.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    })
+  : null;
+
+function notifyPlanner(card) {
+  if (!plannerMailer || !process.env.PLANNER_EMAIL_TO) return;
+  const shouldSync = Boolean(card.plannedPublishDate) || Boolean(card.publishedAt) || card.column === 'published';
+  if (!shouldSync) return;
+  const payload = {
+    id: card.id,
+    title: card.title,
+    description: card.description,
+    column: card.column,
+    plannedPublishDate: card.plannedPublishDate || null,
+    publishedAt: card.publishedAt || null,
+  };
+  plannerMailer.sendMail({
+    from: process.env.SMTP_USER,
+    to: process.env.PLANNER_EMAIL_TO,
+    subject: 'PlannerSync',
+    text: Buffer.from(JSON.stringify(payload)).toString('base64'),
+  }).catch((e) => console.error('Planner sync email failed:', e.message));
+}
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 function getPassword() {
@@ -154,7 +190,8 @@ app.put('/api/cards/reorder', async (req, res) => {
           data.plannedPublishDate = null;
         }
       }
-      await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
+      const updated = await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
+      if (data.column) notifyPlanner(updated);
     }));
     const [cards, hasImageIds] = await Promise.all([
       prisma.card.findMany({ orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
@@ -265,6 +302,7 @@ app.patch('/api/cards/:id', async (req, res) => {
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
+    notifyPlanner(updated);
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
