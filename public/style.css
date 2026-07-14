@@ -1750,6 +1750,9 @@ main#board {
 }
 #profileDialog {
   width: min(340px, 92vw);
+  max-height: min(640px, 88vh);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 .profile-field {
   display: flex;
@@ -1800,6 +1803,9 @@ main#board {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .profile-switcher-row {
@@ -1814,6 +1820,7 @@ main#board {
 
 .profile-switcher-name {
   flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);

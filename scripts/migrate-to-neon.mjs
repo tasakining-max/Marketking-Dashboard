@@ -90,7 +90,7 @@ async function main() {
       update: {},
       create: {
         id: a.id || crypto.randomUUID(),
-        text: a.text || '',
+        text: a.message || '',
         createdAt: a.createdAt ? new Date(a.createdAt) : new Date(),
       },
     });

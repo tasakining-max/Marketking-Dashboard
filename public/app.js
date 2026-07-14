@@ -1,4 +1,17 @@
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 30000;
+
+// Polling keeps the Neon database endpoint continuously active, which is billed
+// by compute time — a tab left open in a background browser tab would otherwise
+// poll forever and never let the database go idle. registerPoll() skips fetches
+// while the tab is hidden and catches up immediately when it becomes visible again.
+const pollFns = [];
+function registerPoll(fn) {
+  pollFns.push(fn);
+  setInterval(() => { if (!document.hidden) fn(); }, POLL_INTERVAL_MS);
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) pollFns.forEach((fn) => fn());
+});
 
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
@@ -419,7 +432,9 @@ async function fetchCards() {
 function getWeekStart() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - d.getDay());
+  const day = d.getDay(); // 0 = Sunday .. 6 = Saturday
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday);
   return d;
 }
 
@@ -1327,9 +1342,11 @@ function renderCommentList() {
       delBtn.type = 'button';
       delBtn.className = 'comment-action-btn comment-action-delete';
       delBtn.textContent = 'Delete';
-      delBtn.addEventListener('click', () => {
+      delBtn.addEventListener('click', async () => {
+        const previous = pendingComments;
         pendingComments = pendingComments.filter((c) => c.id !== comment.id);
         renderCommentList();
+        await persistComments(previous);
       });
 
       actions.appendChild(editBtn);
@@ -1364,11 +1381,13 @@ function startEditComment(id, body, textEl) {
   saveBtn.type = 'button';
   saveBtn.className = 'comment-edit-save';
   saveBtn.textContent = 'Save';
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const newText = editArea.value.trim();
     if (!newText) return;
+    const previous = pendingComments.map((c) => ({ ...c }));
     comment.text = newText;
     renderCommentList();
+    await persistComments(previous);
   });
 
   const cancelBtn2 = document.createElement('button');
@@ -1386,20 +1405,50 @@ function startEditComment(id, body, textEl) {
   editArea.setSelectionRange(editArea.value.length, editArea.value.length);
 }
 
-function addComment() {
+async function persistComments(previousComments) {
+  try {
+    await fetchOrThrow(`/api/cards/${editingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comments: pendingComments })
+    });
+    lastSignature = null;
+  } catch (err) {
+    pendingComments = previousComments;
+    renderCommentList();
+    showErrorToast(err.message || 'Could not save comment. Please try again.');
+  }
+}
+
+function promptSelectProfile() {
+  showErrorToast('Please select your team profile before commenting.');
+  profileNameInput.value = '';
+  profilePendingImageDataUrl = null;
+  renderAvatar(profilePreviewAvatar, '', null);
+  profileDialog.showModal();
+  fetchTeamProfiles().then(renderProfileSwitcher);
+}
+
+async function addComment() {
   const text = commentInput.value.trim();
-  if (!text) return;
+  if (!text || !editingId) return;
   const profile = loadProfile();
-  pendingComments.push({
+  if (!profile.name || !profile.name.trim()) {
+    promptSelectProfile();
+    return;
+  }
+  const previous = pendingComments;
+  pendingComments = [...pendingComments, {
     id: crypto.randomUUID(),
     text,
-    authorName: profile.name || 'Anonymous',
+    authorName: profile.name,
     authorImage: profile.imageUrl || null,
     createdAt: new Date().toISOString()
-  });
+  }];
   commentInput.value = '';
   renderCommentList();
   commentInput.focus();
+  await persistComments(previous);
 }
 
 function renderCommentText(el, text) {
@@ -1730,7 +1779,7 @@ document.getElementById('publishedToggleBtn').addEventListener('click', () => {
 });
 
 fetchCardsAndOpenParam();
-setInterval(fetchCards, POLL_INTERVAL_MS);
+registerPoll(fetchCards);
 
 const keyMessagesList = document.getElementById('keyMessagesList');
 const addKeyMessageBtn = document.getElementById('addKeyMessageBtn');
@@ -1845,7 +1894,7 @@ addKeyMessageBtn.addEventListener('click', async () => {
 });
 
 fetchKeyMessages();
-setInterval(fetchKeyMessages, POLL_INTERVAL_MS);
+registerPoll(fetchKeyMessages);
 
 const websiteChangelogList = document.getElementById('websiteChangelogList');
 const websiteChangelogLink = document.getElementById('websiteChangelogLink');
@@ -2314,7 +2363,7 @@ function renderWebsiteChangelog(entries) {
 }
 
 fetchWebsiteChangelog();
-setInterval(fetchWebsiteChangelog, POLL_INTERVAL_MS);
+registerPoll(fetchWebsiteChangelog);
 
 function spinRefreshBtn(btn) {
   btn.classList.add('spinning');
@@ -2343,7 +2392,7 @@ async function fetchMarketingChangelog() {
 }
 
 fetchMarketingChangelog();
-setInterval(fetchMarketingChangelog, POLL_INTERVAL_MS);
+registerPoll(fetchMarketingChangelog);
 
 const marketingChangelogRefreshBtn = document.getElementById('marketingChangelogRefreshBtn');
 marketingChangelogRefreshBtn.addEventListener('click', (e) => {

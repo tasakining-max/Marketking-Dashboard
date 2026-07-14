@@ -1,4 +1,4 @@
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 10000;
 
 const gatewayStatus = document.getElementById('gatewayStatus');
 const lastRestart = document.getElementById('lastRestart');
@@ -104,10 +104,10 @@ function render(data) {
   } else {
     data.activity.forEach((entry) => {
       const item = document.createElement('div');
-      item.className = `activity-item activity-${entry.type}`;
+      item.className = `activity-item activity-${entry.type || 'info'}`;
       const msg = document.createElement('p');
       msg.className = 'activity-msg';
-      msg.textContent = entry.message;
+      msg.textContent = entry.text;
       const meta = document.createElement('p');
       meta.className = 'activity-meta';
       meta.textContent = timeAgo(entry.createdAt);
@@ -152,5 +152,11 @@ logForm.addEventListener('submit', async (e) => {
   fetchStatus();
 });
 
+// Skip polling while the tab is hidden and catch up immediately when it becomes
+// visible again — otherwise a background tab polls forever and never lets the
+// Neon endpoint autosuspend (it's billed by active compute time).
 fetchStatus();
-setInterval(fetchStatus, POLL_INTERVAL_MS);
+setInterval(() => { if (!document.hidden) fetchStatus(); }, POLL_INTERVAL_MS);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchStatus();
+});

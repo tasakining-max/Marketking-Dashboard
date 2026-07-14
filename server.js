@@ -25,6 +25,26 @@ const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 
 
 try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 
+// ─── Read cache ──────────────────────────────────────────────────────────────
+// The board is polled every few seconds by every open tab. Short-lived caching
+// on the list endpoints means concurrent pollers within the same window share
+// one Neon query instead of each re-running it, and writes invalidate
+// immediately so nothing goes stale.
+const READ_CACHE_TTL_MS = 2500;
+const readCache = new Map();
+async function cached(key, fn) {
+  const hit = readCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.data;
+  const data = await fn();
+  readCache.set(key, { data, expires: Date.now() + READ_CACHE_TTL_MS });
+  return data;
+}
+function invalidateCache(prefix) {
+  for (const key of readCache.keys()) {
+    if (key.startsWith(prefix)) readCache.delete(key);
+  }
+}
+
 // ─── Planner sync ────────────────────────────────────────────────────────────
 // Mirrors cards with a plan date or that have been published into Microsoft
 // Planner via a Power Automate flow triggered by "When a new email arrives"
@@ -100,7 +120,13 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(js|css|html)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 // ─── Cards ───────────────────────────────────────────────────────────────────
 function serializeCard(c) {
@@ -134,12 +160,16 @@ function serializeCardLite(c, hasImageIds) {
 
 app.get('/api/cards', async (req, res) => {
   try {
-    const where = req.query.column ? { column: req.query.column } : {};
-    const [cards, hasImageIds] = await Promise.all([
-      prisma.card.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
-      cardIdsWithImage(),
-    ]);
-    res.json({ cards: cards.map((c) => serializeCardLite(c, hasImageIds)) });
+    const cacheKey = `cards:${req.query.column || ''}`;
+    const cards = await cached(cacheKey, async () => {
+      const where = req.query.column ? { column: req.query.column } : {};
+      const [rows, hasImageIds] = await Promise.all([
+        prisma.card.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
+        cardIdsWithImage(),
+      ]);
+      return rows.map((c) => serializeCardLite(c, hasImageIds));
+    });
+    res.json({ cards });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -169,6 +199,7 @@ app.post('/api/cards', async (req, res) => {
         order: Date.now(),
       },
     });
+    invalidateCache('cards');
     res.status(201).json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -193,6 +224,7 @@ app.put('/api/cards/reorder', async (req, res) => {
       const updated = await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
       if (data.column) notifyPlanner(updated);
     }));
+    invalidateCache('cards');
     const [cards, hasImageIds] = await Promise.all([
       prisma.card.findMany({ orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
       cardIdsWithImage(),
@@ -221,6 +253,7 @@ app.post('/api/cards/:id/image', async (req, res) => {
     const { image } = req.body;
     if (!image || !image.startsWith('data:image/')) return res.status(400).json({ error: 'invalid image data' });
     const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: image }, omit: { imageUrl: true } });
+    invalidateCache('cards');
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -230,6 +263,7 @@ app.delete('/api/cards/:id/image', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
     const updated = await prisma.card.update({ where: { id: req.params.id }, data: { imageUrl: null }, omit: { imageUrl: true } });
+    invalidateCache('cards');
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -303,6 +337,7 @@ app.patch('/api/cards/:id', async (req, res) => {
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
     notifyPlanner(updated);
+    invalidateCache('cards');
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -312,6 +347,7 @@ app.delete('/api/cards/:id', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
     await prisma.card.delete({ where: { id: req.params.id } });
+    invalidateCache('cards');
     res.json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -319,9 +355,12 @@ app.delete('/api/cards/:id', async (req, res) => {
 // ─── Status / Bots (local-only — returns defaults on Vercel) ─────────────────
 app.get('/api/status', async (req, res) => {
   try {
-    const activity = await prisma.activityEntry.findMany({ orderBy: { createdAt: 'desc' }, take: MAX_ACTIVITY });
-    const cronJobs = await prisma.cronJob.findMany();
-    res.json({ gatewayRunning: false, lastRestart: null, bots: [], activity, cronJobs });
+    const data = await cached('status', async () => {
+      const activity = await prisma.activityEntry.findMany({ orderBy: { createdAt: 'desc' }, take: MAX_ACTIVITY });
+      const cronJobs = await prisma.cronJob.findMany();
+      return { gatewayRunning: false, lastRestart: null, bots: [], activity, cronJobs };
+    });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -333,6 +372,7 @@ app.post('/api/activity', async (req, res) => {
     const entry = await prisma.activityEntry.create({
       data: { id: crypto.randomUUID(), text: message.trim() },
     });
+    invalidateCache('status');
     res.status(201).json(entry);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -340,6 +380,7 @@ app.post('/api/activity', async (req, res) => {
 app.delete('/api/activity', async (req, res) => {
   try {
     await prisma.activityEntry.deleteMany();
+    invalidateCache('status');
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -351,6 +392,7 @@ app.put('/api/cron-jobs', async (req, res) => {
     await prisma.cronJob.deleteMany();
     await prisma.cronJob.createMany({ data: jobs.map((j) => ({ id: j.id || crypto.randomUUID(), name: j.name || '', schedule: j.schedule || '', command: j.command || '', enabled: j.enabled !== false })) });
     const cronJobs = await prisma.cronJob.findMany();
+    invalidateCache('status');
     res.json({ cronJobs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -358,7 +400,7 @@ app.put('/api/cron-jobs', async (req, res) => {
 // ─── Key Messages ─────────────────────────────────────────────────────────────
 app.get('/api/key-messages', async (req, res) => {
   try {
-    const messages = await prisma.keyMessage.findMany();
+    const messages = await cached('key-messages', () => prisma.keyMessage.findMany());
     res.json({ messages });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -368,6 +410,7 @@ app.post('/api/key-messages', async (req, res) => {
   if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
   try {
     const message = await prisma.keyMessage.create({ data: { id: crypto.randomUUID(), text: text.trim() } });
+    invalidateCache('key-messages');
     res.status(201).json(message);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -377,6 +420,7 @@ app.patch('/api/key-messages/:id', async (req, res) => {
   if (text !== undefined && (!typeof text === 'string' || !text.trim())) return res.status(400).json({ error: 'text must be a non-empty string' });
   try {
     const message = await prisma.keyMessage.update({ where: { id: req.params.id }, data: text ? { text: text.trim() } : {} });
+    invalidateCache('key-messages');
     res.json(message);
   } catch { res.status(404).json({ error: 'message not found' }); }
 });
@@ -384,6 +428,7 @@ app.patch('/api/key-messages/:id', async (req, res) => {
 app.delete('/api/key-messages/:id', async (req, res) => {
   try {
     const removed = await prisma.keyMessage.delete({ where: { id: req.params.id } });
+    invalidateCache('key-messages');
     res.json(removed);
   } catch { res.status(404).json({ error: 'message not found' }); }
 });
@@ -403,8 +448,10 @@ app.put('/api/key-messages/reorder', async (req, res) => {
 // ─── Website Changelog (read-only from DB) ───────────────────────────────────
 app.get('/api/website-changelog', async (req, res) => {
   try {
-    const rows = await prisma.websiteChangelog.findMany({ orderBy: { date: 'desc' } });
-    const entries = rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
+    const entries = await cached('website-changelog', async () => {
+      const rows = await prisma.websiteChangelog.findMany({ orderBy: { date: 'desc' } });
+      return rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
+    });
     res.json({ entries, siteUrl: TASAKI_WEB_URL });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -412,9 +459,12 @@ app.get('/api/website-changelog', async (req, res) => {
 // ─── Website Issues ───────────────────────────────────────────────────────────
 app.get('/api/website-issues', async (req, res) => {
   try {
-    const rows = await prisma.websiteIssue.findMany();
-    const result = {};
-    rows.forEach((r) => { result[r.id] = r.issues; });
+    const result = await cached('website-issues', async () => {
+      const rows = await prisma.websiteIssue.findMany();
+      const byId = {};
+      rows.forEach((r) => { byId[r.id] = r.issues; });
+      return byId;
+    });
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -433,6 +483,7 @@ app.post('/api/website-issues/:entryId', async (req, res) => {
       issues.push(issue);
       row = await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
     }
+    invalidateCache('website-issues');
     res.status(201).json(issue);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -450,6 +501,7 @@ app.post('/api/website-issues/:entryId/:issueId/comments', async (req, res) => {
     const comment = { id: crypto.randomUUID(), text: text.trim(), link: typeof link === 'string' && link.trim() ? link.trim() : null, authorName: authorName.trim(), authorImage: typeof authorImage === 'string' ? authorImage : null, createdAt: new Date().toISOString() };
     issue.comments.push(comment);
     await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    invalidateCache('website-issues');
     res.status(201).json(comment);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -467,6 +519,7 @@ app.patch('/api/website-issues/:entryId/:issueId/comments/:commentId', async (re
     comment.text = text.trim();
     comment.updatedAt = new Date().toISOString();
     await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    invalidateCache('website-issues');
     res.json(comment);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -481,6 +534,7 @@ app.delete('/api/website-issues/:entryId/:issueId/comments/:commentId', async (r
     if (idx === -1) return res.status(404).json({ error: 'comment not found' });
     const [removed] = issue.comments.splice(idx, 1);
     await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    invalidateCache('website-issues');
     res.json(removed);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -504,6 +558,7 @@ app.patch('/api/website-issues/:entryId/:issueId', async (req, res) => {
     } else {
       await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
     }
+    invalidateCache('website-issues');
     res.json(issue);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -516,6 +571,7 @@ app.delete('/api/website-issues/:entryId/:issueId', async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'issue not found' });
     const [removed] = issues.splice(idx, 1);
     await prisma.websiteIssue.update({ where: { id: req.params.entryId }, data: { issues } });
+    invalidateCache('website-issues');
     res.json(removed);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -523,8 +579,10 @@ app.delete('/api/website-issues/:entryId/:issueId', async (req, res) => {
 // ─── Marketing Changelog ──────────────────────────────────────────────────────
 app.get('/api/marketing-changelog', async (req, res) => {
   try {
-    const rows = await prisma.marketingChangelog.findMany({ orderBy: { date: 'desc' } });
-    const entries = rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
+    const entries = await cached('marketing-changelog', async () => {
+      const rows = await prisma.marketingChangelog.findMany({ orderBy: { date: 'desc' } });
+      return rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
+    });
     res.json({ entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
