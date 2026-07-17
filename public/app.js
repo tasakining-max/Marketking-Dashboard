@@ -66,6 +66,10 @@ const cardImageInput = document.getElementById('cardImageInput');
 const cardImagePreviewWrap = document.getElementById('cardImagePreviewWrap');
 const cardImagePreview = document.getElementById('cardImagePreview');
 const cardImageRemoveBtn = document.getElementById('cardImageRemoveBtn');
+const shootDateLabel = document.getElementById('cardShootDateLabel');
+const shootDateInput = document.getElementById('cardShootDate');
+const shootDateClearBtn = document.getElementById('cardShootDateClearBtn');
+const shootNoteInput = document.getElementById('cardShootNote');
 const planDateLabel = document.getElementById('cardPlanDateLabel');
 const planDateInput = document.getElementById('cardPlanDate');
 const planDateClearBtn = document.getElementById('cardPlanDateClearBtn');
@@ -162,6 +166,7 @@ let publishedShowAll = false;
 let pendingImageDataUrl = null;
 let removeImageRequested = false;
 let planDateClearRequested = false;
+let shootDateClearRequested = false;
 let pendingTodos = [];
 let pendingComments = [];
 let profilePendingImageDataUrl = null;
@@ -1242,6 +1247,11 @@ planDateClearBtn.addEventListener('click', () => {
   planDateClearRequested = true;
 });
 
+shootDateClearBtn.addEventListener('click', () => {
+  shootDateInput.value = '';
+  shootDateClearRequested = true;
+});
+
 issueAddBtn.addEventListener('click', addIssue);
 issueInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -1584,6 +1594,10 @@ function openDialog(card) {
   platformLabel.hidden = !(card && card.column === 'published');
   const cardPlatforms = (card && card.platforms) || [];
   platformCheckboxes.forEach((cb) => { cb.checked = cardPlatforms.includes(cb.value); });
+  shootDateLabel.hidden = card ? Boolean(card.publishedAt) : false;
+  shootDateInput.value = (card && card.shootDate) ? card.shootDate.slice(0, 10) : '';
+  shootNoteInput.value = (card && card.shootNote) || '';
+  shootDateClearRequested = false;
   planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube') && !card.publishedAt);
   planDateInput.value = (card && card.plannedPublishDate) ? card.plannedPublishDate.slice(0, 10) : '';
   planDateClearRequested = false;
@@ -1663,6 +1677,10 @@ form.addEventListener('submit', async (e) => {
   }
   if (!platformLabel.hidden) {
     payload.platforms = platformCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+  }
+  if (!shootDateLabel.hidden) {
+    payload.shootDate = shootDateClearRequested ? null : (shootDateInput.value || null);
+    payload.shootNote = shootNoteInput.value;
   }
   if (!planDateLabel.hidden) {
     payload.plannedPublishDate = planDateClearRequested ? null : (planDateInput.value || null);
@@ -1897,7 +1915,6 @@ fetchKeyMessages();
 registerPoll(fetchKeyMessages);
 
 const websiteChangelogList = document.getElementById('websiteChangelogList');
-const websiteChangelogLink = document.getElementById('websiteChangelogLink');
 const websiteIssuesZone = document.getElementById('websiteIssuesZone');
 const websiteIssuesCount = document.getElementById('websiteIssuesCount');
 const websiteIssueAddInput = document.getElementById('websiteIssueAddInput');
@@ -1921,10 +1938,6 @@ async function fetchWebsiteChangelog() {
     websiteIssuesSig = newIssuesSig;
     websiteIssues = issuesData;
     websiteEntries = data.entries || [];
-    if (data.siteUrl) {
-      websiteChangelogLink.href = data.siteUrl;
-      websiteChangelogLink.textContent = data.siteUrl.replace(/^https?:\/\//, '');
-    }
     renderWebsiteIssuesZone();
     renderWebsiteChangelog(websiteEntries);
   }

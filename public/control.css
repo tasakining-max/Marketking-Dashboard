@@ -232,6 +232,15 @@ header h1 {
   border: 2px solid var(--line);
 }
 
+.bot-avatar-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .bot-avatar-wrap.online .bot-avatar {
   border-color: var(--green);
   box-shadow: 0 0 14px rgba(31,232,143,0.5);

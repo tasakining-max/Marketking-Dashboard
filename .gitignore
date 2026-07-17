@@ -3,3 +3,4 @@ auth.json
 
 /generated/prisma
 .vercel
+.env

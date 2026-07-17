@@ -226,6 +226,17 @@ function renderCalendar() {
     }
   });
 
+  const shootDays = {};
+  allCards.forEach((c) => {
+    if (!c.shootDate || c.status === 'rejected') return;
+    const d = new Date(c.shootDate);
+    if (d >= start && d < end) {
+      const key = d.getDate();
+      if (!shootDays[key]) shootDays[key] = [];
+      shootDays[key].push(c);
+    }
+  });
+
   const wrap = document.getElementById('calendarGrid');
   wrap.innerHTML = '';
 
@@ -253,10 +264,11 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const cards = publishedDays[d] || [];
     const planned = plannedDays[d] || [];
+    const shoots = shootDays[d] || [];
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
-    if (cards.length || planned.length) cell.classList.add('cal-has-content');
+    if (cards.length || planned.length || shoots.length) cell.classList.add('cal-has-content');
 
     const num = document.createElement('span');
     num.className = 'cal-day-num';
@@ -285,6 +297,15 @@ function renderCalendar() {
       chip.className = 'cal-card-planned';
       chip.textContent = `📅 ${c.title}`;
       chip.title = `Plan to Publish: ${c.title}`;
+      chip.href = `/index.html?card=${c.id}`;
+      cell.appendChild(chip);
+    });
+
+    shoots.forEach((c) => {
+      const chip = document.createElement('a');
+      chip.className = 'cal-card-shoot';
+      chip.textContent = `🎬 ${c.title}`;
+      chip.title = c.shootNote ? `วันที่ถ่ายงาน: ${c.title} (${c.shootNote})` : `วันที่ถ่ายงาน: ${c.title}`;
       chip.href = `/index.html?card=${c.id}`;
       cell.appendChild(chip);
     });

@@ -14,10 +14,11 @@ const logMessage = document.getElementById('logMessage');
 const logType = document.getElementById('logType');
 const logCancelBtn = document.getElementById('logCancelBtn');
 
-const BOT_AVATARS = {
-  'Takujung': '/agent-assets/takujung.PNG',
-  'Main agent': '/agent-assets/MainAgent.png',
-  'Video Creator': '/agent-assets/VDOCreator.png'
+const AGENT_AVATARS = {
+  'Claude': '/agent-assets/Agent.png',
+  'remotion-animator': '/agent-assets/VDOCreator.png',
+  'clip-scheduler': '/agent-assets/Agent.png',
+  'content-ideas': '/agent-assets/Agent.png'
 };
 
 let lastSignature = null;
@@ -65,21 +66,21 @@ function render(data) {
     data.bots.forEach((bot) => {
       const item = document.createElement('div');
       item.className = 'bot-card';
-      const avatar = BOT_AVATARS[bot.name];
-      const onlineClass = bot.online ? 'online' : 'offline';
+      const avatar = AGENT_AVATARS[bot.name];
+      const initial = bot.name.trim().charAt(0).toUpperCase();
       item.innerHTML = `
-        <div class="bot-avatar-wrap ${onlineClass}">
-          ${avatar ? `<img class="bot-avatar" src="${avatar}" alt="${escapeHtml(bot.name)}" />` : '<div class="bot-avatar"></div>'}
-          <span class="ring-dot ${bot.online ? 'dot-green' : 'dot-red'}"></span>
+        <div class="bot-avatar-wrap online">
+          ${avatar ? `<img class="bot-avatar" src="${avatar}" alt="${escapeHtml(bot.name)}" />` : `<div class="bot-avatar bot-avatar-letter">${escapeHtml(initial)}</div>`}
+          <span class="ring-dot dot-green"></span>
         </div>
         <div class="bot-info">
           <span class="bot-name">${escapeHtml(bot.name)}</span>
           ${bot.role ? `<span class="bot-role">${escapeHtml(bot.role)}</span>` : ''}
-          <span class="bot-status-line ${onlineClass}">${bot.online ? '● ONLINE' : '● OFFLINE'}</span>
-          <span class="bot-model" title="${bot.modelIsLive ? 'Model used in the most recent session' : 'Configured default model (no session activity yet)'}">
-            ${bot.model ? escapeHtml(bot.model) : 'unknown'}${bot.modelIsLive ? '' : ' (default)'}
+          <span class="bot-status-line online">● AVAILABLE</span>
+          <span class="bot-model" title="${bot.model ? 'Fixed model for this agent' : 'Inherits whichever model runs the session'}">
+            ${bot.model ? escapeHtml(bot.model) : 'inherits session model'}
           </span>
-          <span class="bot-guilds">${bot.guildCount} GUILD${bot.guildCount === 1 ? '' : 'S'}</span>
+          <span class="bot-guilds">${bot.lastActiveAt ? `last active ${timeAgo(bot.lastActiveAt)}` : 'no activity logged yet'}</span>
         </div>
       `;
       botList.appendChild(item);

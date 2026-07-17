@@ -1277,6 +1277,17 @@ main#board {
   color: white;
   border-color: var(--danger, #ef4444);
 }
+.plan-date-label input[type="text"] {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg, var(--bg));
+  color: var(--text);
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
 .plan-date-label input[type="date"] {
   margin-top: 4px;
   padding: 6px 8px;
@@ -2862,12 +2873,22 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 4px;
-  min-height: 72px;
+  height: 92px;
+  overflow-y: auto;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 3px;
   background: var(--bg);
+}
+
+.cal-cell::-webkit-scrollbar {
+  width: 4px;
+}
+.cal-cell::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 
 .cal-blank {
@@ -2881,6 +2902,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   font-weight: 500;
   line-height: 1;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .cal-today {
@@ -2953,6 +2975,27 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 
 .cal-card-planned:hover {
   background: #2563eb;
+  text-decoration: none;
+}
+
+.cal-card-shoot {
+  display: block;
+  background: #f59e0b;
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cal-card-shoot:hover {
+  background: #d97706;
   text-decoration: none;
 }
 
@@ -3031,7 +3074,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   }
 
   .cal-cell {
-    min-height: 44px;
+    height: 44px;
     padding: 4px 2px;
     gap: 2px;
     border-radius: 4px;

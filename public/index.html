@@ -111,7 +111,7 @@
         <button id="websiteChangelogRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
         <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
       </div>
-      <p class="key-messages-hint">ความคืบหน้าของเว็บไซต์ <a id="websiteChangelogLink" href="#" target="_blank" rel="noopener">tasaki-web-cyan.vercel.app</a></p>
+      <p class="key-messages-hint">ความคืบหน้าของเว็บไซต์</p>
 
       <div class="website-zone website-zone-issues">
         <div class="website-zone-header">⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ <span id="websiteIssuesCount" class="website-issues-count"></span></div>
@@ -199,6 +199,14 @@
             <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="tiktok" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/tiktok.jpg" alt="" /></span> TikTok</label>
             <label class="tag-checkbox"><input type="checkbox" name="cardPlatform" value="youtube" /> <span class="platform-icon-circle"><img class="platform-icon" src="/assets/youtube.png" alt="" /></span> YouTube</label>
           </fieldset>
+          <div id="cardShootDateLabel" class="plan-date-label" hidden>
+            <span>🎬 วันที่ถ่ายงาน</span>
+            <div class="plan-date-row">
+              <input type="date" id="cardShootDate" />
+              <button type="button" id="cardShootDateClearBtn" class="plan-date-clear-btn">✕ Clear</button>
+            </div>
+            <input type="text" id="cardShootNote" placeholder="เวลา/สถานที่นัดถ่าย เช่น 10:30 ห้อง QC" maxlength="200" />
+          </div>
           <div id="cardPlanDateLabel" class="plan-date-label" hidden>
             <span>📅 Plan to Publish</span>
             <div class="plan-date-row">

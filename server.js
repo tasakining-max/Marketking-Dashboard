@@ -25,6 +25,45 @@ const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 
 
 try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 
+// ─── Claude agent roster ──────────────────────────────────────────────────────
+// Mission Control used to monitor a separate Discord bot gateway ("Clawbot").
+// That gateway no longer runs — this project is now driven by Claude Code, so
+// the roster instead reflects the main agent plus the subagents configured in
+// .claude/agents/*.md. There's no live process to poll for "online" status
+// (Claude Code is session-based, not a persistent server), so status here
+// means "configured and available", and last-active comes from the Activity
+// Feed whenever an agent logs a `[Agent Name] ...` entry via POST /api/activity.
+const AGENTS_DIR = path.join(__dirname, '.claude', 'agents');
+
+function loadAgentRoster() {
+  const roster = [
+    { name: 'Claude', role: 'Main agent — handles the marketing-dashboard project directly: features, fixes, content, DB operations', model: 'Claude Sonnet 5' },
+  ];
+  try {
+    const files = fs.readdirSync(AGENTS_DIR).filter((f) => f.endsWith('.md'));
+    for (const file of files) {
+      const raw = fs.readFileSync(path.join(AGENTS_DIR, file), 'utf8');
+      const frontmatter = raw.match(/^---\n([\s\S]*?)\n---/);
+      if (!frontmatter) continue;
+      const nameMatch = frontmatter[1].match(/^name:\s*(.+)$/m);
+      const descMatch = frontmatter[1].match(/^description:\s*(.+)$/m);
+      roster.push({
+        name: nameMatch ? nameMatch[1].trim() : file.replace(/\.md$/, ''),
+        role: descMatch ? descMatch[1].trim().split(/(?<=[.!])\s/)[0] : 'Subagent',
+        model: null,
+      });
+    }
+  } catch {}
+  return roster;
+}
+
+function withAgentActivity(roster, activity) {
+  return roster.map((a) => {
+    const last = activity.find((e) => e.text.startsWith(`[${a.name}]`));
+    return { ...a, online: true, lastActiveAt: last ? last.createdAt : null };
+  });
+}
+
 // ─── Read cache ──────────────────────────────────────────────────────────────
 // The board is polled every few seconds by every open tab. Short-lived caching
 // on the list endpoints means concurrent pollers within the same window share
@@ -62,7 +101,7 @@ const plannerMailer = process.env.SMTP_USER && process.env.SMTP_PASS
 
 function notifyPlanner(card) {
   if (!plannerMailer || !process.env.PLANNER_EMAIL_TO) return;
-  const shouldSync = Boolean(card.plannedPublishDate) || Boolean(card.publishedAt) || card.column === 'published';
+  const shouldSync = Boolean(card.plannedPublishDate) || Boolean(card.publishedAt) || Boolean(card.shootDate) || card.column === 'published';
   if (!shouldSync) return;
   const payload = {
     id: card.id,
@@ -71,6 +110,8 @@ function notifyPlanner(card) {
     column: card.column,
     plannedPublishDate: card.plannedPublishDate || null,
     publishedAt: card.publishedAt || null,
+    shootDate: card.shootDate || null,
+    shootNote: card.shootNote || '',
   };
   plannerMailer.sendMail({
     from: process.env.SMTP_USER,
@@ -185,7 +226,7 @@ app.get('/api/cards/:id/image', async (req, res) => {
 });
 
 app.post('/api/cards', async (req, res) => {
-  const { title, description, column } = req.body;
+  const { title, description, column, shootDate, shootNote } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
@@ -197,8 +238,11 @@ app.post('/api/cards', async (req, res) => {
         description: typeof description === 'string' ? description.trim() : '',
         column: COLUMNS.includes(column) ? column : 'idea',
         order: Date.now(),
+        shootDate: shootDate || null,
+        shootNote: typeof shootNote === 'string' ? shootNote.trim() : '',
       },
     });
+    notifyPlanner(card);
     invalidateCache('cards');
     res.status(201).json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -273,7 +317,7 @@ app.patch('/api/cards/:id', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
 
-    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, pinned } = req.body;
+    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, shootDate, shootNote, pinned } = req.body;
     const data = {};
 
     if (title !== undefined) {
@@ -333,6 +377,8 @@ app.patch('/api/cards/:id', async (req, res) => {
       if (publishedAt !== null && isNaN(new Date(publishedAt).getTime())) return res.status(400).json({ error: 'publishedAt must be a valid date' });
       data.publishedAt = publishedAt;
     }
+    if (shootDate !== undefined) data.shootDate = shootDate || null;
+    if (shootNote !== undefined) data.shootNote = typeof shootNote === 'string' ? shootNote.trim() : '';
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
@@ -358,7 +404,8 @@ app.get('/api/status', async (req, res) => {
     const data = await cached('status', async () => {
       const activity = await prisma.activityEntry.findMany({ orderBy: { createdAt: 'desc' }, take: MAX_ACTIVITY });
       const cronJobs = await prisma.cronJob.findMany();
-      return { gatewayRunning: false, lastRestart: null, bots: [], activity, cronJobs };
+      const bots = withAgentActivity(loadAgentRoster(), activity);
+      return { gatewayRunning: true, lastRestart: null, bots, activity, cronJobs };
     });
     res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }

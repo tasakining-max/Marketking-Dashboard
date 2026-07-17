@@ -24,6 +24,8 @@ model Card {
   pinned             Boolean  @default(false)
   plannedPublishDate String?
   publishedAt        String?
+  shootDate          String?
+  shootNote          String   @default("")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
