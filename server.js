@@ -5,14 +5,16 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
+import pg from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import nodemailer from 'nodemailer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
-
+///// END /////
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
 const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 'product', 'trend', 'branding'];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
