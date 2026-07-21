@@ -284,6 +284,7 @@ function renderCalendar() {
 
   const daysInMonth = new Date(display.getFullYear(), display.getMonth() + 1, 0).getDate();
   const todayKey = (today.getFullYear() === display.getFullYear() && today.getMonth() === display.getMonth()) ? today.getDate() : -1;
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   for (let d = 1; d <= daysInMonth; d++) {
     const cards = publishedDays[d] || [];
@@ -296,6 +297,7 @@ function renderCalendar() {
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
+    if (new Date(display.getFullYear(), display.getMonth(), d) < todayStart) cell.classList.add('cal-past-day');
     const visibleCount = (calFilter === 'all' || calFilter === 'public' ? cards.length : 0)
       + (calFilter === 'all' || calFilter === 'plan' ? planned.length : 0)
       + (calFilter === 'all' || calFilter === 'shoot' ? shoots.length : 0);

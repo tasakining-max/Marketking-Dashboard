@@ -2958,6 +2958,10 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   font-weight: 700;
 }
 
+.cal-past-day {
+  opacity: 0.5;
+}
+
 .cal-has-content {
   background: color-mix(in srgb, #22c55e 12%, transparent);
   border-color: #22c55e;
