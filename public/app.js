@@ -67,6 +67,7 @@ async function fetchOrThrow(url, opts) {
 const titleInput = document.getElementById('cardTitle');
 const descInput = document.getElementById('cardDescription');
 const dialogTitle = document.getElementById('dialogTitle');
+const shareCardBtn = document.getElementById('shareCardBtn');
 const tagLabel = document.getElementById('cardTagLabel');
 const tagCheckboxes = Array.from(document.querySelectorAll('input[name="cardTag"]'));
 const ideaTagLabel = document.getElementById('cardIdeaTagLabel');
@@ -1594,6 +1595,7 @@ commentAddBtn.addEventListener('click', addComment);
 function openDialog(card) {
   editingId = card ? card.id : null;
   dialogTitle.textContent = card ? 'Edit Card' : 'New Idea';
+  shareCardBtn.hidden = !card;
   titleInput.value = card ? card.title : '';
   descInput.value = card ? card.description : '';
   deleteBtn.hidden = !card;
@@ -1752,6 +1754,52 @@ deleteBtn.addEventListener('click', async () => {
   dialog.close();
   lastSignature = null;
   fetchCards();
+});
+
+// navigator.clipboard needs a secure context (https/localhost) — this dashboard is
+// served over plain http on the LAN, so fall back to the old execCommand approach.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+  return ok;
+}
+
+function showInfoToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  const body = document.createElement('div');
+  body.className = 'toast-body';
+  const msgEl = document.createElement('p');
+  msgEl.className = 'toast-msg';
+  msgEl.textContent = message;
+  body.appendChild(msgEl);
+  toast.appendChild(body);
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.innerHTML = '×';
+  close.addEventListener('click', (e) => { e.stopPropagation(); dismissToast(toast); });
+  toast.appendChild(close);
+  document.getElementById('toastContainer').appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-show'));
+  toast._timer = setTimeout(() => dismissToast(toast), 5000);
+}
+
+shareCardBtn.addEventListener('click', async () => {
+  if (!editingId) return;
+  const link = `${window.location.origin}/index.html?card=${editingId}`;
+  const ok = await copyText(link);
+  showInfoToast(ok ? 'คัดลอกลิงก์การ์ดแล้ว' : `คัดลอกไม่สำเร็จ คัดลอกเองได้ที่นี่: ${link}`);
 });
 
 function openRejectDialog(id) {

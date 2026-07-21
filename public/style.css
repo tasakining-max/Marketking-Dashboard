@@ -1029,7 +1029,7 @@ main#board {
 }
 .column h2 {
   font-size: 15px;
-  margin: 0;
+  margin: 0 0 12px 0;
   color: var(--text);
 }
 .column-count {
@@ -1927,8 +1927,26 @@ main#board {
 }
 .card-form-header {
   padding: 16px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .card-form-header h3 { margin: 0 0 4px; }
+.share-card-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.share-card-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
 .card-form-body {
   display: flex;
   flex: 1;
@@ -2772,6 +2790,31 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   color: var(--muted);
   min-width: 140px;
   text-align: center;
+}
+
+.cal-filter-group {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+}
+.cal-filter-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+.cal-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.cal-filter-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
 }
 
 .report-goal-card {

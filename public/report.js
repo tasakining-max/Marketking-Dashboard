@@ -51,6 +51,7 @@ const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
 let weekOffset = 0;
 let monthOffset = 0;
 let calOffset = 0;
+let calFilter = 'all';
 let allCards = [];
 
 function startOfDay(d) {
@@ -295,7 +296,10 @@ function renderCalendar() {
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
-    if (cards.length || planned.length || shoots.length) cell.classList.add('cal-has-content');
+    const visibleCount = (calFilter === 'all' || calFilter === 'public' ? cards.length : 0)
+      + (calFilter === 'all' || calFilter === 'plan' ? planned.length : 0)
+      + (calFilter === 'all' || calFilter === 'shoot' ? shoots.length : 0);
+    if (visibleCount) cell.classList.add('cal-has-content');
     if (holidayName || isWeekend) cell.classList.add('cal-holiday');
 
     const num = document.createElement('span');
@@ -319,32 +323,38 @@ function renderCalendar() {
       cell.addEventListener('click', () => openDayPopover(d, cards, display));
     }
 
-    cards.forEach((c) => {
-      const chip = document.createElement('a');
-      chip.className = 'cal-card-title';
-      chip.textContent = c.title;
-      chip.title = c.title;
-      chip.href = `/index.html?card=${c.id}`;
-      cell.appendChild(chip);
-    });
+    if (calFilter === 'all' || calFilter === 'public') {
+      cards.forEach((c) => {
+        const chip = document.createElement('a');
+        chip.className = 'cal-card-title';
+        chip.textContent = c.title;
+        chip.title = c.title;
+        chip.href = `/index.html?card=${c.id}`;
+        cell.appendChild(chip);
+      });
+    }
 
-    planned.forEach((c) => {
-      const chip = document.createElement('a');
-      chip.className = 'cal-card-planned';
-      chip.textContent = `📅 ${c.title}`;
-      chip.title = `Plan to Publish: ${c.title}`;
-      chip.href = `/index.html?card=${c.id}`;
-      cell.appendChild(chip);
-    });
+    if (calFilter === 'all' || calFilter === 'plan') {
+      planned.forEach((c) => {
+        const chip = document.createElement('a');
+        chip.className = 'cal-card-planned';
+        chip.textContent = `📅 ${c.title}`;
+        chip.title = `Plan to Publish: ${c.title}`;
+        chip.href = `/index.html?card=${c.id}`;
+        cell.appendChild(chip);
+      });
+    }
 
-    shoots.forEach((c) => {
-      const chip = document.createElement('a');
-      chip.className = 'cal-card-shoot';
-      chip.textContent = `🎬 ${c.title}`;
-      chip.title = c.shootNote ? `วันที่ถ่ายงาน: ${c.title} (${c.shootNote})` : `วันที่ถ่ายงาน: ${c.title}`;
-      chip.href = `/index.html?card=${c.id}`;
-      cell.appendChild(chip);
-    });
+    if (calFilter === 'all' || calFilter === 'shoot') {
+      shoots.forEach((c) => {
+        const chip = document.createElement('a');
+        chip.className = 'cal-card-shoot';
+        chip.textContent = `🎬 ${c.title}`;
+        chip.title = c.shootNote ? `วันที่ถ่ายงาน: ${c.title} (${c.shootNote})` : `วันที่ถ่ายงาน: ${c.title}`;
+        chip.href = `/index.html?card=${c.id}`;
+        cell.appendChild(chip);
+      });
+    }
 
     grid.appendChild(cell);
   }
@@ -373,6 +383,15 @@ function openDayPopover(day, cards, monthDate) {
 
 document.getElementById('calPrevBtn').addEventListener('click', () => { calOffset -= 1; calDayPopover.hidden = true; renderCalendar(); });
 document.getElementById('calNextBtn').addEventListener('click', () => { calOffset += 1; calDayPopover.hidden = true; renderCalendar(); });
+
+document.querySelectorAll('.cal-filter-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    calFilter = btn.dataset.filter;
+    document.querySelectorAll('.cal-filter-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    calDayPopover.hidden = true;
+    renderCalendar();
+  });
+});
 
 document.getElementById('weekPrevBtn').addEventListener('click', () => { weekOffset -= 1; renderWeek(); });
 document.getElementById('weekNextBtn').addEventListener('click', () => { weekOffset += 1; renderWeek(); });
