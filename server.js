@@ -242,6 +242,8 @@ app.put('/api/cards/reorder', async (req, res) => {
         if (column === 'published') {
           data.publishedAt = now;
           data.plannedPublishDate = null;
+        } else if (card.column === 'published') {
+          data.publishedAt = null;
         }
       }
       const updated = await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
@@ -349,6 +351,8 @@ app.patch('/api/cards/:id', async (req, res) => {
       if (column === 'published' && card.column !== 'published') {
         data.publishedAt = new Date().toISOString();
         data.plannedPublishDate = null;
+      } else if (column !== 'published' && card.column === 'published') {
+        data.publishedAt = null;
       }
       data.column = column;
     }
