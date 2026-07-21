@@ -1431,7 +1431,7 @@ async function persistComments(previousComments) {
     await fetchOrThrow(`/api/cards/${editingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comments: pendingComments })
+      body: JSON.stringify({ comments: pendingComments.map(({ authorImage, ...rest }) => rest) })
     });
     lastSignature = null;
   } catch (err) {
@@ -1706,7 +1706,7 @@ form.addEventListener('submit', async (e) => {
     payload.issues = pendingIssues;
   }
   if (!commentLabel.hidden) {
-    payload.comments = pendingComments;
+    payload.comments = pendingComments.map(({ authorImage, ...rest }) => rest);
   }
   payload.links = pendingLinks;
   let cardId = editingId;
