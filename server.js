@@ -310,7 +310,15 @@ app.patch('/api/cards/:id', async (req, res) => {
     if (comments !== undefined) {
       const valid = Array.isArray(comments) && comments.every((c) => c && typeof c.id === 'string' && typeof c.text === 'string' && c.text.trim() && typeof c.authorName === 'string');
       if (!valid) return res.status(400).json({ error: 'comments must be an array of { id, text, authorName, authorImage, createdAt }' });
-      data.comments = comments.map((c) => ({ id: c.id, text: c.text.trim(), authorName: c.authorName.trim(), authorImage: typeof c.authorImage === 'string' ? c.authorImage : null, createdAt: c.createdAt || new Date().toISOString() }));
+      // GET /api/cards replaces authorImage with a /image URL for list rendering — if that
+      // gets echoed back here on an unrelated save, keep the stored image instead of
+      // overwriting it with the URL string (a comment's real image lives only as base64).
+      const existingComments = Array.isArray(card.comments) ? card.comments : [];
+      data.comments = comments.map((c) => {
+        const isRealImage = typeof c.authorImage === 'string' && /^data:[^;]+;base64,/.test(c.authorImage);
+        const existing = existingComments.find((e) => e.id === c.id);
+        return { id: c.id, text: c.text.trim(), authorName: c.authorName.trim(), authorImage: isRealImage ? c.authorImage : (existing ? existing.authorImage : null), createdAt: c.createdAt || new Date().toISOString() };
+      });
     }
     if (column !== undefined) {
       if (!COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
