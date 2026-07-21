@@ -1,5 +1,16 @@
 const POLL_INTERVAL_MS = 30000;
 
+// crypto.randomUUID() only exists in secure contexts (https/localhost) — this
+// dashboard is served over plain http on the LAN, so fall back to a manual v4 id.
+function genId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // Polling keeps the Neon database endpoint continuously active, which is billed
 // by compute time — a tab left open in a background browser tab would otherwise
 // poll forever and never let the database go idle. registerPoll() skips fetches
@@ -1136,7 +1147,7 @@ function renderTodoList() {
 function addTodo() {
   const text = todoInput.value.trim();
   if (!text) return;
-  pendingTodos.push({ id: crypto.randomUUID(), text, status: 'plan' });
+  pendingTodos.push({ id: genId(), text, status: 'plan' });
   todoInput.value = '';
   renderTodoList();
   todoInput.focus();
@@ -1236,7 +1247,7 @@ function addIssue() {
   const text = issueInput.value.trim();
   if (!text) return;
 
-  pendingIssues.push({ id: crypto.randomUUID(), text, status: 'problem' });
+  pendingIssues.push({ id: genId(), text, status: 'problem' });
   issueInput.value = '';
   renderIssueList();
   issueInput.focus();
@@ -1298,7 +1309,7 @@ function addLink() {
   const url = cardLinkUrl.value.trim();
   if (!url) return;
   const label = cardLinkLabel.value.trim();
-  pendingLinks.push({ id: crypto.randomUUID(), label, url });
+  pendingLinks.push({ id: genId(), label, url });
   cardLinkLabel.value = '';
   cardLinkUrl.value = '';
   renderLinkList();
@@ -1449,7 +1460,7 @@ async function addComment() {
   }
   const previous = pendingComments;
   pendingComments = [...pendingComments, {
-    id: crypto.randomUUID(),
+    id: genId(),
     text,
     authorName: profile.name,
     authorImage: profile.imageUrl || null,
