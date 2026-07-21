@@ -51,7 +51,7 @@ const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
 let weekOffset = 0;
 let monthOffset = 0;
 let calOffset = 0;
-let calFilter = 'all';
+let calFilters = new Set(['shoot', 'plan', 'public']);
 let allCards = [];
 
 function startOfDay(d) {
@@ -298,9 +298,9 @@ function renderCalendar() {
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
     if (new Date(display.getFullYear(), display.getMonth(), d) < todayStart) cell.classList.add('cal-past-day');
-    const visibleCount = (calFilter === 'all' || calFilter === 'public' ? cards.length : 0)
-      + (calFilter === 'all' || calFilter === 'plan' ? planned.length : 0)
-      + (calFilter === 'all' || calFilter === 'shoot' ? shoots.length : 0);
+    const visibleCount = (calFilters.has('public') ? cards.length : 0)
+      + (calFilters.has('plan') ? planned.length : 0)
+      + (calFilters.has('shoot') ? shoots.length : 0);
     if (visibleCount) cell.classList.add('cal-has-content');
     if (holidayName || isWeekend) cell.classList.add('cal-holiday');
 
@@ -325,7 +325,7 @@ function renderCalendar() {
       cell.addEventListener('click', () => openDayPopover(d, cards, display));
     }
 
-    if (calFilter === 'all' || calFilter === 'public') {
+    if (calFilters.has('public')) {
       cards.forEach((c) => {
         const chip = document.createElement('a');
         chip.className = 'cal-card-title';
@@ -336,7 +336,7 @@ function renderCalendar() {
       });
     }
 
-    if (calFilter === 'all' || calFilter === 'plan') {
+    if (calFilters.has('plan')) {
       planned.forEach((c) => {
         const chip = document.createElement('a');
         chip.className = 'cal-card-planned';
@@ -347,7 +347,7 @@ function renderCalendar() {
       });
     }
 
-    if (calFilter === 'all' || calFilter === 'shoot') {
+    if (calFilters.has('shoot')) {
       shoots.forEach((c) => {
         const chip = document.createElement('a');
         chip.className = 'cal-card-shoot';
@@ -386,14 +386,28 @@ function openDayPopover(day, cards, monthDate) {
 document.getElementById('calPrevBtn').addEventListener('click', () => { calOffset -= 1; calDayPopover.hidden = true; renderCalendar(); });
 document.getElementById('calNextBtn').addEventListener('click', () => { calOffset += 1; calDayPopover.hidden = true; renderCalendar(); });
 
+const ALL_CAL_FILTERS = ['shoot', 'plan', 'public'];
+function syncCalFilterBtns() {
+  document.querySelectorAll('.cal-filter-btn').forEach((b) => {
+    const f = b.dataset.filter;
+    b.classList.toggle('active', f === 'all' ? calFilters.size === ALL_CAL_FILTERS.length : calFilters.has(f));
+  });
+}
 document.querySelectorAll('.cal-filter-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    calFilter = btn.dataset.filter;
-    document.querySelectorAll('.cal-filter-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    if (btn.dataset.filter === 'all') {
+      calFilters = new Set(ALL_CAL_FILTERS);
+    } else if (calFilters.has(btn.dataset.filter)) {
+      calFilters.delete(btn.dataset.filter);
+    } else {
+      calFilters.add(btn.dataset.filter);
+    }
+    syncCalFilterBtns();
     calDayPopover.hidden = true;
     renderCalendar();
   });
 });
+syncCalFilterBtns();
 
 document.getElementById('weekPrevBtn').addEventListener('click', () => { weekOffset -= 1; renderWeek(); });
 document.getElementById('weekNextBtn').addEventListener('click', () => { weekOffset += 1; renderWeek(); });
