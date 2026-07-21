@@ -151,12 +151,26 @@ async function cardIdsWithImage() {
   return new Set(rows.map((r) => r.id));
 }
 
-function serializeCardLite(c, hasImageIds) {
+function isBase64Image(v) {
+  return typeof v === 'string' && /^data:[^;]+;base64,/.test(v);
+}
+
+// Comment avatars are resolved from the commenter's Team Profile at read time rather
+// than storing a copy per comment, so there's nothing to go stale or get overwritten.
+// profileNames is just which names currently have a picture, to decide whether the
+// avatar URL is worth generating; isBase64Image(cm.authorImage) is a fallback for
+// comments created before this (their image lives on the comment itself, not a Profile).
+async function profileNamesWithImage() {
+  const rows = await prisma.profile.findMany({ select: { name: true } });
+  return new Set(rows.map((r) => r.name));
+}
+
+function serializeCardLite(c, hasImageIds, profileNames) {
   const card = serializeCard(c);
   card.imageUrl = hasImageIds.has(c.id) ? `/api/cards/${c.id}/image?t=${new Date(c.updatedAt).getTime()}` : null;
   card.comments = (Array.isArray(c.comments) ? c.comments : []).map((cm) => ({
     ...cm,
-    authorImage: cm.authorImage ? `/api/cards/${c.id}/comments/${cm.id}/image` : null,
+    authorImage: (profileNames.has(cm.authorName) || isBase64Image(cm.authorImage)) ? `/api/cards/${c.id}/comments/${cm.id}/image` : null,
   }));
   return card;
 }
@@ -166,11 +180,12 @@ app.get('/api/cards', async (req, res) => {
     const cacheKey = `cards:${req.query.column || ''}`;
     const cards = await cached(cacheKey, async () => {
       const where = req.query.column ? { column: req.query.column } : {};
-      const [rows, hasImageIds] = await Promise.all([
+      const [rows, hasImageIds, profileNames] = await Promise.all([
         prisma.card.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
         cardIdsWithImage(),
+        profileNamesWithImage(),
       ]);
-      return rows.map((c) => serializeCardLite(c, hasImageIds));
+      return rows.map((c) => serializeCardLite(c, hasImageIds, profileNames));
     });
     res.json({ cards });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -231,11 +246,12 @@ app.put('/api/cards/reorder', async (req, res) => {
       if (data.column) notifyPlanner(updated);
     }));
     invalidateCache('cards');
-    const [cards, hasImageIds] = await Promise.all([
+    const [cards, hasImageIds, profileNames] = await Promise.all([
       prisma.card.findMany({ orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
       cardIdsWithImage(),
+      profileNamesWithImage(),
     ]);
-    res.json({ cards: cards.map((c) => serializeCardLite(c, hasImageIds)) });
+    res.json({ cards: cards.map((c) => serializeCardLite(c, hasImageIds, profileNames)) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -244,10 +260,18 @@ app.get('/api/cards/:id/comments/:commentId/image', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { comments: true } });
     const comments = Array.isArray(card?.comments) ? card.comments : [];
     const comment = comments.find((cm) => cm.id === req.params.commentId);
-    const match = comment?.authorImage ? /^data:([^;]+);base64,(.+)$/.exec(comment.authorImage) : null;
+    if (!comment) return res.status(404).end();
+    let source = null;
+    if (comment.authorName) {
+      const profile = await prisma.profile.findUnique({ where: { name: comment.authorName } });
+      if (isBase64Image(profile?.imageUrl)) source = profile.imageUrl;
+    }
+    if (!source && isBase64Image(comment.authorImage)) source = comment.authorImage;
+    const match = source ? /^data:([^;]+);base64,(.+)$/.exec(source) : null;
     if (!match) return res.status(404).end();
     res.setHeader('Content-Type', match[1]);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Not immutable anymore — it now follows the Profile, which can change.
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.end(Buffer.from(match[2], 'base64'));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -313,7 +337,7 @@ app.patch('/api/cards/:id', async (req, res) => {
       // overwriting it with the URL string (a comment's real image lives only as base64).
       const existingComments = Array.isArray(card.comments) ? card.comments : [];
       data.comments = comments.map((c) => {
-        const isRealImage = typeof c.authorImage === 'string' && /^data:[^;]+;base64,/.test(c.authorImage);
+        const isRealImage = isBase64Image(c.authorImage);
         const existing = existingComments.find((e) => e.id === c.id);
         return { id: c.id, text: c.text.trim(), authorName: c.authorName.trim(), authorImage: isRealImage ? c.authorImage : (existing ? existing.authorImage : null), createdAt: c.createdAt || new Date().toISOString() };
       });
