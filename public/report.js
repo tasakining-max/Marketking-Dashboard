@@ -190,6 +190,29 @@ function renderMonth() {
 
 const CAL_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const HOLIDAYS_2026 = {
+  '2026-01-01': 'วันขึ้นปีใหม่',
+  '2026-01-02': 'วันหยุดพิเศษ',
+  '2026-03-03': 'วันมาฆบูชา',
+  '2026-04-13': 'วันสงกรานต์',
+  '2026-04-14': 'วันสงกรานต์',
+  '2026-04-15': 'วันสงกรานต์',
+  '2026-04-16': 'วันหยุดพิเศษ',
+  '2026-04-17': 'วันหยุดพิเศษ',
+  '2026-05-01': 'วันแรงงาน',
+  '2026-06-03': 'วันเฉลิมฯ พระราชินี',
+  '2026-07-27': 'วันหยุดพิเศษ',
+  '2026-07-28': 'วันเฉลิมฯ ร.10',
+  '2026-07-29': 'วันอาสาฬหบูชา',
+  '2026-08-12': 'วันแม่แห่งชาติ',
+  '2026-10-13': 'วันนวมินทรมหาราช',
+  '2026-12-05': 'วันพ่อแห่งชาติ',
+  '2026-12-28': 'วันหยุดพิเศษ',
+  '2026-12-29': 'วันหยุดพิเศษ',
+  '2026-12-30': 'วันหยุดพิเศษ',
+  '2026-12-31': 'วันสิ้นปี',
+};
+
 function renderCalendar() {
   const today = new Date();
   const year = today.getFullYear();
@@ -265,15 +288,28 @@ function renderCalendar() {
     const cards = publishedDays[d] || [];
     const planned = plannedDays[d] || [];
     const shoots = shootDays[d] || [];
+    const dateKey = `${display.getFullYear()}-${String(display.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const holidayName = HOLIDAYS_2026[dateKey];
+    const weekday = (firstWeekday + (d - 1)) % 7;
+    const isWeekend = weekday === 0 || weekday === 6;
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
     if (cards.length || planned.length || shoots.length) cell.classList.add('cal-has-content');
+    if (holidayName || isWeekend) cell.classList.add('cal-holiday');
 
     const num = document.createElement('span');
     num.className = 'cal-day-num';
     num.textContent = d;
     cell.appendChild(num);
+
+    if (holidayName) {
+      const label = document.createElement('span');
+      label.className = 'cal-holiday-label';
+      label.textContent = `🌴 ${holidayName}`;
+      label.title = holidayName;
+      cell.appendChild(label);
+    }
 
     if (cards.length) {
       const dot = document.createElement('span');
