@@ -18,7 +18,6 @@ const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
 const MAX_ACTIVITY = 100;
-const PUBLIC_PATHS = new Set(['/login.html', '/api/login']);
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
 const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
 const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
@@ -121,45 +120,8 @@ function notifyPlanner(card) {
   }).catch((e) => console.error('Planner sync email failed:', e.message));
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-function getPassword() {
-  return process.env.DASHBOARD_PASSWORD || null;
-}
-
-function parseCookies(req) {
-  const cookies = {};
-  (req.headers.cookie || '').split(';').forEach((pair) => {
-    const idx = pair.indexOf('=');
-    if (idx === -1) return;
-    cookies[pair.slice(0, idx).trim()] = decodeURIComponent(pair.slice(idx + 1).trim());
-  });
-  return cookies;
-}
-
 const app = express();
 app.use(express.json({ limit: '15mb' }));
-
-app.use((req, res, next) => {
-  if (PUBLIC_PATHS.has(req.path)) return next();
-  const password = getPassword();
-  const cookies = parseCookies(req);
-  if (!password || cookies.dashboard_token === password) return next();
-  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
-  return res.redirect('/login.html');
-});
-
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  const actual = getPassword();
-  if (!actual || password !== actual) return res.status(401).json({ error: 'Invalid password' });
-  res.setHeader('Set-Cookie', `dashboard_token=${encodeURIComponent(password)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`);
-  res.json({ ok: true });
-});
-
-app.post('/api/logout', (req, res) => {
-  res.setHeader('Set-Cookie', 'dashboard_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
-  res.json({ ok: true });
-});
 
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
