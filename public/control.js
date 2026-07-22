@@ -94,7 +94,7 @@ function render(data) {
     data.cronJobs.forEach((job) => {
       const item = document.createElement('div');
       item.className = 'cron-item';
-      item.innerHTML = `<span class="cron-schedule">${escapeHtml(job.schedule || '')}</span><span class="cron-label">${escapeHtml(job.label || '')}</span>`;
+      item.innerHTML = `<span class="cron-schedule">${escapeHtml(describeCronSchedule(job.schedule))}</span><span class="cron-label">${escapeHtml(job.name || '')}</span>`;
       cronList.appendChild(item);
     });
   }
@@ -123,6 +123,17 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function describeCronSchedule(schedule) {
+  if (!schedule) return '';
+  const parts = schedule.trim().split(/\s+/);
+  if (parts.length !== 5) return schedule;
+  const [min, hour, dom, mon, dow] = parts;
+  if (dom === '*' && mon === '*' && dow === '*' && /^\d+$/.test(min) && /^\d+$/.test(hour)) {
+    return `ทุกวัน ${hour.padStart(2, '0')}:${min.padStart(2, '0')} น.`;
+  }
+  return schedule;
 }
 
 clearBtn.addEventListener('click', async () => {

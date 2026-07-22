@@ -492,7 +492,7 @@ app.put('/api/key-messages/reorder', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Website Changelog (read-only from DB) ───────────────────────────────────
+// ─── Website Changelog ─────────────────────────────────────────────────────
 app.get('/api/website-changelog', async (req, res) => {
   try {
     const entries = await cached('website-changelog', async () => {
@@ -500,6 +500,18 @@ app.get('/api/website-changelog', async (req, res) => {
       return rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
     });
     res.json({ entries, siteUrl: TASAKI_WEB_URL });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/website-changelog', async (req, res) => {
+  const { text, date } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  try {
+    const row = await prisma.websiteChangelog.create({
+      data: { text: text.trim(), ...(date ? { date: new Date(date) } : {}) },
+    });
+    invalidateCache('website-changelog');
+    res.status(201).json({ id: row.id, date: row.date, feature: row.text });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -10,7 +10,9 @@
     "build": "prisma generate",
     "postinstall": "prisma generate",
     "migrate": "node scripts/migrate-to-neon.mjs",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "get-todays-website-commits": "node scripts/get-todays-website-commits.mjs",
+    "post-website-changelog": "node scripts/post-website-changelog.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
