@@ -515,6 +515,21 @@ app.post('/api/website-changelog', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.patch('/api/website-changelog/:id', async (req, res) => {
+  const { text, date } = req.body;
+  try {
+    const row = await prisma.websiteChangelog.update({
+      where: { id: req.params.id },
+      data: {
+        ...(text !== undefined ? { text: String(text).trim() } : {}),
+        ...(date !== undefined ? { date: new Date(date) } : {}),
+      },
+    });
+    invalidateCache('website-changelog');
+    res.json({ id: row.id, date: row.date, feature: row.text });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Website Issues ───────────────────────────────────────────────────────────
 app.get('/api/website-issues', async (req, res) => {
   try {

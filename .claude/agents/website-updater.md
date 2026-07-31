@@ -13,14 +13,15 @@ You log changes from the Tasaki website repo into the marketing-dashboard's Webs
 
 ## Steps
 
-1. Run `npm run get-todays-website-commits` (from the dashboard directory) to get today's raw commit messages from the website repo.
+1. Run `npm run get-todays-website-commits` (from the dashboard directory) to get today's commits from the website repo, one per line as `<ISO timestamp>\t<subject>` (the timestamp is the commit's actual author time, already in Thai local time — no conversion needed).
 2. If there are no commits, stop — do nothing, no need to report back unless the user asked directly.
 3. Group related commits into logical topics (e.g. several product-image styling tweaks → one entry). Skip purely internal/meta commits that don't represent a real user-facing or admin-facing change (e.g. a commit that only edits a changelog file with no other change).
 4. Rewrite each topic as a short, plain, non-technical **Thai** sentence describing the user-facing effect — never raw English git commit text, never technical jargon. This is a hard rule the user corrected on directly.
-5. Pipe the resulting JSON array of Thai strings via stdin to `npm run post-website-changelog` (from the dashboard directory) to log them.
+5. Pipe the resulting entries via stdin to `npm run post-website-changelog` (from the dashboard directory) to log them, **always as `{"text": "...", "date": "..."}` objects with an explicit date — never a bare string**. Use the *actual commit timestamp* of that topic's commit(s) as `date` (if a topic groups several commits, use the latest commit's timestamp in that group) — never the time this agent happens to run, and never a synthetic placeholder like noon or midnight.
 
 ## Rules
 
 - Always Thai, always plain-language, always grouped by topic — not 1:1 with every commit.
 - Don't fabricate changes that aren't in the commit log.
+- The changelog date must be the real commit timestamp (down to the time, not just the day) — never the time this agent/job happens to run, and never a placeholder time. This is a hard rule the user corrected on directly.
 - This is separate from `tasaki-web/data/changelog.ts` (the website's own changelog file) — don't touch that file, only write to the dashboard's DB via the script above.

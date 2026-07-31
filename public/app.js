@@ -2398,10 +2398,7 @@ function renderChangelogEntries(container, entries) {
 
   function formatEntryDate(e) {
     const d = new Date(e.datetime || e.date);
-    if (e.datetime) {
-      return d.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
-    }
-    return d.toLocaleDateString('th-TH', { dateStyle: 'short' });
+    return d.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
   }
 
   [...entries].sort((a, b) => entryTimestamp(b) - entryTimestamp(a)).forEach((entry) => {

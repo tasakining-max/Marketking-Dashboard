@@ -1,6 +1,7 @@
 node_modules/
 auth.json
 remotion-clips/
+scripts/pending-website-updates/
 
 /generated/prisma
 .vercel
