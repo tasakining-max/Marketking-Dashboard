@@ -3257,6 +3257,14 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   .ads-main { max-width: 50vw; }
 }
 
+.insights-icon-col { width: 1%; white-space: nowrap; text-align: center; }
+.insights-link-icon {
+  display: inline-block;
+  font-size: 15px;
+  text-decoration: none;
+}
+.insights-link-icon:hover { opacity: 0.7; }
+
 .ads-filter-row {
   display: flex;
   flex-wrap: wrap;

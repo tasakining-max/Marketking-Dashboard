@@ -315,7 +315,9 @@ function renderTable(videos) {
       a.href = v.permalinkUrl.startsWith('http') ? v.permalinkUrl : `https://facebook.com${v.permalinkUrl}`;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
-      a.textContent = 'เปิดดู →';
+      a.className = 'insights-link-icon';
+      a.title = 'เปิดดูโพสต์';
+      a.textContent = '🔗';
       linkTd.appendChild(a);
     } else {
       linkTd.textContent = '—';
@@ -327,7 +329,9 @@ function renderTable(videos) {
     if (cardId) {
       const a = document.createElement('a');
       a.href = `/index.html?card=${cardId}`;
-      a.textContent = 'เปิดการ์ด →';
+      a.className = 'insights-link-icon';
+      a.title = 'เปิดการ์ด';
+      a.textContent = '🗂️';
       cardTd.appendChild(a);
     } else {
       cardTd.textContent = '—';
