@@ -26,6 +26,10 @@ model Card {
   publishedAt        String?
   shootDate          String?
   shootNote          String   @default("")
+  caption            String   @default("") @db.Text
+  linkedVideoId      String?
+  videoUrl           String?
+  videoMimeType      String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -72,4 +76,47 @@ model WebsiteChangelog {
   id        String   @id @default(uuid())
   text      String
   date      DateTime @default(now())
+}
+
+model AdInsight {
+  id               String   @id @default(uuid())
+  date             DateTime
+  campaignName     String
+  spend            Float    @default(0)
+  reach            Int      @default(0)
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  ctr              Float    @default(0)
+  cpc              Float    @default(0)
+  targetAudience   String   @default("")
+  creativeName     String   @default("")
+  creativeImageUrl String?  @db.Text
+  createdAt        DateTime @default(now())
+}
+
+model AutoPostLog {
+  id           String   @id @default(uuid())
+  cardId       String?
+  cardTitle    String
+  platform     String
+  placement    String   @default("Feed")
+  status       String   @default("success")
+  postUrl      String?  @db.Text
+  errorMessage String?  @db.Text
+  postedAt     DateTime @default(now())
+}
+
+model PageVideoInsight {
+  id            String   @id @default(uuid())
+  videoId       String   @unique
+  description   String   @default("") @db.Text
+  createdTime   DateTime
+  length        Float    @default(0)
+  permalinkUrl  String   @default("") @db.Text
+  views         Int      @default(0)
+  postViews     Int      @default(0)
+  likes         Int      @default(0)
+  comments      Int      @default(0)
+  shares        Int      @default(0)
+  fetchedAt     DateTime @default(now())
 }

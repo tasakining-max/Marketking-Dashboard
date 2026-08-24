@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import pg from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import nodemailer from 'nodemailer';
+import multer from 'multer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,10 +22,22 @@ const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
 const MAX_ACTIVITY = 100;
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+const VIDEOS_DIR = path.join(UPLOADS_DIR, 'videos');
 const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
 const IMAGE_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const VIDEO_MIME_EXT = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 
 try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
+try { fs.mkdirSync(VIDEOS_DIR, { recursive: true }); } catch {}
+
+const videoUpload = multer({
+  storage: multer.diskStorage({
+    destination: VIDEOS_DIR,
+    filename: (req, file, cb) => cb(null, `${crypto.randomUUID()}.${VIDEO_MIME_EXT[file.mimetype] || 'mp4'}`),
+  }),
+  fileFilter: (req, file, cb) => cb(null, Boolean(VIDEO_MIME_EXT[file.mimetype])),
+  limits: { fileSize: 500 * 1024 * 1024 },
+});
 
 // ─── Claude agent roster ──────────────────────────────────────────────────────
 // Mission Control used to monitor a separate Discord bot gateway ("Clawbot").
@@ -122,6 +135,106 @@ function notifyPlanner(card) {
   }).catch((e) => console.error('Planner sync email failed:', e.message));
 }
 
+// ─── Auto-post to Facebook/Instagram ────────────────────────────────────────
+// Fires (fire-and-forget) when a card transitions into "published". Every
+// published clip is a Reel posted to 3 destinations at once (confirmed
+// 2026-08-24): Facebook Reel, Facebook Story, Instagram Reel. Off by default
+// (AUTO_POST_ENABLED unset/false) — logs a "dry_run" attempt per destination
+// instead of calling the real API, so the report can be previewed safely.
+const AUTO_POST_ENABLED = process.env.AUTO_POST_ENABLED === 'true';
+const GRAPH_VERSION = 'v26.0';
+const AUTO_POST_DESTINATIONS = [
+  { platform: 'instagram', placement: 'Reel' },
+  { platform: 'facebook', placement: 'Reel' },
+  { platform: 'facebook', placement: 'Story' },
+];
+
+async function logAutoPostAttempt(card, dest, status, extra = {}) {
+  try {
+    await prisma.autoPostLog.create({
+      data: {
+        cardId: card.id,
+        cardTitle: card.title,
+        platform: dest.platform,
+        placement: dest.placement,
+        status,
+        postUrl: extra.postUrl || null,
+        errorMessage: extra.errorMessage || null,
+      },
+    });
+    invalidateCache('auto-post-log');
+  } catch (e) { console.error('Failed to write auto-post log:', e.message); }
+}
+
+// Facebook's resumable upload protocol: start -> upload raw bytes -> finish.
+// Reels and Stories use the same 3-phase shape on sibling endpoints.
+async function uploadFacebookReelOrStory(card, kind) {
+  const pageId = process.env.FB_PAGE_ID;
+  const token = process.env.FB_PAGE_ACCESS_TOKEN;
+  const endpoint = kind === 'reel' ? 'video_reels' : 'video_stories';
+  const fileBuffer = fs.readFileSync(path.join(__dirname, 'public', card.videoUrl));
+
+  const startRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/${endpoint}?upload_phase=start&access_token=${token}`, { method: 'POST' });
+  const startJson = await startRes.json();
+  if (startJson.error) throw new Error(startJson.error.message);
+  const { video_id, upload_url } = startJson;
+
+  const uploadRes = await fetch(upload_url, {
+    method: 'POST',
+    headers: { Authorization: `OAuth ${token}`, offset: '0', file_size: String(fileBuffer.length) },
+    body: fileBuffer,
+  });
+  const uploadJson = await uploadRes.json().catch(() => ({}));
+  if (uploadJson.error) throw new Error(uploadJson.error.message);
+
+  const finishParams = new URLSearchParams({ upload_phase: 'finish', video_id, video_state: 'PUBLISHED', access_token: token });
+  if (kind === 'reel' && card.caption) finishParams.set('description', card.caption);
+  const finishRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/${endpoint}?${finishParams}`, { method: 'POST' });
+  const finishJson = await finishRes.json();
+  if (finishJson.error) throw new Error(finishJson.error.message);
+
+  return { videoId: video_id, postUrl: kind === 'reel' ? `https://www.facebook.com/reel/${video_id}` : null };
+}
+
+async function postToFacebook(card) {
+  if (!card.videoUrl) {
+    for (const dest of AUTO_POST_DESTINATIONS) {
+      await logAutoPostAttempt(card, dest, 'failed', { errorMessage: 'การ์ดนี้ไม่มีไฟล์วิดีโอแนบ — โพสต์ Reel ไม่ได้' });
+    }
+    return;
+  }
+
+  if (!AUTO_POST_ENABLED) {
+    for (const dest of AUTO_POST_DESTINATIONS) {
+      await logAutoPostAttempt(card, dest, 'dry_run');
+    }
+    return;
+  }
+
+  try {
+    const r = await uploadFacebookReelOrStory(card, 'reel');
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Reel' }, 'success', { postUrl: r.postUrl });
+  } catch (e) {
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Reel' }, 'failed', { errorMessage: e.message });
+  }
+
+  try {
+    await uploadFacebookReelOrStory(card, 'story');
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'success', {});
+  } catch (e) {
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'failed', { errorMessage: e.message });
+  }
+
+  // Instagram's Content Publishing API needs a `video_url` its own servers can
+  // fetch over the public internet — our video lives at localhost/LAN only, so
+  // this leg can't work until the video is reachable from outside (a tunnel or
+  // a public storage URL). Logged honestly rather than attempted and failing
+  // opaquely against the Graph API.
+  await logAutoPostAttempt(card, { platform: 'instagram', placement: 'Reel' }, 'failed', {
+    errorMessage: 'ยังโพสต์ Instagram อัตโนมัติไม่ได้ — ต้องมี URL วิดีโอที่เข้าถึงได้จากอินเทอร์เน็ต แต่วิดีโอตอนนี้เก็บอยู่ที่ localhost เท่านั้น',
+  });
+}
+
 const app = express();
 app.use(express.json({ limit: '15mb' }));
 
@@ -187,7 +300,17 @@ app.get('/api/cards', async (req, res) => {
         cardIdsWithImage(),
         profileNamesWithImage(),
       ]);
-      return rows.map((c) => serializeCardLite(c, hasImageIds, profileNames));
+      const linkedVideoIds = rows.map((c) => c.linkedVideoId).filter(Boolean);
+      const videoRows = linkedVideoIds.length
+        ? await prisma.pageVideoInsight.findMany({ where: { videoId: { in: linkedVideoIds } } })
+        : [];
+      const videoByCardVideoId = new Map(videoRows.map((v) => [v.videoId, v]));
+      return rows.map((c) => {
+        const card = serializeCardLite(c, hasImageIds, profileNames);
+        const v = c.linkedVideoId ? videoByCardVideoId.get(c.linkedVideoId) : null;
+        card.videoStats = v ? { views: v.views, likes: v.likes, comments: v.comments, shares: v.shares, permalinkUrl: v.permalinkUrl } : null;
+        return card;
+      });
     });
     res.json({ cards });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -205,7 +328,7 @@ app.get('/api/cards/:id/image', async (req, res) => {
 });
 
 app.post('/api/cards', async (req, res) => {
-  const { title, description, column, shootDate, shootNote } = req.body;
+  const { title, description, column, shootDate, shootNote, caption } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
@@ -219,6 +342,7 @@ app.post('/api/cards', async (req, res) => {
         order: Date.now(),
         shootDate: shootDate || null,
         shootNote: typeof shootNote === 'string' ? shootNote.trim() : '',
+        caption: typeof caption === 'string' ? caption.trim() : '',
       },
     });
     notifyPlanner(card);
@@ -237,17 +361,20 @@ app.put('/api/cards/reorder', async (req, res) => {
       const card = await prisma.card.findUnique({ where: { id }, select: { column: true } });
       if (!card) return;
       const data = { order: index, updatedAt: new Date() };
+      let enteringPublished = false;
       if (card.column !== column) {
         data.column = column;
         if (column === 'published') {
           data.publishedAt = now;
           data.plannedPublishDate = null;
+          enteringPublished = true;
         } else if (card.column === 'published') {
           data.publishedAt = null;
         }
       }
       const updated = await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
       if (data.column) notifyPlanner(updated);
+      if (enteringPublished) postToFacebook(updated).catch((e) => console.error('postToFacebook failed:', e.message));
     }));
     invalidateCache('cards');
     const [cards, hasImageIds, profileNames] = await Promise.all([
@@ -302,12 +429,48 @@ app.delete('/api/cards/:id/image', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Video files live on local disk (public/uploads/videos/), not in Postgres —
+// base64-in-DB doesn't scale to video file sizes the way it does for images.
+app.post('/api/cards/:id/video', videoUpload.single('video'), async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { id: true, videoUrl: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    if (!req.file) return res.status(400).json({ error: 'video file is required (field name "video", mp4/mov/webm)' });
+    if (card.videoUrl) {
+      const oldPath = path.join(__dirname, 'public', card.videoUrl);
+      fs.unlink(oldPath, () => {});
+    }
+    const videoUrl = `/uploads/videos/${req.file.filename}`;
+    const updated = await prisma.card.update({
+      where: { id: req.params.id },
+      data: { videoUrl, videoMimeType: req.file.mimetype },
+      omit: { imageUrl: true },
+    });
+    invalidateCache('cards');
+    res.json(serializeCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/cards/:id/video', async (req, res) => {
+  try {
+    const card = await prisma.card.findUnique({ where: { id: req.params.id }, select: { id: true, videoUrl: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    if (card.videoUrl) {
+      const oldPath = path.join(__dirname, 'public', card.videoUrl);
+      fs.unlink(oldPath, () => {});
+    }
+    const updated = await prisma.card.update({ where: { id: req.params.id }, data: { videoUrl: null, videoMimeType: null }, omit: { imageUrl: true } });
+    invalidateCache('cards');
+    res.json(serializeCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch('/api/cards/:id', async (req, res) => {
   try {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
 
-    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, shootDate, shootNote, pinned } = req.body;
+    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, shootDate, shootNote, caption, linkedVideoId, pinned } = req.body;
     const data = {};
 
     if (title !== undefined) {
@@ -346,11 +509,13 @@ app.patch('/api/cards/:id', async (req, res) => {
         return { id: c.id, text: c.text.trim(), authorName: c.authorName.trim(), authorImage: isRealImage ? c.authorImage : (existing ? existing.authorImage : null), createdAt: c.createdAt || new Date().toISOString() };
       });
     }
+    let enteringPublished = false;
     if (column !== undefined) {
       if (!COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${COLUMNS.join(', ')}` });
       if (column === 'published' && card.column !== 'published') {
         data.publishedAt = new Date().toISOString();
         data.plannedPublishDate = null;
+        enteringPublished = true;
       } else if (column !== 'published' && card.column === 'published') {
         data.publishedAt = null;
       }
@@ -379,11 +544,14 @@ app.patch('/api/cards/:id', async (req, res) => {
     }
     if (shootDate !== undefined) data.shootDate = shootDate || null;
     if (shootNote !== undefined) data.shootNote = typeof shootNote === 'string' ? shootNote.trim() : '';
+    if (caption !== undefined) data.caption = typeof caption === 'string' ? caption.trim() : '';
+    if (linkedVideoId !== undefined) data.linkedVideoId = linkedVideoId || null;
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
     notifyPlanner(updated);
     invalidateCache('cards');
+    if (enteringPublished) postToFacebook(updated).catch((e) => console.error('postToFacebook failed:', e.message));
     res.json(serializeCard(updated));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -392,6 +560,7 @@ app.delete('/api/cards/:id', async (req, res) => {
   try {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
+    if (card.videoUrl) fs.unlink(path.join(__dirname, 'public', card.videoUrl), () => {});
     await prisma.card.delete({ where: { id: req.params.id } });
     invalidateCache('cards');
     res.json(serializeCard(card));
@@ -530,6 +699,154 @@ app.patch('/api/website-changelog/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Ad Insights ────────────────────────────────────────────────────────────
+// Will be populated by scripts/sync-ad-insights.mjs pulling the Facebook
+// Marketing Insights API on a daily launchd schedule, once Meta Business
+// Manager access to the Tasaki ad account is granted.
+app.get('/api/ad-insights', async (req, res) => {
+  try {
+    const entries = await cached('ad-insights', async () => {
+      const rows = await prisma.adInsight.findMany({ orderBy: { date: 'desc' } });
+      return rows.map((r) => ({
+        id: r.id,
+        date: r.date,
+        campaignName: r.campaignName,
+        spend: r.spend,
+        reach: r.reach,
+        impressions: r.impressions,
+        clicks: r.clicks,
+        ctr: r.ctr,
+        cpc: r.cpc,
+        targetAudience: r.targetAudience,
+        creativeName: r.creativeName,
+        creativeImageUrl: r.creativeImageUrl,
+      }));
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ad-insights', async (req, res) => {
+  const { date, campaignName, spend, reach, impressions, clicks, ctr, cpc, targetAudience, creativeName, creativeImageUrl } = req.body;
+  if (!date || !campaignName) return res.status(400).json({ error: 'date and campaignName are required' });
+  try {
+    const row = await prisma.adInsight.create({
+      data: {
+        date: new Date(date),
+        campaignName: String(campaignName),
+        spend: Number(spend) || 0,
+        reach: Number(reach) || 0,
+        impressions: Number(impressions) || 0,
+        clicks: Number(clicks) || 0,
+        ctr: Number(ctr) || 0,
+        cpc: Number(cpc) || 0,
+        targetAudience: targetAudience ? String(targetAudience) : '',
+        creativeName: creativeName ? String(creativeName) : '',
+        ...(creativeImageUrl ? { creativeImageUrl: String(creativeImageUrl) } : {}),
+      },
+    });
+    invalidateCache('ad-insights');
+    res.status(201).json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Auto-post log ──────────────────────────────────────────────────────────
+// Will be written to by the postToFacebook(card) side effect once real Page
+// credentials exist (see server.js's card-published hook, not yet built) —
+// one row per attempt, so this is a history/report, not live status.
+app.get('/api/auto-post-log', async (req, res) => {
+  try {
+    const entries = await cached('auto-post-log', async () => {
+      const rows = await prisma.autoPostLog.findMany({ orderBy: { postedAt: 'desc' }, take: 50 });
+      return rows.map((r) => ({
+        id: r.id,
+        cardId: r.cardId,
+        cardTitle: r.cardTitle,
+        platform: r.platform,
+        placement: r.placement,
+        status: r.status,
+        postUrl: r.postUrl,
+        errorMessage: r.errorMessage,
+        postedAt: r.postedAt,
+      }));
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auto-post-log', async (req, res) => {
+  const { cardId, cardTitle, platform, placement, status, postUrl, errorMessage, postedAt } = req.body;
+  if (!cardTitle || !platform) return res.status(400).json({ error: 'cardTitle and platform are required' });
+  try {
+    const row = await prisma.autoPostLog.create({
+      data: {
+        cardId: cardId ? String(cardId) : null,
+        cardTitle: String(cardTitle),
+        platform: String(platform),
+        placement: placement ? String(placement) : 'Feed',
+        status: status ? String(status) : 'success',
+        postUrl: postUrl ? String(postUrl) : null,
+        errorMessage: errorMessage ? String(errorMessage) : null,
+        ...(postedAt ? { postedAt: new Date(postedAt) } : {}),
+      },
+    });
+    invalidateCache('auto-post-log');
+    res.status(201).json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Page Video Insights ────────────────────────────────────────────────────
+// Organic (non-paid) video performance on the Tasaki Air Facebook Page, pulled
+// by scripts/sync-page-video-insights.mjs from the Graph API. Upserted by
+// videoId so re-running the sync just refreshes view/like counts.
+app.get('/api/page-video-insights', async (req, res) => {
+  try {
+    const entries = await cached('page-video-insights', async () => {
+      const rows = await prisma.pageVideoInsight.findMany({ orderBy: { createdTime: 'desc' } });
+      return rows.map((r) => ({
+        id: r.id,
+        videoId: r.videoId,
+        description: r.description,
+        createdTime: r.createdTime,
+        length: r.length,
+        permalinkUrl: r.permalinkUrl,
+        views: r.views,
+        postViews: r.postViews,
+        likes: r.likes,
+        comments: r.comments,
+        shares: r.shares,
+      }));
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/page-video-insights', async (req, res) => {
+  const { videoId, description, createdTime, length, permalinkUrl, views, postViews, likes, comments, shares } = req.body;
+  if (!videoId || !createdTime) return res.status(400).json({ error: 'videoId and createdTime are required' });
+  try {
+    const data = {
+      description: typeof description === 'string' ? description : '',
+      createdTime: new Date(createdTime),
+      length: Number(length) || 0,
+      permalinkUrl: typeof permalinkUrl === 'string' ? permalinkUrl : '',
+      views: Number(views) || 0,
+      postViews: Number(postViews) || 0,
+      likes: Number(likes) || 0,
+      comments: Number(comments) || 0,
+      shares: Number(shares) || 0,
+      fetchedAt: new Date(),
+    };
+    const row = await prisma.pageVideoInsight.upsert({
+      where: { videoId: String(videoId) },
+      create: { videoId: String(videoId), ...data },
+      update: data,
+    });
+    invalidateCache('page-video-insights');
+    res.status(201).json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Website Issues ───────────────────────────────────────────────────────────
 app.get('/api/website-issues', async (req, res) => {
   try {
@@ -658,6 +975,33 @@ app.get('/api/marketing-changelog', async (req, res) => {
       return rows.map((r) => ({ id: r.id, date: r.date, feature: r.text }));
     });
     res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/marketing-changelog', async (req, res) => {
+  const { text, date } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  try {
+    const row = await prisma.marketingChangelog.create({
+      data: { text: text.trim(), ...(date ? { date: new Date(date) } : {}) },
+    });
+    invalidateCache('marketing-changelog');
+    res.status(201).json({ id: row.id, date: row.date, feature: row.text });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/marketing-changelog/:id', async (req, res) => {
+  const { text, date } = req.body;
+  try {
+    const row = await prisma.marketingChangelog.update({
+      where: { id: req.params.id },
+      data: {
+        ...(text !== undefined ? { text: String(text).trim() } : {}),
+        ...(date !== undefined ? { date: new Date(date) } : {}),
+      },
+    });
+    invalidateCache('marketing-changelog');
+    res.json({ id: row.id, date: row.date, feature: row.text });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

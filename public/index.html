@@ -19,6 +19,9 @@
     <nav class="top-nav">
       <a href="/index.html" class="nav-link active">📋 Marketing Pipeline</a>
       <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/ads.html" class="nav-link">📈 Ads</a>
+      <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
+      <a href="/insights.html" class="nav-link">📹 Insights</a>
       <a href="/control.html" class="nav-link">🛰 Mission Control</a>
     </nav>
     <button id="addBtn" class="add-btn">+ New Idea</button>
@@ -172,11 +175,17 @@
       <div class="card-form-body">
         <div class="card-form-left">
           <label>Title<input type="text" id="cardTitle" required maxlength="200" /></label>
-          <label>Description / Notes<textarea id="cardDescription" rows="4"></textarea></label>
+          <label>Description / Notes <span class="key-messages-hint" style="font-weight:400;">(สำหรับบรีฟงานทีม ไม่ใช่ข้อความที่จะโพสต์)</span><textarea id="cardDescription" rows="4"></textarea></label>
+          <label>Caption <span class="key-messages-hint" style="font-weight:400;">(ข้อความนี้จะถูกใช้โพสต์อัตโนมัติจริงเมื่อระบบเชื่อมต่อเสร็จ)</span><textarea id="cardCaption" rows="3" placeholder="พิมพ์แคปชั่นที่จะใช้โพสต์จริง..." maxlength="2000"></textarea></label>
           <label>Image<input type="file" id="cardImageInput" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
           <div id="cardImagePreviewWrap" class="card-image-preview-wrap" hidden>
             <img id="cardImagePreview" class="card-image-preview" alt="Preview" title="Click to view full size" draggable="false" />
             <button type="button" id="cardImageRemoveBtn" class="danger">Remove image</button>
+          </div>
+          <label>Video <span class="key-messages-hint" style="font-weight:400;">(ไฟล์ที่จะโพสต์อัตโนมัติจริง — mp4/mov/webm)</span><input type="file" id="cardVideoInput" accept="video/mp4,video/quicktime,video/webm" /></label>
+          <div id="cardVideoPreviewWrap" class="card-image-preview-wrap" hidden>
+            <video id="cardVideoPreview" class="card-image-preview" controls></video>
+            <button type="button" id="cardVideoRemoveBtn" class="danger">Remove video</button>
           </div>
           <fieldset id="cardIdeaTagLabel" class="tag-fieldset" hidden>
             <legend>Content type (เลือกได้ 1 อย่าง)</legend>

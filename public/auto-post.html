@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Auto Post — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>Auto Post</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/ads.html" class="nav-link">📈 Ads</a>
+      <a href="/auto-post.html" class="nav-link active">🤖 Auto Post</a>
+      <a href="/insights.html" class="nav-link">📹 Insights</a>
+      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <main class="report-main">
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>🤖 รายงานการโพสต์อัตโนมัติ</h2>
+        <div class="report-nav">
+          <button id="autoPostRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+        </div>
+      </div>
+      <p class="key-messages-hint">บันทึกทุกครั้งที่ระบบโพสต์การ์ดขึ้น Facebook/Instagram ให้อัตโนมัติเมื่อการ์ดถูกย้ายไปสถานะ "เผยแพร่แล้ว" — คลิป Reel หนึ่งคลิปจะโพสต์ไป 3 ที่พร้อมกัน (IG Reel, FB Reel, FB Story) ✅ ระบบเชื่อมต่อจริงแล้ว การ์ดอัปโหลดวิดีโอได้แล้ว แต่ตอนนี้ตั้งเป็น <strong>Dry-run</strong> (บันทึก log ไว้ดู ยังไม่โพสต์ขึ้นเพจจริง) รอยืนยันก่อนเปิดโพสต์จริง — ส่วน Instagram ยังติดข้อจำกัด: ต้องมี URL วิดีโอที่เข้าถึงจากอินเทอร์เน็ตได้ แต่วิดีโอเก็บอยู่ที่ localhost เท่านั้น</p>
+
+      <div id="autoPostEmpty" class="key-messages-hint">ยังไม่มีการโพสต์อัตโนมัติเกิดขึ้น</div>
+
+      <div id="autoPostContent" hidden>
+        <div class="ads-table-wrap">
+          <table class="ads-table ads-log-table">
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>การ์ด/หัวข้อ</th>
+                <th>แพลตฟอร์ม</th>
+                <th>ตำแหน่งโพสต์</th>
+                <th>สถานะ</th>
+                <th>รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody id="autoPostTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="auto-post.js"></script>
+</body>
+</html>

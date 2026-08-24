@@ -66,6 +66,7 @@ async function fetchOrThrow(url, opts) {
 }
 const titleInput = document.getElementById('cardTitle');
 const descInput = document.getElementById('cardDescription');
+const captionInput = document.getElementById('cardCaption');
 const dialogTitle = document.getElementById('dialogTitle');
 const shareCardBtn = document.getElementById('shareCardBtn');
 const tagLabel = document.getElementById('cardTagLabel');
@@ -78,6 +79,10 @@ const cardImageInput = document.getElementById('cardImageInput');
 const cardImagePreviewWrap = document.getElementById('cardImagePreviewWrap');
 const cardImagePreview = document.getElementById('cardImagePreview');
 const cardImageRemoveBtn = document.getElementById('cardImageRemoveBtn');
+const cardVideoInput = document.getElementById('cardVideoInput');
+const cardVideoPreviewWrap = document.getElementById('cardVideoPreviewWrap');
+const cardVideoPreview = document.getElementById('cardVideoPreview');
+const cardVideoRemoveBtn = document.getElementById('cardVideoRemoveBtn');
 const shootDateLabel = document.getElementById('cardShootDateLabel');
 const shootDateInput = document.getElementById('cardShootDate');
 const shootDateClearBtn = document.getElementById('cardShootDateClearBtn');
@@ -177,6 +182,8 @@ let draggingId = null;
 let publishedShowAll = false;
 let pendingImageDataUrl = null;
 let removeImageRequested = false;
+let pendingVideoFile = null;
+let removeVideoRequested = false;
 let planDateClearRequested = false;
 let shootDateClearRequested = false;
 let pendingTodos = [];
@@ -736,6 +743,38 @@ function renderCard(card) {
     expandable.appendChild(descWrap);
   }
 
+  if (card.caption) {
+    const captionWrap = document.createElement('div');
+    captionWrap.className = 'desc-wrap card-caption-wrap';
+
+    const captionLabel = document.createElement('p');
+    captionLabel.className = 'card-caption-label';
+    captionLabel.textContent = '📝 Caption (ใช้โพสต์อัตโนมัติ)';
+    captionWrap.appendChild(captionLabel);
+
+    const caption = document.createElement('p');
+    caption.className = 'desc desc-collapsed';
+    caption.textContent = card.caption;
+    captionWrap.appendChild(caption);
+
+    const lines = card.caption.split('\n').length;
+    const long = lines > 3 || card.caption.length > 180;
+    if (long) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'desc-toggle';
+      toggle.textContent = 'See more';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const collapsed = caption.classList.toggle('desc-collapsed');
+        toggle.textContent = collapsed ? 'See more' : 'See less';
+      });
+      captionWrap.appendChild(toggle);
+    }
+
+    expandable.appendChild(captionWrap);
+  }
+
   if (Array.isArray(card.todos) && card.todos.length) {
     const todoList = document.createElement('ul');
     todoList.className = 'inline-todo-list';
@@ -1044,6 +1083,16 @@ function setImagePreview(url) {
   } else {
     cardImagePreview.src = '';
     cardImagePreviewWrap.hidden = true;
+  }
+}
+
+function setVideoPreview(url) {
+  if (url) {
+    cardVideoPreview.src = url;
+    cardVideoPreviewWrap.hidden = false;
+  } else {
+    cardVideoPreview.src = '';
+    cardVideoPreviewWrap.hidden = true;
   }
 }
 
@@ -1598,6 +1647,7 @@ function openDialog(card) {
   shareCardBtn.hidden = !card;
   titleInput.value = card ? card.title : '';
   descInput.value = card ? card.description : '';
+  captionInput.value = (card && card.caption) || '';
   deleteBtn.hidden = !card;
   tagLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
   const cardTags = (card && card.tags) || [];
@@ -1639,6 +1689,10 @@ function openDialog(card) {
   pendingImageDataUrl = null;
   removeImageRequested = false;
   setImagePreview(card && card.imageUrl);
+  cardVideoInput.value = '';
+  pendingVideoFile = null;
+  removeVideoRequested = false;
+  setVideoPreview(card && card.videoUrl);
   cardFormError.hidden = true;
   setCardSaveLoading(false);
   dialog.showModal();
@@ -1670,6 +1724,21 @@ cardImageRemoveBtn.addEventListener('click', () => {
   setImagePreview(null);
 });
 
+cardVideoInput.addEventListener('change', () => {
+  const file = cardVideoInput.files[0];
+  if (!file) return;
+  pendingVideoFile = file;
+  removeVideoRequested = false;
+  setVideoPreview(URL.createObjectURL(file));
+});
+
+cardVideoRemoveBtn.addEventListener('click', () => {
+  pendingVideoFile = null;
+  removeVideoRequested = true;
+  cardVideoInput.value = '';
+  setVideoPreview(null);
+});
+
 function setCardSaveLoading(isLoading) {
   cardSaveBtn.disabled = isLoading;
   cardSaveBtnSpinner.hidden = !isLoading;
@@ -1681,7 +1750,7 @@ form.addEventListener('submit', async (e) => {
   cardFormError.hidden = true;
   setCardSaveLoading(true);
   try {
-  const payload = { title: titleInput.value, description: descInput.value };
+  const payload = { title: titleInput.value, description: descInput.value, caption: captionInput.value };
   if (!tagLabel.hidden) {
     payload.tags = tagCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
   }
@@ -1735,6 +1804,13 @@ form.addEventListener('submit', async (e) => {
     });
   } else if (removeImageRequested) {
     await fetchOrThrow(`/api/cards/${cardId}/image`, { method: 'DELETE' });
+  }
+  if (pendingVideoFile) {
+    const videoForm = new FormData();
+    videoForm.append('video', pendingVideoFile);
+    await fetchOrThrow(`/api/cards/${cardId}/video`, { method: 'POST', body: videoForm });
+  } else if (removeVideoRequested) {
+    await fetchOrThrow(`/api/cards/${cardId}/video`, { method: 'DELETE' });
   }
   dialog.close();
   lastSignature = null;
@@ -2209,6 +2285,7 @@ function renderWebsiteIssuesZone() {
   Object.entries(websiteIssues).forEach(([entryKey, list]) => {
     (list || []).forEach((issue) => {
       if (!Array.isArray(issue.comments)) issue.comments = [];
+      if (issue.solved) return;
       allIssues.push({ issue, entryKey });
     });
   });

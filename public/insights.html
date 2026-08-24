@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Insights — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>Insights</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/ads.html" class="nav-link">📈 Ads</a>
+      <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
+      <a href="/insights.html" class="nav-link active">📹 Insights</a>
+      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <main class="report-main ads-main">
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📹 ผลงานวิดีโอเพจ Tasaki Air (ออร์แกนิก ไม่ใช่โฆษณา)</h2>
+        <div class="report-nav">
+          <button id="insightsRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+        </div>
+      </div>
+      <p class="key-messages-hint">ข้อมูลจริงจาก Facebook Page — ดึงผ่าน Graph API (ยังไม่ได้ยิงโฆษณา นี่คือยอดวิวออร์แกนิกล้วนๆ)</p>
+
+      <div id="insightsEmpty" class="key-messages-hint" hidden>ยังไม่มีข้อมูล — รัน <code>node scripts/sync-page-video-insights.mjs 6</code> เพื่อดึงข้อมูลก่อน</div>
+
+      <div id="insightsBody" hidden>
+        <div class="report-list-wrap" style="margin-bottom:24px;">
+          <h3>📊 เปรียบเทียบ: ก่อน-หลังหนิงเริ่มงาน (24 มิ.ย. 2569)</h3>
+          <div class="ads-table-wrap">
+            <table class="ads-table ads-log-table">
+              <thead>
+                <tr>
+                  <th>ตัวชี้วัด</th>
+                  <th>ก่อนเริ่มงาน<br /><span class="ads-filter-label" id="beforeRangeLabel"></span></th>
+                  <th>ตั้งแต่เริ่มงาน<br /><span class="ads-filter-label" id="afterRangeLabel"></span></th>
+                  <th>เปลี่ยนแปลง</th>
+                </tr>
+              </thead>
+              <tbody id="comparisonTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <p class="key-messages-hint" style="margin-bottom:8px;">👇 ข้อมูลด้านล่างนี้คือช่วงที่หนิงทำงาน (ตั้งแต่ 24 มิ.ย. 2569 เป็นต้นมา) เท่านั้น</p>
+        <div id="videoStatGrid" class="ads-stat-grid"></div>
+
+        <div id="videoInsightRows" class="ads-insights"></div>
+
+        <div class="report-list-wrap" style="margin-bottom:24px;">
+          <h3>10 คลิปยอดวิวสูงสุด (ตั้งแต่หนิงเริ่มงาน)</h3>
+          <div id="topVideosChart" class="ads-chart-wrap"></div>
+        </div>
+
+        <div class="report-list-wrap">
+          <h3>วิดีโอตั้งแต่หนิงเริ่มงาน (เรียงตามวันที่โพสต์ล่าสุด)</h3>
+          <div class="ads-table-wrap">
+            <table class="ads-table ads-video-table">
+              <thead>
+                <tr>
+                  <th>วันที่</th>
+                  <th>คำอธิบาย</th>
+                  <th>ความยาว</th>
+                  <th>วิว</th>
+                  <th>Post Views</th>
+                  <th>ไลก์</th>
+                  <th>คอมเมนต์</th>
+                  <th>แชร์</th>
+                  <th>ลิงก์โพสต์</th>
+                  <th>การ์ด</th>
+                </tr>
+              </thead>
+              <tbody id="videoTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="insights.js"></script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ads — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>Ads</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/ads.html" class="nav-link active">📈 Ads</a>
+      <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
+      <a href="/insights.html" class="nav-link">📹 Insights</a>
+      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <main class="report-main ads-main">
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📈 ผลโฆษณา Facebook</h2>
+        <div class="report-nav">
+          <button id="adInsightsRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+        </div>
+      </div>
+      <p id="adInsightsMockNote" class="key-messages-hint">✅ เชื่อมต่อ Facebook Ads (Tasaki Ad Acc) จริงแล้ว — ยังไม่มีข้อมูลเพราะยังไม่เริ่มยิงโฆษณา พอเริ่มแคมเปญเมื่อไหร่ ข้อมูลจะไหลเข้ามาที่นี่อัตโนมัติ (รันด้วยมือผ่าน <code>node scripts/sync-ad-insights.mjs</code> ตอนนี้ ยังไม่ได้ตั้งอัตโนมัติรายวัน)</p>
+
+      <div id="adInsightsEmpty" class="key-messages-hint" hidden>ยังไม่มีข้อมูลผลโฆษณา</div>
+
+      <div id="adInsightsBody" hidden>
+        <div class="ads-filter-row">
+          <div class="cal-filter-group" role="group" aria-label="กรองช่วงเวลา">
+            <button type="button" class="cal-filter-btn active" data-range="all">ทั้งหมด</button>
+            <button type="button" class="cal-filter-btn" data-range="today">วันนี้</button>
+            <button type="button" class="cal-filter-btn" data-range="thisWeek">สัปดาห์นี้</button>
+            <button type="button" class="cal-filter-btn" data-range="lastWeek">สัปดาห์ที่แล้ว</button>
+            <button type="button" class="cal-filter-btn" data-range="thisMonth">เดือนนี้</button>
+            <button type="button" class="cal-filter-btn" data-range="lastMonth">เดือนที่แล้ว</button>
+          </div>
+
+          <div class="ads-datepicker-wrap">
+            <button type="button" id="adCalToggleBtn" class="ads-cal-toggle" aria-haspopup="true" aria-expanded="false" title="เลือกวันที่จากปฏิทิน">
+              <span>📅</span>
+              <span id="adCalToggleBadge" class="ads-cal-badge" hidden>0</span>
+            </button>
+            <div id="adDatepickerPopover" class="ads-datepicker-popover" hidden>
+              <div class="ads-datepicker-header">
+                <button type="button" id="adCalPrevBtn" class="ads-cal-nav-btn" aria-label="เดือนก่อนหน้า">‹</button>
+                <span id="adCalMonthLabel" class="ads-cal-month-label"></span>
+                <button type="button" id="adCalNextBtn" class="ads-cal-nav-btn" aria-label="เดือนถัดไป">›</button>
+              </div>
+              <div id="adCalGrid" class="ads-cal-grid"></div>
+              <p class="ads-cal-hint">Shift+คลิก เพื่อเลือกเป็นช่วง</p>
+            </div>
+          </div>
+
+          <button type="button" id="adDateClearBtn" class="ads-filter-clear" title="ล้างวันที่ที่เลือกทั้งหมด">✕ ล้าง</button>
+        </div>
+
+        <div id="adFilteredEmpty" class="key-messages-hint" hidden>ไม่มีข้อมูลในช่วงที่เลือก ลองเปลี่ยนตัวกรองดูค่ะ</div>
+
+        <div id="adInsightsContent">
+          <div id="adStatGrid" class="ads-stat-grid"></div>
+
+          <div id="adInsightRows" class="ads-insights"></div>
+
+          <div class="report-list-wrap" style="margin-bottom:24px;">
+            <h3>แนวโน้มงบใช้จ่ายรายวัน</h3>
+            <div id="adSpendChart" class="ads-chart-wrap"></div>
+          </div>
+
+          <div class="report-list-wrap" style="margin-bottom:24px;">
+            <h3>CTR แยกตามแคมเปญ (เรียงจากดีสุด)</h3>
+            <div id="adCtrChart" class="ads-chart-wrap"></div>
+          </div>
+
+          <div class="report-list-wrap">
+            <h3>ตารางข้อมูลทั้งหมด</h3>
+            <div class="ads-table-wrap">
+              <table class="ads-table">
+                <thead>
+                  <tr>
+                    <th>วันที่</th>
+                    <th>แคมเปญ</th>
+                    <th>ครีเอทีฟ</th>
+                    <th>กลุ่มเป้าหมาย</th>
+                    <th>งบใช้ (฿)</th>
+                    <th>เข้าถึง</th>
+                    <th>คลิก</th>
+                    <th>CTR</th>
+                    <th>CPC (฿)</th>
+                  </tr>
+                </thead>
+                <tbody id="adInsightsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="ads.js"></script>
+</body>
+</html>
