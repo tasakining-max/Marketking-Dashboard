@@ -199,21 +199,45 @@ function renderTopVideosChart(videos) {
   const bestId = items[0].videoId;
   const worstId = items[items.length - 1].videoId;
 
-  const rowH = 36, barH = 20, labelW = 220;
-  const W = 760, H = items.length * rowH + 16;
+  const rowH = 40, barH = 20, thumbSize = 30, thumbGap = 8, labelW = 250;
+  const W = 780, H = items.length * rowH + 16;
   const plotW = W - labelW - 70;
   const maxViews = niceMax(Math.max(...items.map((v) => v.views)) * 1.15);
 
   const svg = svgEl('svg', { class: 'ads-chart-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '10 คลิปยอดวิวสูงสุด' });
+  const defs = svgEl('defs', {});
+  svg.appendChild(defs);
 
   items.forEach((v, i) => {
     const cy = 16 + i * rowH;
     const barW = Math.max((v.views / maxViews) * plotW, 2);
     const isBest = v.videoId === bestId;
     const isWorst = v.videoId === worstId && items.length > 1;
+    const thumbY = cy + barH / 2 - thumbSize / 2;
+    const imgUrl = videoIdToCardImage.get(v.videoId);
 
-    const nameLabel = svgEl('text', { class: 'ads-bar-name', x: 0, y: cy + barH / 2 + 4 });
-    nameLabel.textContent = (isBest ? '✅ ' : isWorst ? '⚠️ ' : '') + firstLine(v.description, 30);
+    if (imgUrl) {
+      const clipId = `top-video-thumb-clip-${i}`;
+      const clipPath = svgEl('clipPath', { id: clipId });
+      clipPath.appendChild(svgEl('rect', { x: 0, y: thumbY, width: thumbSize, height: thumbSize, rx: 5 }));
+      defs.appendChild(clipPath);
+      const thumb = svgEl('image', {
+        x: 0, y: thumbY, width: thumbSize, height: thumbSize,
+        href: imgUrl, preserveAspectRatio: 'xMidYMid slice', 'clip-path': `url(#${clipId})`,
+      });
+      svg.appendChild(thumb);
+      const border = svgEl('rect', { class: 'ads-bar-thumb-border', x: 0, y: thumbY, width: thumbSize, height: thumbSize, rx: 5 });
+      svg.appendChild(border);
+    } else {
+      const placeholder = svgEl('rect', { class: 'ads-bar-thumb-placeholder', x: 0, y: thumbY, width: thumbSize, height: thumbSize, rx: 5 });
+      svg.appendChild(placeholder);
+      const placeholderIcon = svgEl('text', { class: 'ads-bar-thumb-icon', x: thumbSize / 2, y: thumbY + thumbSize / 2 + 4, 'text-anchor': 'middle' });
+      placeholderIcon.textContent = '🎬';
+      svg.appendChild(placeholderIcon);
+    }
+
+    const nameLabel = svgEl('text', { class: 'ads-bar-name', x: thumbSize + thumbGap, y: cy + barH / 2 + 4 });
+    nameLabel.textContent = (isBest ? '✅ ' : isWorst ? '⚠️ ' : '') + firstLine(v.description, 24);
     const title = svgEl('title', {});
     title.textContent = v.description;
     nameLabel.appendChild(title);
@@ -364,6 +388,7 @@ function render(videos) {
 }
 
 let videoIdToCardId = new Map();
+let videoIdToCardImage = new Map();
 
 async function fetchInsights() {
   const [videoRes, cardsRes] = await Promise.all([
@@ -375,7 +400,10 @@ async function fetchInsights() {
   videoIdToCardId = new Map(
     (cardsData.cards || []).filter((c) => c.linkedVideoId).map((c) => [c.linkedVideoId, c.id])
   );
-  const sig = JSON.stringify(data.entries) + JSON.stringify([...videoIdToCardId]);
+  videoIdToCardImage = new Map(
+    (cardsData.cards || []).filter((c) => c.linkedVideoId && c.imageUrl).map((c) => [c.linkedVideoId, c.imageUrl])
+  );
+  const sig = JSON.stringify(data.entries) + JSON.stringify([...videoIdToCardId]) + JSON.stringify([...videoIdToCardImage]);
   if (sig !== insightsSignature) {
     insightsSignature = sig;
     render(data.entries || []);

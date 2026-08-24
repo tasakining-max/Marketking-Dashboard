@@ -3452,6 +3452,9 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-chart-svg .ads-bar-label { fill: var(--text); font-size: 12px; font-weight: 600; }
 .ads-chart-svg .ads-bar-name { fill: var(--text); font-size: 12px; }
 .ads-chart-svg .ads-bar-icon { font-size: 12px; }
+.ads-chart-svg .ads-bar-thumb-border { fill: none; stroke: var(--border); stroke-width: 1; }
+.ads-chart-svg .ads-bar-thumb-placeholder { fill: var(--bg); stroke: var(--border); stroke-width: 1; }
+.ads-chart-svg .ads-bar-thumb-icon { font-size: 13px; }
 
 .ads-chart-tooltip {
   position: absolute;
