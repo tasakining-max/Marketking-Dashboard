@@ -408,6 +408,15 @@ async function fetchInsights() {
     insightsSignature = sig;
     render(data.entries || []);
   }
+  renderLastSynced(data.lastSyncedAt);
+}
+
+function renderLastSynced(iso) {
+  const el = document.getElementById('insightsLastSynced');
+  if (!iso) { el.hidden = true; return; }
+  const d = new Date(iso);
+  el.textContent = `🕐 อัปเดตล่าสุด: ${d.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+  el.hidden = false;
 }
 
 fetchInsights();

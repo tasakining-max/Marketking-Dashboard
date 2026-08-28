@@ -3523,9 +3523,76 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-status-badge.is-failed { background: color-mix(in srgb, var(--status-critical) 15%, transparent); color: var(--status-critical); }
 .ads-status-badge.is-pending { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: #8a6100; }
 .ads-status-badge.is-dry_run { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+.ads-status-badge.is-manual { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
 .ads-error-text { color: var(--status-critical); font-size: 12px; }
+.ads-note-text { color: var(--muted); font-size: 12px; }
 .ads-platform-cell { display: flex; align-items: center; gap: 6px; }
 
 @media (max-width: 640px) {
   .ads-stat-value { font-size: 20px; }
+}
+
+/* Ads Action Log */
+.ads-action-log-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.ads-action-log-form textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ads-action-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ads-action-log-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+}
+
+.ads-action-log-text {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.ads-action-log-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ads-action-log-delete {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.ads-action-log-delete:hover {
+  color: var(--text);
 }

@@ -106,6 +106,13 @@ model AutoPostLog {
   postedAt     DateTime @default(now())
 }
 
+model AdActionLog {
+  id        String   @id @default(uuid())
+  text      String   @db.Text
+  method    String   @default("")
+  createdAt DateTime @default(now())
+}
+
 model PageVideoInsight {
   id            String   @id @default(uuid())
   videoId       String   @unique

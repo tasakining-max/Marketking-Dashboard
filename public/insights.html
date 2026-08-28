@@ -35,7 +35,8 @@
           <button id="insightsRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
         </div>
       </div>
-      <p class="key-messages-hint">ข้อมูลจริงจาก Facebook Page — ดึงผ่าน Graph API (ยังไม่ได้ยิงโฆษณา นี่คือยอดวิวออร์แกนิกล้วนๆ)</p>
+      <p class="key-messages-hint">ข้อมูลจริงจาก Facebook Page — ดึงผ่าน Graph API (นี่คือยอดวิวออร์แกนิกล้วนๆ ไม่รวมโฆษณา)</p>
+      <p id="insightsLastSynced" class="key-messages-hint" hidden></p>
 
       <div id="insightsEmpty" class="key-messages-hint" hidden>ยังไม่มีข้อมูล — รัน <code>node scripts/sync-page-video-insights.mjs 6</code> เพื่อดึงข้อมูลก่อน</div>
 

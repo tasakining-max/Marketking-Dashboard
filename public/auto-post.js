@@ -21,7 +21,7 @@ const PLATFORM_ICONS = {
   tiktok: '/assets/tiktok.jpg',
   youtube: '/assets/youtube.png',
 };
-const STATUS_LABELS = { success: '✓ สำเร็จ', failed: '✕ ล้มเหลว', pending: '… กำลังโพสต์', dry_run: '🧪 Dry-run (ยังไม่โพสต์จริง)' };
+const STATUS_LABELS = { success: '✓ สำเร็จ', failed: '✕ ล้มเหลว', pending: '… กำลังโพสต์', dry_run: '🧪 Dry-run (ยังไม่โพสต์จริง)', manual: '📝 โพสเอง' };
 
 function renderAutoPostLog(entries) {
   const empty = document.getElementById('autoPostEmpty');
@@ -76,9 +76,9 @@ function renderAutoPostLog(entries) {
     tr.appendChild(statusTd);
 
     const detailTd = document.createElement('td');
-    if (e.status === 'failed' && e.errorMessage) {
+    if ((e.status === 'failed' || e.status === 'manual') && e.errorMessage) {
       const err = document.createElement('span');
-      err.className = 'ads-error-text';
+      err.className = e.status === 'manual' ? 'ads-note-text' : 'ads-error-text';
       err.textContent = e.errorMessage;
       detailTd.appendChild(err);
     } else if (e.postUrl) {

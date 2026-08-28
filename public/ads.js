@@ -687,3 +687,61 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !adDatepickerPopover.hidden) closeCalPopover();
 });
+
+// ─── Ad Action Log ──────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatLogDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadAdActionLog() {
+  try {
+    const res = await fetch('/api/ad-action-log');
+    const { entries } = await res.json();
+    const list = document.getElementById('adActionLogList');
+    const empty = document.getElementById('adActionLogEmpty');
+    if (!entries.length) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+    list.innerHTML = entries.map((e) => `
+      <li class="ads-action-log-item">
+        <div class="ads-action-log-text">${escapeHtml(e.text).replace(/\n/g, '<br>')}</div>
+        <div class="ads-action-log-meta">
+          <span>${formatLogDate(e.createdAt)}</span>
+          <button type="button" class="ads-action-log-delete" data-id="${e.id}" title="ลบ">✕</button>
+        </div>
+      </li>
+    `).join('');
+    list.querySelectorAll('.ads-action-log-delete').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/ad-action-log/${btn.dataset.id}`, { method: 'DELETE' });
+        loadAdActionLog();
+      });
+    });
+  } catch (e) { console.error('Failed to load ad action log:', e.message); }
+}
+
+document.getElementById('adActionLogForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('adActionLogInput');
+  const text = input.value.trim();
+  if (!text) return;
+  await fetch('/api/ad-action-log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  input.value = '';
+  loadAdActionLog();
+});
+
+loadAdActionLog();

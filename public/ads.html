@@ -110,6 +110,19 @@
         </div>
       </div>
     </section>
+
+    <section class="report-section">
+      <h2>📝 สรุปสิ่งที่ทำไปแล้ว</h2>
+      <p class="key-messages-hint">บันทึกสั้นๆ ว่าทำอะไรไปบ้างในฝั่งโฆษณา (เช่น เปิดแคมเปญ, สร้าง Custom Audience) สำหรับให้หัวหน้ารับทราบ — ไม่ใช่ตัวเลขผลลัพธ์ (ดูผลลัพธ์จริงได้ที่ตารางด้านบน)</p>
+
+      <form id="adActionLogForm" class="ads-action-log-form">
+        <textarea id="adActionLogInput" placeholder="เช่น สร้าง Custom Audience &quot;ตัวแทนจำหน่าย&quot; จากเบอร์โทร/ที่อยู่ตัวแทนจำหน่าย (ได้รับความยินยอมแล้ว) — อัปโหลดผ่าน Meta Ads Manager Customer List" rows="2"></textarea>
+        <button type="submit" class="report-nav-btn">+ เพิ่มบันทึก</button>
+      </form>
+
+      <div id="adActionLogEmpty" class="key-messages-hint" hidden>ยังไม่มีบันทึกกิจกรรม</div>
+      <ul id="adActionLogList" class="ads-action-log-list"></ul>
+    </section>
   </main>
 
   <script src="ads.js"></script>

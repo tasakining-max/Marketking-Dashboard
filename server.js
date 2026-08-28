@@ -198,8 +198,10 @@ async function uploadFacebookReelOrStory(card, kind) {
 
 async function postToFacebook(card) {
   if (!card.videoUrl) {
+    // No video attached almost always means the card was posted by hand outside
+    // the dashboard (see feedback 2026-08-28) rather than a real failure.
     for (const dest of AUTO_POST_DESTINATIONS) {
-      await logAutoPostAttempt(card, dest, 'failed', { errorMessage: 'การ์ดนี้ไม่มีไฟล์วิดีโอแนบ — โพสต์ Reel ไม่ได้' });
+      await logAutoPostAttempt(card, dest, 'manual', { errorMessage: 'Nungning โพสเอง' });
     }
     return;
   }
@@ -699,6 +701,42 @@ app.patch('/api/website-changelog/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Ad Action Log ──────────────────────────────────────────────────────────
+// A short manual log of what's actually been done on the ad account (campaigns
+// launched, Custom Audiences built, etc.) — separate from AdInsight (real
+// spend/CTR numbers) since actions taken manually in Ads Manager aren't
+// something the API sync can detect on its own. Meant to be skimmable by a
+// manager, not a full audit trail.
+app.get('/api/ad-action-log', async (req, res) => {
+  try {
+    const entries = await cached('ad-action-log', async () => {
+      const rows = await prisma.adActionLog.findMany({ orderBy: { createdAt: 'desc' } });
+      return rows.map((r) => ({ id: r.id, text: r.text, method: r.method, createdAt: r.createdAt }));
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ad-action-log', async (req, res) => {
+  const { text, method } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  try {
+    const row = await prisma.adActionLog.create({
+      data: { id: crypto.randomUUID(), text: text.trim(), method: typeof method === 'string' ? method.trim() : '' },
+    });
+    invalidateCache('ad-action-log');
+    res.status(201).json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/ad-action-log/:id', async (req, res) => {
+  try {
+    await prisma.adActionLog.delete({ where: { id: req.params.id } });
+    invalidateCache('ad-action-log');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Ad Insights ────────────────────────────────────────────────────────────
 // Will be populated by scripts/sync-ad-insights.mjs pulling the Facebook
 // Marketing Insights API on a daily launchd schedule, once Meta Business
@@ -801,9 +839,9 @@ app.post('/api/auto-post-log', async (req, res) => {
 // videoId so re-running the sync just refreshes view/like counts.
 app.get('/api/page-video-insights', async (req, res) => {
   try {
-    const entries = await cached('page-video-insights', async () => {
+    const data = await cached('page-video-insights', async () => {
       const rows = await prisma.pageVideoInsight.findMany({ orderBy: { createdTime: 'desc' } });
-      return rows.map((r) => ({
+      const entries = rows.map((r) => ({
         id: r.id,
         videoId: r.videoId,
         description: r.description,
@@ -815,9 +853,12 @@ app.get('/api/page-video-insights', async (req, res) => {
         likes: r.likes,
         comments: r.comments,
         shares: r.shares,
+        fetchedAt: r.fetchedAt,
       }));
+      const lastSyncedAt = entries.reduce((max, e) => (!max || e.fetchedAt > max ? e.fetchedAt : max), null);
+      return { entries, lastSyncedAt };
     });
-    res.json({ entries });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
