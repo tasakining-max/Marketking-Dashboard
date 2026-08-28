@@ -34,6 +34,18 @@ model Card {
   updatedAt          DateTime @updatedAt
 }
 
+model GraphicDesignCard {
+  id          String   @id @default(uuid())
+  title       String
+  description String   @default("")
+  column      String   @default("todo")
+  usage       String[] @default([])
+  imageUrl    String?  @db.Text
+  order       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model KeyMessage {
   id   String @id @default(uuid())
   text String

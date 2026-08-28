@@ -17,6 +17,8 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 ///// END /////
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
+const GRAPHIC_COLUMNS = ['todo', 'in_progress', 'review', 'done'];
+const GRAPHIC_USAGE = ['website', 'facebook_ads', 'instagram_ads', 'other'];
 const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 'product', 'trend', 'branding'];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
@@ -464,6 +466,129 @@ app.delete('/api/cards/:id/video', async (req, res) => {
     const updated = await prisma.card.update({ where: { id: req.params.id }, data: { videoUrl: null, videoMimeType: null }, omit: { imageUrl: true } });
     invalidateCache('cards');
     res.json(serializeCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Graphic Design board ─────────────────────────────────────────────────────
+// Tracks progress of graphic assets (product cutouts, website banners, ad
+// creatives) from draft to done — separate from the content Marketing Pipeline
+// above, so it doesn't touch COLUMNS or trigger Facebook auto-posting.
+function serializeGraphicCard(c) {
+  return { ...serializeCard(c) };
+}
+
+async function graphicCardIdsWithImage() {
+  const rows = await prisma.$queryRaw`SELECT id FROM "GraphicDesignCard" WHERE "imageUrl" IS NOT NULL`;
+  return new Set(rows.map((r) => r.id));
+}
+
+app.get('/api/graphic-cards', async (req, res) => {
+  try {
+    const cacheKey = `graphic-cards:${req.query.column || ''}`;
+    const cards = await cached(cacheKey, async () => {
+      const where = req.query.column ? { column: req.query.column } : {};
+      const [rows, hasImageIds] = await Promise.all([
+        prisma.graphicDesignCard.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
+        graphicCardIdsWithImage(),
+      ]);
+      return rows.map((c) => {
+        const card = serializeGraphicCard(c);
+        card.imageUrl = hasImageIds.has(c.id) ? `/api/graphic-cards/${c.id}/image?t=${new Date(c.updatedAt).getTime()}` : null;
+        return card;
+      });
+    });
+    res.json({ cards });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/graphic-cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { imageUrl: true } });
+    const match = card?.imageUrl ? /^data:([^;]+);base64,(.+)$/.exec(card.imageUrl) : null;
+    if (!match) return res.status(404).end();
+    res.setHeader('Content-Type', match[1]);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.end(Buffer.from(match[2], 'base64'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/graphic-cards', async (req, res) => {
+  const { title, description, column, usage } = req.body;
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+  try {
+    const card = await prisma.graphicDesignCard.create({
+      data: {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        description: typeof description === 'string' ? description.trim() : '',
+        column: GRAPHIC_COLUMNS.includes(column) ? column : 'todo',
+        usage: Array.isArray(usage) ? usage.filter((u) => GRAPHIC_USAGE.includes(u)) : [],
+        order: Date.now(),
+      },
+      omit: { imageUrl: true },
+    });
+    invalidateCache('graphic-cards');
+    res.status(201).json(serializeGraphicCard(card));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/graphic-cards/:id', async (req, res) => {
+  try {
+    const existing = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!existing) return res.status(404).json({ error: 'card not found' });
+    const data = {};
+    if (typeof req.body.title === 'string' && req.body.title.trim()) data.title = req.body.title.trim();
+    if (typeof req.body.description === 'string') data.description = req.body.description.trim();
+    if (Array.isArray(req.body.usage)) data.usage = req.body.usage.filter((u) => GRAPHIC_USAGE.includes(u));
+    if (GRAPHIC_COLUMNS.includes(req.body.column)) data.column = req.body.column;
+    const updated = await prisma.graphicDesignCard.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
+    invalidateCache('graphic-cards');
+    res.json(serializeGraphicCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/graphic-cards/reorder', async (req, res) => {
+  const { column, order } = req.body;
+  if (!GRAPHIC_COLUMNS.includes(column)) return res.status(400).json({ error: `column must be one of ${GRAPHIC_COLUMNS.join(', ')}` });
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of card ids' });
+  try {
+    await Promise.all(order.map((id, index) =>
+      prisma.graphicDesignCard.update({ where: { id }, data: { column, order: index }, omit: { imageUrl: true } }).catch(() => null)
+    ));
+    invalidateCache('graphic-cards');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/graphic-cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    const { image } = req.body;
+    if (!image || !image.startsWith('data:image/')) return res.status(400).json({ error: 'invalid image data' });
+    const updated = await prisma.graphicDesignCard.update({ where: { id: req.params.id }, data: { imageUrl: image }, omit: { imageUrl: true } });
+    invalidateCache('graphic-cards');
+    res.json(serializeGraphicCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/graphic-cards/:id/image', async (req, res) => {
+  try {
+    const card = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    const updated = await prisma.graphicDesignCard.update({ where: { id: req.params.id }, data: { imageUrl: null }, omit: { imageUrl: true } });
+    invalidateCache('graphic-cards');
+    res.json(serializeGraphicCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/graphic-cards/:id', async (req, res) => {
+  try {
+    await prisma.graphicDesignCard.delete({ where: { id: req.params.id } });
+    invalidateCache('graphic-cards');
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
