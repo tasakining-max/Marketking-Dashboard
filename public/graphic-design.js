@@ -58,12 +58,112 @@ const cardSaveBtnLabel = document.getElementById('cardSaveBtnLabel');
 const cardSaveBtnSpinner = cardSaveBtn.querySelector('.btn-spinner');
 const lightboxDialog = document.getElementById('lightboxDialog');
 const lightboxImage = document.getElementById('lightboxImage');
+const cardCommentLabel = document.getElementById('cardCommentLabel');
+const cardCommentList = document.getElementById('cardCommentList');
+const cardCommentInput = document.getElementById('cardCommentInput');
+const cardCommentAddBtn = document.getElementById('cardCommentAddBtn');
 
 let editingId = null;
 let pendingImageDataUrl = null;
 let removeImageRequested = false;
 let draggingId = null;
 let lastSignature = null;
+let currentComments = [];
+
+function getMyName() {
+  try {
+    const profile = JSON.parse(localStorage.getItem('dashboard_profile'));
+    if (profile && profile.name) return profile.name;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function renderComments() {
+  cardCommentList.innerHTML = '';
+  const myName = getMyName();
+  currentComments.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'comment-item';
+
+    const body = document.createElement('div');
+    body.className = 'comment-body';
+
+    const meta = document.createElement('div');
+    meta.className = 'comment-meta';
+    const author = document.createElement('span');
+    author.className = 'comment-author';
+    author.textContent = c.authorName || 'Unknown';
+    meta.appendChild(author);
+    const time = document.createElement('span');
+    time.className = 'comment-time';
+    time.textContent = c.createdAt ? new Date(c.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    meta.appendChild(time);
+
+    if (myName && c.authorName === myName) {
+      const actions = document.createElement('span');
+      actions.className = 'comment-actions';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'comment-action-btn comment-action-delete';
+      del.textContent = 'Delete';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/graphic-cards/${editingId}/comments/${c.id}`, { method: 'DELETE' });
+        currentComments = currentComments.filter((x) => x.id !== c.id);
+        renderComments();
+        lastSignature = null;
+      });
+      actions.appendChild(del);
+      meta.appendChild(actions);
+    }
+
+    body.appendChild(meta);
+
+    const text = document.createElement('p');
+    text.className = 'comment-text';
+    text.textContent = c.text;
+    body.appendChild(text);
+
+    item.appendChild(body);
+    cardCommentList.appendChild(item);
+  });
+  cardCommentList.scrollTop = cardCommentList.scrollHeight;
+}
+
+cardCommentAddBtn.addEventListener('click', async () => {
+  const text = cardCommentInput.value.trim();
+  if (!text || !editingId) return;
+  let authorName = getMyName();
+  if (!authorName) {
+    authorName = prompt('ชื่อของคุณ (สำหรับแสดงในคอมเมนต์)');
+    if (!authorName || !authorName.trim()) return;
+    authorName = authorName.trim();
+    try { localStorage.setItem('dashboard_profile', JSON.stringify({ ...(JSON.parse(localStorage.getItem('dashboard_profile') || '{}')), name: authorName })); } catch (e) { /* ignore */ }
+  }
+  cardCommentAddBtn.disabled = true;
+  try {
+    const updated = await fetchOrThrow(`/api/graphic-cards/${editingId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, authorName }),
+    }).then((r) => r.json());
+    currentComments = Array.isArray(updated.comments) ? updated.comments : [];
+    cardCommentInput.value = '';
+    renderComments();
+    lastSignature = null;
+  } catch (err) {
+    alert(err.message || 'Could not post comment. Please try again.');
+  } finally {
+    cardCommentAddBtn.disabled = false;
+  }
+});
+
+cardCommentInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    cardCommentAddBtn.click();
+  }
+});
 
 function setImagePreview(url) {
   if (url) {
@@ -87,6 +187,11 @@ function openDialog(card) {
   setImagePreview(card ? card.imageUrl : null);
   deleteBtn.hidden = !card;
   cardFormError.hidden = true;
+  currentComments = card && Array.isArray(card.comments) ? card.comments : [];
+  cardCommentLabel.hidden = !card;
+  cardCommentInput.value = '';
+  if (card) renderComments();
+  dialog.classList.toggle('is-editing', !!card);
   dialog.showModal();
 }
 

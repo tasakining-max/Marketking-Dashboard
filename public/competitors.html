@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Competitors — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>Competitors</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">🎥 VDO</a>
+      <a href="/graphic-design.html" class="nav-link">🎨 Graphic Design</a>
+      <a href="/report.html" class="nav-link">📅 Reports</a>
+      <a href="/ads.html" class="nav-link">📈 Ads</a>
+      <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
+      <a href="/insights.html" class="nav-link">📹 Insights</a>
+      <a href="/website.html" class="nav-link">🌐 เว็บไซต์</a>
+      <a href="/competitors.html" class="nav-link active">🕵️ ส่องคู่แข่ง</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <main class="report-main ads-main">
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📢 1. Meta Ads — โฆษณา Active ต่อแบรนด์</h2>
+        <div class="report-nav">
+          <button id="metaAdsRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+        </div>
+      </div>
+      <p class="key-messages-hint">นับเฉพาะโฆษณาที่ยืนยันแล้วว่ามาจากเพจแบรนด์จริง (Advertiser filter ใน Meta Ad Library ไม่ใช่แค่ keyword search ซึ่งปนขยะได้ง่ายมาก) — แบรนด์ที่มี ⚠️ ยังไม่ได้ยืนยันด้วยวิธีนี้</p>
+      <div class="ads-table-wrap">
+        <table class="ads-table">
+          <thead>
+            <tr>
+              <th>แบรนด์</th>
+              <th>โฆษณา Active</th>
+              <th>สถานะ</th>
+              <th>เช็คล่าสุด</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="metaAdsBody"></tbody>
+        </table>
+      </div>
+      <form id="metaAdsAddForm" class="ads-action-log-form">
+        <input id="metaAdsBrandInput" type="text" placeholder="ชื่อแบรนด์" maxlength="60" style="max-width:200px;" />
+        <input id="metaAdsValueInput" type="number" placeholder="จำนวนโฆษณา Active" min="0" style="max-width:180px;" />
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted);">
+          <input id="metaAdsVerifiedInput" type="checkbox" /> ยืนยันด้วย Advertiser filter แล้ว
+        </label>
+        <button type="submit" class="report-nav-btn">+ บันทึก/อัปเดต</button>
+      </form>
+    </section>
+
+    <section class="report-section">
+      <h2>🤖 2. Website — AI Search (robots.txt เปิด/ปิดให้บอท AI)</h2>
+      <p class="key-messages-hint">เช็คว่าเว็บของแต่ละแบรนด์เปิดให้ ChatGPT/Claude/Gemini ฯลฯ เข้ามาอ่านเนื้อหาไปตอบลูกค้าได้ไหม (เช่น ตอนมีคนถาม AI ว่า "แอร์ยี่ห้อไหนดี") — เช็คจากไฟล์ robots.txt จริงของแต่ละเว็บ</p>
+      <div class="ads-table-wrap">
+        <table class="ads-table">
+          <thead>
+            <tr>
+              <th>แบรนด์</th>
+              <th>คะแนน</th>
+              <th>สถานะ</th>
+              <th>รายละเอียด</th>
+              <th>เช็คล่าสุด</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="aiSearchBody"></tbody>
+        </table>
+      </div>
+      <form id="aiSearchAddForm" class="ads-action-log-form">
+        <input id="aiSearchBrandInput" type="text" placeholder="ชื่อแบรนด์" maxlength="60" style="max-width:200px;" />
+        <select id="aiSearchValueInput" style="max-width:160px;">
+          <option value="open">เปิด (ไม่บล็อก)</option>
+          <option value="blocked">ปิด (บล็อกบอท AI)</option>
+          <option value="unknown">ไม่ทราบ / หาโดเมนไม่เจอ</option>
+        </select>
+        <input id="aiSearchScoreInput" type="number" min="0" max="100" placeholder="คะแนน (ว่าง=อัตโนมัติ)" style="max-width:160px;" />
+        <input id="aiSearchNoteInput" type="text" placeholder="รายละเอียด เช่น บล็อก GPTBot, ClaudeBot" maxlength="300" style="flex:1; min-width:200px;" />
+        <button type="submit" class="report-nav-btn">+ บันทึก/อัปเดต</button>
+      </form>
+    </section>
+
+    <section class="report-section">
+      <h2>🔍 3. Website — Google Ads / SEO Keyword</h2>
+      <p class="key-messages-hint">บันทึกสิ่งที่เจอเวลาค้นหาคำที่ลูกค้าน่าจะใช้ (เช่น "แอร์ 12000 btu ยี่ห้อไหนดี") — ใครติด Google Ads, ใครติดอันดับ SEO ธรรมชาติ</p>
+
+      <form id="seoNoteForm" class="ads-action-log-form">
+        <textarea id="seoNoteInput" placeholder="เช่น ค้นหา &quot;แอร์ ประหยัดไฟ ยี่ห้อไหนดี&quot; บน Google — Daikin ติด Google Ads อันดับ 1, อันดับ SEO ธรรมชาติมี Eminent กับ Carrier" rows="2"></textarea>
+        <button type="submit" class="report-nav-btn">+ เพิ่มบันทึก</button>
+      </form>
+
+      <div id="seoNotesEmpty" class="key-messages-hint" hidden>ยังไม่มีบันทึก</div>
+      <ul id="seoNotesList" class="ads-action-log-list"></ul>
+    </section>
+
+  </main>
+
+  <script src="competitors.js"></script>
+</body>
+</html>

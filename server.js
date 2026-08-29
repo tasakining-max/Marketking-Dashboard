@@ -15,14 +15,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
+
+// tasaki-web keeps its own DB (same LAN Postgres server, different database).
+// Read-only access to its PageView table powers the Website Updates page below.
+const tasakiWebPool = new pg.Pool({ connectionString: process.env.TASAKI_WEB_DATABASE_URL });
 ///// END /////
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
-const GRAPHIC_COLUMNS = ['todo', 'in_progress', 'review', 'done'];
+const GRAPHIC_COLUMNS = ['todo', 'in_progress', 'done'];
 const GRAPHIC_USAGE = ['website', 'facebook_ads', 'instagram_ads', 'other'];
 const CLIP_TAGS = ['factory', 'office', 'ai', 'archive', 'motion', 'knowledge', 'product', 'trend', 'branding'];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'];
 const TODO_STATUSES = ['plan', 'in_progress', 'done'];
-const MAX_ACTIVITY = 100;
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
 const VIDEOS_DIR = path.join(UPLOADS_DIR, 'videos');
 const TASAKI_WEB_URL = 'https://tasaki-web-cyan.vercel.app';
@@ -40,45 +43,6 @@ const videoUpload = multer({
   fileFilter: (req, file, cb) => cb(null, Boolean(VIDEO_MIME_EXT[file.mimetype])),
   limits: { fileSize: 500 * 1024 * 1024 },
 });
-
-// ─── Claude agent roster ──────────────────────────────────────────────────────
-// Mission Control used to monitor a separate Discord bot gateway ("Clawbot").
-// That gateway no longer runs — this project is now driven by Claude Code, so
-// the roster instead reflects the main agent plus the subagents configured in
-// .claude/agents/*.md. There's no live process to poll for "online" status
-// (Claude Code is session-based, not a persistent server), so status here
-// means "configured and available", and last-active comes from the Activity
-// Feed whenever an agent logs a `[Agent Name] ...` entry via POST /api/activity.
-const AGENTS_DIR = path.join(__dirname, '.claude', 'agents');
-
-function loadAgentRoster() {
-  const roster = [
-    { name: 'Claude', role: 'Main agent — handles the marketing-dashboard project directly: features, fixes, content, DB operations', model: 'Claude Sonnet 5' },
-  ];
-  try {
-    const files = fs.readdirSync(AGENTS_DIR).filter((f) => f.endsWith('.md'));
-    for (const file of files) {
-      const raw = fs.readFileSync(path.join(AGENTS_DIR, file), 'utf8');
-      const frontmatter = raw.match(/^---\n([\s\S]*?)\n---/);
-      if (!frontmatter) continue;
-      const nameMatch = frontmatter[1].match(/^name:\s*(.+)$/m);
-      const descMatch = frontmatter[1].match(/^description:\s*(.+)$/m);
-      roster.push({
-        name: nameMatch ? nameMatch[1].trim() : file.replace(/\.md$/, ''),
-        role: descMatch ? descMatch[1].trim().split(/(?<=[.!])\s/)[0] : 'Subagent',
-        model: null,
-      });
-    }
-  } catch {}
-  return roster;
-}
-
-function withAgentActivity(roster, activity) {
-  return roster.map((a) => {
-    const last = activity.find((e) => e.text.startsWith(`[${a.name}]`));
-    return { ...a, online: true, lastActiveAt: last ? last.createdAt : null };
-  });
-}
 
 // ─── Read cache ──────────────────────────────────────────────────────────────
 // The board is polled every few seconds by every open tab. Short-lived caching
@@ -584,6 +548,36 @@ app.delete('/api/graphic-cards/:id/image', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/graphic-cards/:id/comments', async (req, res) => {
+  try {
+    const card = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { comments: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    const { text, authorName } = req.body;
+    if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+    const comment = {
+      id: crypto.randomUUID(),
+      text: text.trim(),
+      authorName: typeof authorName === 'string' && authorName.trim() ? authorName.trim() : 'Unknown',
+      createdAt: new Date().toISOString(),
+    };
+    const comments = [...(Array.isArray(card.comments) ? card.comments : []), comment];
+    const updated = await prisma.graphicDesignCard.update({ where: { id: req.params.id }, data: { comments }, omit: { imageUrl: true } });
+    invalidateCache('graphic-cards');
+    res.status(201).json(serializeGraphicCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/graphic-cards/:id/comments/:commentId', async (req, res) => {
+  try {
+    const card = await prisma.graphicDesignCard.findUnique({ where: { id: req.params.id }, select: { comments: true } });
+    if (!card) return res.status(404).json({ error: 'card not found' });
+    const comments = (Array.isArray(card.comments) ? card.comments : []).filter((c) => c.id !== req.params.commentId);
+    const updated = await prisma.graphicDesignCard.update({ where: { id: req.params.id }, data: { comments }, omit: { imageUrl: true } });
+    invalidateCache('graphic-cards');
+    res.json(serializeGraphicCard(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.delete('/api/graphic-cards/:id', async (req, res) => {
   try {
     await prisma.graphicDesignCard.delete({ where: { id: req.params.id } });
@@ -691,52 +685,6 @@ app.delete('/api/cards/:id', async (req, res) => {
     await prisma.card.delete({ where: { id: req.params.id } });
     invalidateCache('cards');
     res.json(serializeCard(card));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Status / Bots (local-only — returns defaults on Vercel) ─────────────────
-app.get('/api/status', async (req, res) => {
-  try {
-    const data = await cached('status', async () => {
-      const activity = await prisma.activityEntry.findMany({ orderBy: { createdAt: 'desc' }, take: MAX_ACTIVITY });
-      const cronJobs = await prisma.cronJob.findMany();
-      const bots = withAgentActivity(loadAgentRoster(), activity);
-      return { gatewayRunning: true, lastRestart: null, bots, activity, cronJobs };
-    });
-    res.json(data);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── Activity ────────────────────────────────────────────────────────────────
-app.post('/api/activity', async (req, res) => {
-  const { message, type } = req.body;
-  if (!message || typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'message is required' });
-  try {
-    const entry = await prisma.activityEntry.create({
-      data: { id: crypto.randomUUID(), text: message.trim() },
-    });
-    invalidateCache('status');
-    res.status(201).json(entry);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete('/api/activity', async (req, res) => {
-  try {
-    await prisma.activityEntry.deleteMany();
-    invalidateCache('status');
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.put('/api/cron-jobs', async (req, res) => {
-  const { jobs } = req.body;
-  if (!Array.isArray(jobs)) return res.status(400).json({ error: 'jobs must be an array' });
-  try {
-    await prisma.cronJob.deleteMany();
-    await prisma.cronJob.createMany({ data: jobs.map((j) => ({ id: j.id || crypto.randomUUID(), name: j.name || '', schedule: j.schedule || '', command: j.command || '', enabled: j.enabled !== false })) });
-    const cronJobs = await prisma.cronJob.findMany();
-    invalidateCache('status');
-    res.json({ cronJobs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -862,15 +810,134 @@ app.delete('/api/ad-action-log/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Competitor Watch ("ส่องคู่แข่ง") ────────────────────────────────────────
+// section: 'meta_ads' (active FB ad count per brand, verified via the
+// Advertiser filter in Meta Ad Library — never trust plain keyword search,
+// it pollutes badly for generic brand names) | 'ai_search' (whether the
+// brand's site blocks AI crawlers in robots.txt).
+app.get('/api/competitor-metrics', async (req, res) => {
+  try {
+    const section = typeof req.query.section === 'string' ? req.query.section : null;
+    const entries = await cached(`competitor-metrics:${section || 'all'}`, async () => {
+      const rows = await prisma.competitorMetric.findMany({
+        where: section ? { section } : undefined,
+        orderBy: { checkedAt: 'desc' },
+      });
+      return rows;
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Upserts by (section, brand) — each brand has one current value per section,
+// re-checking just overwrites it (checkedAt bumps to now).
+app.post('/api/competitor-metrics', async (req, res) => {
+  const { section, brand, value, score, note, verified } = req.body;
+  if (!section || !brand) return res.status(400).json({ error: 'section and brand are required' });
+  try {
+    const existing = await prisma.competitorMetric.findFirst({ where: { section, brand } });
+    const data = {
+      value: value != null ? String(value) : '',
+      score: score != null && score !== '' ? Number(score) : null,
+      note: note ? String(note) : '',
+      verified: Boolean(verified),
+      checkedAt: new Date(),
+    };
+    const row = existing
+      ? await prisma.competitorMetric.update({ where: { id: existing.id }, data })
+      : await prisma.competitorMetric.create({ data: { section: String(section), brand: String(brand), ...data } });
+    invalidateCache('competitor-metrics');
+    res.status(existing ? 200 : 201).json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/competitor-metrics/:id', async (req, res) => {
+  try {
+    await prisma.competitorMetric.delete({ where: { id: req.params.id } });
+    invalidateCache('competitor-metrics');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/competitor-seo-notes', async (req, res) => {
+  try {
+    const entries = await cached('competitor-seo-notes', async () => {
+      return prisma.competitorSeoNote.findMany({ orderBy: { createdAt: 'desc' } });
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/competitor-seo-notes', async (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  try {
+    const row = await prisma.competitorSeoNote.create({ data: { text: text.trim() } });
+    invalidateCache('competitor-seo-notes');
+    res.status(201).json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/competitor-seo-notes/:id', async (req, res) => {
+  try {
+    await prisma.competitorSeoNote.delete({ where: { id: req.params.id } });
+    invalidateCache('competitor-seo-notes');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Website Todo ("แผนเว็บไซต์เป็นอันดับ 1") ───────────────────────────────
+app.get('/api/website-todos', async (req, res) => {
+  try {
+    const entries = await cached('website-todos', async () => {
+      return prisma.websiteTodo.findMany({ orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] });
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/website-todos', async (req, res) => {
+  const { phase, text, sortOrder } = req.body;
+  if (!phase || !text || !String(text).trim()) return res.status(400).json({ error: 'phase and text are required' });
+  try {
+    const row = await prisma.websiteTodo.create({
+      data: { phase: String(phase), text: String(text).trim(), sortOrder: Number(sortOrder) || 0 },
+    });
+    invalidateCache('website-todos');
+    res.status(201).json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/website-todos/:id', async (req, res) => {
+  const { done, text, phase } = req.body;
+  try {
+    const data = {};
+    if (done !== undefined) { data.done = Boolean(done); data.doneAt = done ? new Date() : null; }
+    if (text !== undefined) data.text = String(text).trim();
+    if (phase !== undefined) data.phase = String(phase).trim();
+    const row = await prisma.websiteTodo.update({ where: { id: req.params.id }, data });
+    invalidateCache('website-todos');
+    res.json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/website-todos/:id', async (req, res) => {
+  try {
+    await prisma.websiteTodo.delete({ where: { id: req.params.id } });
+    invalidateCache('website-todos');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Ad Insights ────────────────────────────────────────────────────────────
 // Will be populated by scripts/sync-ad-insights.mjs pulling the Facebook
 // Marketing Insights API on a daily launchd schedule, once Meta Business
 // Manager access to the Tasaki ad account is granted.
 app.get('/api/ad-insights', async (req, res) => {
   try {
-    const entries = await cached('ad-insights', async () => {
+    const data = await cached('ad-insights', async () => {
       const rows = await prisma.adInsight.findMany({ orderBy: { date: 'desc' } });
-      return rows.map((r) => ({
+      const entries = rows.map((r) => ({
         id: r.id,
         date: r.date,
         campaignName: r.campaignName,
@@ -884,8 +951,10 @@ app.get('/api/ad-insights', async (req, res) => {
         creativeName: r.creativeName,
         creativeImageUrl: r.creativeImageUrl,
       }));
+      const lastSyncedAt = rows.reduce((max, r) => (!max || r.createdAt > max ? r.createdAt : max), null);
+      return { entries, lastSyncedAt };
     });
-    res.json({ entries });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -910,6 +979,59 @@ app.post('/api/ad-insights', async (req, res) => {
     });
     invalidateCache('ad-insights');
     res.status(201).json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Website page views ─────────────────────────────────────────────────────
+// tasaki-web tracks visitor page views itself (PageViewTracker.tsx -> PageView
+// table in its own DB) but never had a viewer for that data. We read it
+// straight from the LAN Postgres server rather than duplicating the tracker.
+app.get('/api/website-pageviews', async (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  try {
+    const data = await cached(`website-pageviews:${days}`, async () => {
+      const since = `now() - interval '${days} days'`;
+      const [totals, daily, topPages, devices, statusBreakdown, referrers] = await Promise.all([
+        tasakiWebPool.query(`
+          SELECT count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
+          FROM "PageView" WHERE "createdAt" >= ${since}
+        `),
+        tasakiWebPool.query(`
+          SELECT to_char("createdAt", 'YYYY-MM-DD') AS date, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
+          FROM "PageView" WHERE "createdAt" >= ${since}
+          GROUP BY 1 ORDER BY 1
+        `),
+        tasakiWebPool.query(`
+          SELECT path, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
+          FROM "PageView" WHERE "createdAt" >= ${since}
+          GROUP BY path ORDER BY views DESC LIMIT 25
+        `),
+        tasakiWebPool.query(`
+          SELECT device, count(*)::int AS views
+          FROM "PageView" WHERE "createdAt" >= ${since}
+          GROUP BY device ORDER BY views DESC
+        `),
+        tasakiWebPool.query(`
+          SELECT status, count(*)::int AS views
+          FROM "PageView" WHERE "createdAt" >= ${since}
+          GROUP BY status ORDER BY views DESC
+        `),
+        tasakiWebPool.query(`
+          SELECT referrer, count(*)::int AS views
+          FROM "PageView" WHERE "createdAt" >= ${since}
+          GROUP BY referrer ORDER BY views DESC LIMIT 200
+        `),
+      ]);
+      return {
+        totals: totals.rows[0],
+        daily: daily.rows,
+        topPages: topPages.rows,
+        devices: devices.rows,
+        statusBreakdown: statusBreakdown.rows,
+        referrers: referrers.rows,
+      };
+    });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

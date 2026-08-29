@@ -17,13 +17,14 @@
   <header>
     <h1>Graphic Design</h1>
     <nav class="top-nav">
-      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/index.html" class="nav-link">🎥 VDO</a>
       <a href="/graphic-design.html" class="nav-link active">🎨 Graphic Design</a>
-      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/report.html" class="nav-link">📅 Reports</a>
       <a href="/ads.html" class="nav-link">📈 Ads</a>
       <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
       <a href="/insights.html" class="nav-link">📹 Insights</a>
-      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+      <a href="/website.html" class="nav-link">🌐 เว็บไซต์</a>
+      <a href="/competitors.html" class="nav-link">🕵️ ส่องคู่แข่ง</a>
     </nav>
     <button id="addBtn" class="add-btn">+ New Design</button>
     <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
@@ -37,10 +38,6 @@
     <section class="column" data-column="in_progress">
       <h2>🎨 กำลังออกแบบ</h2>
       <div class="cards" data-column-cards="in_progress"></div>
-    </section>
-    <section class="column" data-column="review">
-      <h2>👀 รอตรวจ</h2>
-      <div class="cards" data-column-cards="review"></div>
     </section>
     <section class="column" data-column="done">
       <h2>✅ เสร็จแล้ว / ใช้งานแล้ว</h2>
@@ -69,6 +66,14 @@
             <label class="tag-checkbox"><input type="checkbox" name="cardUsage" value="instagram_ads" /> 📸 Instagram Ads</label>
             <label class="tag-checkbox"><input type="checkbox" name="cardUsage" value="other" /> 📦 อื่นๆ</label>
           </fieldset>
+        </div>
+        <div id="cardCommentLabel" class="card-form-right" hidden>
+          <div class="card-form-right-header">💬 Comments</div>
+          <div id="cardCommentList" class="comment-list"></div>
+          <div class="comment-add-row">
+            <input type="text" id="cardCommentInput" placeholder="Add a comment…" maxlength="500" />
+            <button type="button" id="cardCommentAddBtn">Post</button>
+          </div>
         </div>
       </div>
       <p id="cardFormError" class="form-error" hidden></p>

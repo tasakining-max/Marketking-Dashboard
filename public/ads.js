@@ -94,6 +94,156 @@ function aggregateByCampaign(entries) {
   }));
 }
 
+// ─── Date tree (วันที่ → แคมเปญ → กลุ่มเป้าหมาย → ครีเอทีฟ) ─────────────────
+function metricsFrom(spend, reach, impressions, clicks) {
+  return {
+    spend, reach, impressions, clicks,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+  };
+}
+
+function sumMetrics(items) {
+  const totals = items.reduce((acc, x) => ({
+    spend: acc.spend + x.spend, reach: acc.reach + x.reach,
+    impressions: acc.impressions + x.impressions, clicks: acc.clicks + x.clicks,
+  }), { spend: 0, reach: 0, impressions: 0, clicks: 0 });
+  return metricsFrom(totals.spend, totals.reach, totals.impressions, totals.clicks);
+}
+
+function buildDateTree(entries) {
+  const dates = new Map();
+  entries.forEach((e) => {
+    const dKey = dateKey(e.date);
+    const dateBucket = dates.get(dKey) || { date: e.date, campaigns: new Map() };
+    dates.set(dKey, dateBucket);
+
+    const campaign = dateBucket.campaigns.get(e.campaignName) || { name: e.campaignName, adsets: new Map() };
+    dateBucket.campaigns.set(e.campaignName, campaign);
+
+    const audienceKey = e.targetAudience || 'ไม่ระบุกลุ่มเป้าหมาย';
+    const adset = campaign.adsets.get(audienceKey) || { name: audienceKey, creatives: new Map() };
+    campaign.adsets.set(audienceKey, adset);
+
+    const creativeKey = e.creativeName || 'ไม่ระบุครีเอทีฟ';
+    const creative = adset.creatives.get(creativeKey) || {
+      name: creativeKey, imageUrl: e.creativeImageUrl || null,
+      spend: 0, reach: 0, impressions: 0, clicks: 0,
+    };
+    creative.spend += e.spend;
+    creative.reach += e.reach;
+    creative.impressions += e.impressions;
+    creative.clicks += e.clicks;
+    if (!creative.imageUrl && e.creativeImageUrl) creative.imageUrl = e.creativeImageUrl;
+    adset.creatives.set(creativeKey, creative);
+  });
+
+  return [...dates.values()].map((dateBucket) => {
+    const campaigns = [...dateBucket.campaigns.values()].map((campaign) => {
+      const adsets = [...campaign.adsets.values()].map((adset) => {
+        const creatives = [...adset.creatives.values()]
+          .map((c) => ({ ...c, ...metricsFrom(c.spend, c.reach, c.impressions, c.clicks) }))
+          .sort((a, b) => b.spend - a.spend);
+        return { name: adset.name, creatives, ...sumMetrics(creatives) };
+      }).sort((a, b) => b.spend - a.spend);
+      return { name: campaign.name, adsets, ...sumMetrics(adsets) };
+    }).sort((a, b) => b.spend - a.spend);
+    return { date: dateBucket.date, campaigns, ...sumMetrics(campaigns) };
+  }).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function renderCampaignTree(entries) {
+  const tbody = document.getElementById('adCampaignTreeBody');
+  tbody.innerHTML = '';
+  const tree = buildDateTree(entries);
+
+  function makeRow({ level, label, thumb, metrics, toggle, childRows }) {
+    const tr = document.createElement('tr');
+    tr.className = `ads-tree-row ads-tree-level-${level}`;
+
+    const nameTd = document.createElement('td');
+    nameTd.className = 'ads-tree-name-cell';
+    nameTd.style.paddingLeft = `${10 + level * 22}px`;
+
+    if (toggle) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ads-tree-toggle';
+      btn.textContent = '▾';
+      btn.setAttribute('aria-label', 'ย่อ/ขยาย');
+      btn.addEventListener('click', () => {
+        const collapsed = tr.classList.toggle('is-collapsed');
+        btn.textContent = collapsed ? '▸' : '▾';
+        childRows.forEach((r) => { r.hidden = collapsed; });
+      });
+      nameTd.appendChild(btn);
+    } else {
+      const spacer = document.createElement('span');
+      spacer.className = 'ads-tree-toggle-spacer';
+      nameTd.appendChild(spacer);
+    }
+
+    if (thumb) {
+      const img = document.createElement('img');
+      img.className = 'ads-tree-thumb';
+      img.src = thumb;
+      img.alt = label;
+      nameTd.appendChild(img);
+    }
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'ads-tree-name';
+    nameSpan.textContent = label;
+    nameTd.appendChild(nameSpan);
+    tr.appendChild(nameTd);
+
+    [fmtNum(metrics.spend), fmtNum(metrics.reach), fmtNum(metrics.clicks), fmtPct(metrics.ctr), fmtNum(metrics.cpc)].forEach((val) => {
+      const td = document.createElement('td');
+      td.className = 'ads-num';
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+
+    return tr;
+  }
+
+  tree.forEach((dateBucket) => {
+    const dateChildRows = [];
+    tbody.appendChild(makeRow({
+      level: 0, label: `📅 ${fmtDate(dateBucket.date)}`, metrics: dateBucket, toggle: true, childRows: dateChildRows,
+    }));
+
+    dateBucket.campaigns.forEach((campaign) => {
+      const campaignChildRows = [];
+      const campaignRow = makeRow({
+        level: 1, label: `📁 ${campaign.name}`, metrics: campaign, toggle: true, childRows: campaignChildRows,
+      });
+      tbody.appendChild(campaignRow);
+      dateChildRows.push(campaignRow);
+
+      campaign.adsets.forEach((adset) => {
+        const adsetChildRows = [];
+        const adsetRow = makeRow({
+          level: 2, label: `👥 ${adset.name}`, metrics: adset, toggle: true, childRows: adsetChildRows,
+        });
+        tbody.appendChild(adsetRow);
+        campaignChildRows.push(adsetRow);
+        dateChildRows.push(adsetRow);
+
+        adset.creatives.forEach((creative) => {
+          const creativeRow = makeRow({
+            level: 3, label: creative.name, thumb: creative.imageUrl, metrics: creative,
+          });
+          tbody.appendChild(creativeRow);
+          adsetChildRows.push(creativeRow);
+          campaignChildRows.push(creativeRow);
+          dateChildRows.push(creativeRow);
+        });
+      });
+    });
+  });
+}
+
 // ─── Insights (rule-based, computed from the actual numbers) ──────────────
 function renderInsights(entries) {
   const rows = document.getElementById('adInsightRows');
@@ -371,61 +521,6 @@ function renderCtrChart(entries) {
   });
 }
 
-// ─── Data table (accessible fallback for both charts) ──────────────────
-function renderTable(entries) {
-  const tbody = document.getElementById('adInsightsTableBody');
-  tbody.innerHTML = '';
-  const sorted = [...entries].sort((a, b) => new Date(b.date) - new Date(a.date));
-  sorted.forEach((e) => {
-    const tr = document.createElement('tr');
-
-    const dateTd = document.createElement('td');
-    dateTd.textContent = fmtDate(e.date);
-    tr.appendChild(dateTd);
-
-    const campaignTd = document.createElement('td');
-    campaignTd.textContent = e.campaignName;
-    tr.appendChild(campaignTd);
-
-    const creativeTd = document.createElement('td');
-    const creativeWrap = document.createElement('div');
-    creativeWrap.className = 'ads-creative-cell';
-    if (e.creativeImageUrl) {
-      const img = document.createElement('img');
-      img.className = 'ads-creative-thumb';
-      img.src = e.creativeImageUrl;
-      img.alt = e.creativeName || '';
-      creativeWrap.appendChild(img);
-    }
-    const creativeName = document.createElement('span');
-    creativeName.className = 'ads-creative-name';
-    creativeName.textContent = e.creativeName || '—';
-    creativeWrap.appendChild(creativeName);
-    creativeTd.appendChild(creativeWrap);
-    tr.appendChild(creativeTd);
-
-    const audienceTd = document.createElement('td');
-    audienceTd.className = 'ads-audience';
-    audienceTd.textContent = e.targetAudience || '—';
-    tr.appendChild(audienceTd);
-
-    [
-      fmtNum(e.spend),
-      fmtNum(e.reach),
-      fmtNum(e.clicks),
-      fmtPct(e.ctr),
-      fmtNum(e.cpc),
-    ].forEach((val) => {
-      const td = document.createElement('td');
-      td.className = 'ads-num';
-      td.textContent = val;
-      tr.appendChild(td);
-    });
-
-    tbody.appendChild(tr);
-  });
-}
-
 // ─── Date filters ───────────────────────────────────────────────────────
 function dateKey(d) { return new Date(d).toISOString().slice(0, 10); }
 function startOfWeek(d) { const dt = new Date(d); const day = (dt.getDay() + 6) % 7; dt.setDate(dt.getDate() - day); dt.setHours(0, 0, 0, 0); return dt; }
@@ -438,6 +533,11 @@ function computePresetRange(mode) {
   if (mode === 'today') {
     const s = new Date(now); s.setHours(0, 0, 0, 0);
     const e = new Date(now); e.setHours(23, 59, 59, 999);
+    return [s, e];
+  }
+  if (mode === 'yesterday') {
+    const s = new Date(now); s.setDate(s.getDate() - 1); s.setHours(0, 0, 0, 0);
+    const e = new Date(s); e.setHours(23, 59, 59, 999);
     return [s, e];
   }
   if (mode === 'thisWeek') return [startOfWeek(now), endOfWeek(now)];
@@ -479,7 +579,7 @@ function datesInPreset(mode, availableDates) {
 
 function activePresetForDates(availableDates) {
   if (!filterDates.size) return 'all';
-  for (const mode of ['today', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth']) {
+  for (const mode of ['today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth']) {
     const expected = new Set(datesInPreset(mode, availableDates));
     if (expected.size && expected.size === filterDates.size && [...expected].every((d) => filterDates.has(d))) {
       return mode;
@@ -592,7 +692,7 @@ function applyFiltersAndRender() {
   renderInsights(filtered);
   renderSpendChart(filtered);
   renderCtrChart(filtered);
-  renderTable(filtered);
+  renderCampaignTree(filtered);
 }
 
 let calInitialized = false;
@@ -618,6 +718,14 @@ function renderAdInsights(entries) {
 }
 
 let adInsightsSignature = null;
+function renderAdLastSynced(iso) {
+  const el = document.getElementById('adInsightsLastSynced');
+  if (!iso) { el.hidden = true; return; }
+  const d = new Date(iso);
+  el.textContent = `🕐 อัปเดตล่าสุด: ${d.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+  el.hidden = false;
+}
+
 async function fetchAdInsights() {
   const res = await fetch('/api/ad-insights');
   const data = await res.json();
@@ -626,6 +734,7 @@ async function fetchAdInsights() {
     adInsightsSignature = sig;
     renderAdInsights(data.entries || []);
   }
+  renderAdLastSynced(data.lastSyncedAt);
 }
 
 fetchAdInsights();

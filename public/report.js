@@ -214,6 +214,18 @@ const HOLIDAYS_2026 = {
   '2026-12-31': 'วันสิ้นปี',
 };
 
+// Saturdays the office works to make up for a special holiday elsewhere in
+// the year (per the company's official 2569/2026 work calendar) — these
+// should render as normal working days, not weekend/holiday cells.
+const WORKING_SATURDAYS_2026 = new Set([
+  '2026-01-10',
+  '2026-03-28',
+  '2026-04-25',
+  '2026-07-04',
+  '2026-08-29',
+  '2026-10-24',
+]);
+
 function renderCalendar() {
   const today = new Date();
   const year = today.getFullYear();
@@ -293,7 +305,8 @@ function renderCalendar() {
     const dateKey = `${display.getFullYear()}-${String(display.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const holidayName = HOLIDAYS_2026[dateKey];
     const weekday = (firstWeekday + (d - 1)) % 7;
-    const isWeekend = weekday === 0 || weekday === 6;
+    const isWorkingSaturday = weekday === 6 && WORKING_SATURDAYS_2026.has(dateKey);
+    const isWeekend = (weekday === 0 || weekday === 6) && !isWorkingSaturday;
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (d === todayKey) cell.classList.add('cal-today');
@@ -303,6 +316,7 @@ function renderCalendar() {
       + (calFilters.has('shoot') ? shoots.length : 0);
     if (visibleCount) cell.classList.add('cal-has-content');
     if (holidayName || isWeekend) cell.classList.add('cal-holiday');
+    if (isWorkingSaturday) cell.classList.add('cal-workday');
 
     const num = document.createElement('span');
     num.className = 'cal-day-num';
@@ -314,6 +328,12 @@ function renderCalendar() {
       label.className = 'cal-holiday-label';
       label.textContent = `🌴 ${holidayName}`;
       label.title = holidayName;
+      cell.appendChild(label);
+    } else if (isWorkingSaturday) {
+      const label = document.createElement('span');
+      label.className = 'cal-workday-label';
+      label.textContent = '🏢 เสาร์ทำงาน';
+      label.title = 'วันเสาร์ทำงาน (ชดเชยวันหยุด)';
       cell.appendChild(label);
     }
 

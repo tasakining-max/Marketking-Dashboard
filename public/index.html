@@ -17,13 +17,14 @@
   <header>
     <h1>Marketing Pipeline</h1>
     <nav class="top-nav">
-      <a href="/index.html" class="nav-link active">📋 Marketing Pipeline</a>
+      <a href="/index.html" class="nav-link active">🎥 VDO</a>
       <a href="/graphic-design.html" class="nav-link">🎨 Graphic Design</a>
-      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/report.html" class="nav-link">📅 Reports</a>
       <a href="/ads.html" class="nav-link">📈 Ads</a>
       <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
       <a href="/insights.html" class="nav-link">📹 Insights</a>
-      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+      <a href="/website.html" class="nav-link">🌐 เว็บไซต์</a>
+      <a href="/competitors.html" class="nav-link">🕵️ ส่องคู่แข่ง</a>
     </nav>
     <button id="addBtn" class="add-btn">+ New Idea</button>
     <button id="summaryBtn" class="add-btn" type="button">📋 สรุปงานวันนี้</button>
@@ -108,41 +109,6 @@
         <div id="rejectedList" class="rejected-list" hidden></div>
       </section>
     </div>
-
-    <aside id="websiteChangelogPanel" class="key-messages-panel right-panel collapsible-panel">
-      <div class="panel-header-row">
-        <h2><span class="panel-icon">🌐</span><span class="panel-title-text"> Tasaki Website Updates</span></h2>
-        <button id="websiteChangelogRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
-        <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
-      </div>
-      <p class="key-messages-hint">ความคืบหน้าของเว็บไซต์</p>
-
-      <div class="website-zone website-zone-issues">
-        <div class="website-zone-header">⚠️ ปัญหาที่เจอ / ต้องการความช่วยเหลือ <span id="websiteIssuesCount" class="website-issues-count"></span></div>
-        <div id="websiteIssuesZone" class="website-issues-list"></div>
-        <div class="website-issue-add-form">
-          <div class="website-issue-add-row">
-            <input id="websiteIssueAddInput" type="text" class="entry-issue-add-input" placeholder="เพิ่มปัญหา..." maxlength="300" />
-            <button id="websiteIssueAddBtn" type="button" class="entry-issue-add-btn">+</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="website-zone website-zone-updates">
-        <div class="website-zone-header">📋 โซนรวมอัพเดท</div>
-        <div id="websiteChangelogList" class="key-messages-list"></div>
-      </div>
-    </aside>
-
-    <aside id="marketingChangelogPanel" class="key-messages-panel right-panel collapsible-panel">
-      <div class="panel-header-row">
-        <h2><span class="panel-icon">🛠</span><span class="panel-title-text"> Marketing System Updates</span></h2>
-        <button id="marketingChangelogRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
-        <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
-      </div>
-      <p class="key-messages-hint">ความคืบหน้าของเครื่องมือนี้เอง (localhost:5050)</p>
-      <div id="marketingChangelogList" class="key-messages-list"></div>
-    </aside>
   </div>
 
   <dialog id="rejectDialog">

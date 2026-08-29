@@ -17,13 +17,14 @@
   <header>
     <h1>Ads</h1>
     <nav class="top-nav">
-      <a href="/index.html" class="nav-link">📋 Marketing Pipeline</a>
+      <a href="/index.html" class="nav-link">🎥 VDO</a>
       <a href="/graphic-design.html" class="nav-link">🎨 Graphic Design</a>
-      <a href="/report.html" class="nav-link">📊 Reports</a>
+      <a href="/report.html" class="nav-link">📅 Reports</a>
       <a href="/ads.html" class="nav-link active">📈 Ads</a>
       <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
       <a href="/insights.html" class="nav-link">📹 Insights</a>
-      <a href="/control.html" class="nav-link">🛰 Mission Control</a>
+      <a href="/website.html" class="nav-link">🌐 เว็บไซต์</a>
+      <a href="/competitors.html" class="nav-link">🕵️ ส่องคู่แข่ง</a>
     </nav>
     <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
   </header>
@@ -36,7 +37,7 @@
           <button id="adInsightsRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
         </div>
       </div>
-      <p id="adInsightsMockNote" class="key-messages-hint">✅ เชื่อมต่อ Facebook Ads (Tasaki Ad Acc) จริงแล้ว — ยังไม่มีข้อมูลเพราะยังไม่เริ่มยิงโฆษณา พอเริ่มแคมเปญเมื่อไหร่ ข้อมูลจะไหลเข้ามาที่นี่อัตโนมัติ (รันด้วยมือผ่าน <code>node scripts/sync-ad-insights.mjs</code> ตอนนี้ ยังไม่ได้ตั้งอัตโนมัติรายวัน)</p>
+      <p id="adInsightsLastSynced" class="key-messages-hint" hidden></p>
 
       <div id="adInsightsEmpty" class="key-messages-hint" hidden>ยังไม่มีข้อมูลผลโฆษณา</div>
 
@@ -45,6 +46,7 @@
           <div class="cal-filter-group" role="group" aria-label="กรองช่วงเวลา">
             <button type="button" class="cal-filter-btn active" data-range="all">ทั้งหมด</button>
             <button type="button" class="cal-filter-btn" data-range="today">วันนี้</button>
+            <button type="button" class="cal-filter-btn" data-range="yesterday">เมื่อวาน</button>
             <button type="button" class="cal-filter-btn" data-range="thisWeek">สัปดาห์นี้</button>
             <button type="button" class="cal-filter-btn" data-range="lastWeek">สัปดาห์ที่แล้ว</button>
             <button type="button" class="cal-filter-btn" data-range="thisMonth">เดือนนี้</button>
@@ -87,16 +89,13 @@
             <div id="adCtrChart" class="ads-chart-wrap"></div>
           </div>
 
-          <div class="report-list-wrap">
-            <h3>ตารางข้อมูลทั้งหมด</h3>
+          <div class="report-list-wrap" style="margin-bottom:24px;">
+            <h3>โครงสร้างแคมเปญ (แคมเปญ → กลุ่มเป้าหมาย → ครีเอทีฟ)</h3>
             <div class="ads-table-wrap">
-              <table class="ads-table">
+              <table class="ads-table ads-tree-table">
                 <thead>
                   <tr>
-                    <th>วันที่</th>
-                    <th>แคมเปญ</th>
-                    <th>ครีเอทีฟ</th>
-                    <th>กลุ่มเป้าหมาย</th>
+                    <th>วันที่ / แคมเปญ / กลุ่มเป้าหมาย / ครีเอทีฟ</th>
                     <th>งบใช้ (฿)</th>
                     <th>เข้าถึง</th>
                     <th>คลิก</th>
@@ -104,7 +103,7 @@
                     <th>CPC (฿)</th>
                   </tr>
                 </thead>
-                <tbody id="adInsightsTableBody"></tbody>
+                <tbody id="adCampaignTreeBody"></tbody>
               </table>
             </div>
           </div>

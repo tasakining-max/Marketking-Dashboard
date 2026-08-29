@@ -41,6 +41,7 @@ model GraphicDesignCard {
   column      String   @default("todo")
   usage       String[] @default([])
   imageUrl    String?  @db.Text
+  comments    Json     @default("[]")
   order       Float    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -123,6 +124,43 @@ model AdActionLog {
   text      String   @db.Text
   method    String   @default("")
   createdAt DateTime @default(now())
+}
+
+// ─── Competitor Watch ("ส่องคู่แข่ง") ──────────────────────────────────────
+// section: 'meta_ads' (active Facebook ad count per brand) | 'ai_search'
+// (whether the brand's site blocks AI crawlers in robots.txt)
+model CompetitorMetric {
+  id         String   @id @default(uuid())
+  section    String
+  brand      String
+  value      String   @default("")
+  score      Int?
+  note       String   @default("") @db.Text
+  verified   Boolean  @default(false)
+  checkedAt  DateTime @default(now())
+
+  @@index([section])
+}
+
+// Freeform log for the Website/SEO section (Google Ads + organic SEO keyword
+// findings) — inherently qualitative, so kept as notes rather than structured
+// metrics like the other two sections.
+model CompetitorSeoNote {
+  id        String   @id @default(uuid())
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+// "แผนเว็บไซต์เป็นอันดับ 1" 1-month sprint to-do list (see the ส่องคู่แข่ง
+// competitive report this was derived from). phase groups items into weeks.
+model WebsiteTodo {
+  id        String    @id @default(uuid())
+  phase     String
+  text      String    @db.Text
+  done      Boolean   @default(false)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
 }
 
 model PageVideoInsight {
