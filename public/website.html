@@ -34,33 +34,6 @@
       <main class="report-main ads-main">
         <section class="report-section">
           <div class="report-section-header">
-            <h2>🏆 แผนเว็บไซต์เป็นอันดับ 1 — Sprint เร่งด่วน (ทำให้เสร็จวันนี้)</h2>
-            <div class="report-nav">
-              <button id="websiteTodoRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
-            </div>
-          </div>
-          <p class="key-messages-hint">✅ คะแนน AI Search Citability: 65 → 87 แซง Carrier (75) ชัดเจน — หลังแก้หน้าแรก (เนื้อหาจริงเรื่องผลิต/ทดสอบเอง), เพิ่มบรรทัดผู้เขียน/ผู้ตรวจสอบในทุกบทความ, และทำหน้า error-code ให้ server-render รายการเต็ม (เดิมเป็นกล่องว่างสำหรับ AI ที่ไม่รัน JS) — เหลือจุดเดียว: อ้างอิงบทความยังไม่ผูกกับตัวเลขเฉพาะจุด (ดูเหตุผลเต็มได้ในหน้า ส่องคู่แข่ง)</p>
-
-          <div class="sprint-progress-row">
-            <div class="sprint-progress-track"><div id="sprintProgressFill" class="sprint-progress-fill" style="width:0%"></div></div>
-            <span id="sprintProgressLabel" class="sprint-progress-label">0/0 เสร็จ</span>
-          </div>
-
-          <div id="sprintPhases"></div>
-
-          <form id="sprintAddForm" class="sprint-add-row">
-            <select id="sprintPhaseInput">
-              <option value="ทำวันนี้">ทำวันนี้</option>
-              <option value="ทำหลัง Deploy">ทำหลัง Deploy</option>
-              <option value="รอข้อมูลจากลูกค้า">รอข้อมูลจากลูกค้า</option>
-            </select>
-            <input id="sprintTextInput" type="text" placeholder="เพิ่มสิ่งที่ต้องทำ..." maxlength="300" />
-            <button type="submit" class="report-nav-btn">+ เพิ่ม</button>
-          </form>
-        </section>
-
-        <section class="report-section">
-          <div class="report-section-header">
             <h2>🌐 คนเข้าเว็บ Tasaki Air</h2>
             <div class="report-nav">
               <button id="siteRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
@@ -92,6 +65,28 @@
             <div class="report-list-wrap" style="margin-bottom:24px;">
               <h3>แหล่งที่มา (Traffic Sources)</h3>
               <div id="siteSourceChart" class="ads-chart-wrap"></div>
+            </div>
+
+            <div class="report-list-wrap" style="margin-bottom:24px;">
+              <h3>แคมเปญ UTM (จากโฆษณา/ลิงก์ที่ติด UTM)</h3>
+              <p class="key-messages-hint">คลิกที่มาจากลิงก์ที่ติด utm_source/utm_medium/utm_campaign (เช่น จาก Facebook Ads) เท่านั้น — คลิกจากลิงก์ทั่วไปที่ไม่ได้ติด UTM จะไม่ขึ้นในตารางนี้</p>
+              <div class="ads-table-wrap">
+                <table class="ads-table">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Medium</th>
+                      <th>Campaign</th>
+                      <th>Content</th>
+                      <th>เข้าชม</th>
+                      <th>ผู้เข้าชม</th>
+                      <th>เจอครั้งแรก</th>
+                      <th>เจอล่าสุด</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siteUtmBody"></tbody>
+                </table>
+              </div>
             </div>
 
             <div class="report-list-wrap" style="margin-bottom:24px;">

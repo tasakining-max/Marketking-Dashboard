@@ -991,7 +991,7 @@ app.get('/api/website-pageviews', async (req, res) => {
   try {
     const data = await cached(`website-pageviews:${days}`, async () => {
       const since = `now() - interval '${days} days'`;
-      const [totals, daily, topPages, devices, statusBreakdown, referrers] = await Promise.all([
+      const [totals, daily, topPages, devices, statusBreakdown, referrers, utmCampaigns] = await Promise.all([
         tasakiWebPool.query(`
           SELECT count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
           FROM "PageView" WHERE "createdAt" >= ${since}
@@ -1021,6 +1021,14 @@ app.get('/api/website-pageviews', async (req, res) => {
           FROM "PageView" WHERE "createdAt" >= ${since}
           GROUP BY referrer ORDER BY views DESC LIMIT 200
         `),
+        tasakiWebPool.query(`
+          SELECT "utmSource" AS source, "utmMedium" AS medium, "utmCampaign" AS campaign, "utmContent" AS content,
+            count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions,
+            min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
+          FROM "PageView" WHERE "createdAt" >= ${since} AND "utmSource" != ''
+          GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
+          ORDER BY views DESC
+        `),
       ]);
       return {
         totals: totals.rows[0],
@@ -1029,6 +1037,7 @@ app.get('/api/website-pageviews', async (req, res) => {
         devices: devices.rows,
         statusBreakdown: statusBreakdown.rows,
         referrers: referrers.rows,
+        utmCampaigns: utmCampaigns.rows,
       };
     });
     res.json(data);

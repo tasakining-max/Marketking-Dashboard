@@ -98,10 +98,14 @@ function aggregateSources(referrers) {
 function renderStatTiles(data) {
   const total = data.totals.views || 0;
   const notFound = (data.statusBreakdown.find((s) => s.status === 404) || {}).views || 0;
+  const adViews = (data.utmCampaigns || [])
+    .filter((r) => r.medium === 'paid')
+    .reduce((sum, r) => sum + r.views, 0);
 
   const tiles = [
     { label: 'เข้าชมทั้งหมด', value: fmtNum(total) },
     { label: 'ผู้เข้าชม (sessions)', value: fmtNum(data.totals.sessions || 0) },
+    { label: 'เข้าชมจากโฆษณา (Ads)', value: `${fmtNum(adViews)} (${fmtPct(total ? (adViews / total) * 100 : 0)})` },
     { label: 'หน้าไม่พบ (404)', value: fmtNum(notFound) },
   ];
 
@@ -140,6 +144,25 @@ function renderInsights(data) {
     insights.push({
       type: 'warning', icon: '⚠️',
       text: `มีการเข้าหน้าที่ไม่พบ (404) ${fmtNum(notFound)} ครั้ง — น่าจะมีลิงก์เสียหรือ URL เก่าที่ยังมีคนคลิกเข้ามา`,
+    });
+  }
+
+  const utmRows = data.utmCampaigns || [];
+  const fbClicks = utmRows.filter((r) => r.source === 'facebook').reduce((sum, r) => sum + r.views, 0);
+  if (fbClicks > 0) {
+    insights.push({
+      type: 'good', icon: '📣',
+      text: `มีคนคลิกจากโฆษณา Facebook ที่ติด UTM เข้าเว็บแล้ว ${fmtNum(fbClicks)} ครั้ง`,
+    });
+  }
+  const aiReferralSources = ['chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'claude.ai', 'gemini.google.com', 'copilot.microsoft.com'];
+  const aiReferralRows = utmRows.filter((r) => aiReferralSources.includes(r.source));
+  const aiReferralViews = aiReferralRows.reduce((sum, r) => sum + r.views, 0);
+  if (aiReferralViews > 0) {
+    const names = [...new Set(aiReferralRows.map((r) => r.source))].join(', ');
+    insights.push({
+      type: 'good', icon: '🤖',
+      text: `AI Search ส่งคนเข้าเว็บจริงแล้ว ${fmtNum(aiReferralViews)} ครั้ง (จาก ${names}) — สัญญาณว่างาน AI Search citability เริ่มเห็นผล`,
     });
   }
 
@@ -352,6 +375,43 @@ function renderTopPages(data) {
   });
 }
 
+// ─── UTM campaigns table ────────────────────────────────────────────────
+function renderUtmTable(data) {
+  const tbody = document.getElementById('siteUtmBody');
+  tbody.innerHTML = '';
+  const rows = data.utmCampaigns || [];
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8;
+    td.textContent = 'ยังไม่มีคลิกที่ติด UTM ในช่วงเวลานี้';
+    td.style.textAlign = 'center';
+    td.style.color = 'var(--text-muted, #888)';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    [
+      r.source || '-',
+      r.medium || '-',
+      r.campaign || '-',
+      r.content || '-',
+      fmtNum(r.views),
+      fmtNum(r.sessions),
+      new Date(r.firstSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+      new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+    ].forEach((val, idx) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      if (idx === 4 || idx === 5) td.className = 'ads-num';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
 // ─── Load + filter ────────────────────────────────────────────────────────
 const siteEmpty = document.getElementById('siteEmpty');
 const siteBody = document.getElementById('siteBody');
@@ -369,6 +429,7 @@ function renderAll(data) {
   renderInsights(data);
   renderTrendChart(data);
   renderSourceChart(data);
+  renderUtmTable(data);
   renderDeviceGrid(data);
   renderTopPages(data);
 }
@@ -921,87 +982,3 @@ document.querySelectorAll('.collapsible-panel').forEach((panel) => {
   });
 });
 
-// ─── Website plan sprint to-do ("แผนเว็บไซต์เป็นอันดับ 1") ──────────────────
-function escapeHtmlSprint(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-const SPRINT_PHASES = ['ทำวันนี้', 'ทำหลัง Deploy', 'รอข้อมูลจากลูกค้า'];
-
-async function loadSprintTodos() {
-  try {
-    const res = await fetch('/api/website-todos');
-    const { entries } = await res.json();
-
-    const total = entries.length;
-    const done = entries.filter((e) => e.done).length;
-    document.getElementById('sprintProgressFill').style.width = total ? `${(done / total) * 100}%` : '0%';
-    document.getElementById('sprintProgressLabel').textContent = `${done}/${total} เสร็จ`;
-
-    const phasesEl = document.getElementById('sprintPhases');
-    const phaseNames = [...new Set([...SPRINT_PHASES, ...entries.map((e) => e.phase)])];
-
-    phasesEl.innerHTML = phaseNames.map((phase) => {
-      const items = entries.filter((e) => e.phase === phase);
-      if (!items.length) return '';
-      const phaseDone = items.filter((e) => e.done).length;
-      return `
-        <div class="sprint-phase-group">
-          <div class="sprint-phase-head">
-            <h4>${escapeHtmlSprint(phase)}</h4>
-            <span class="sprint-phase-count">${phaseDone}/${items.length}</span>
-          </div>
-          <div class="sprint-todo-list">
-            ${items.map((e) => `
-              <div class="sprint-todo-item">
-                <input type="checkbox" data-id="${e.id}" ${e.done ? 'checked' : ''} />
-                <span class="sprint-todo-text${e.done ? ' done' : ''}">${escapeHtmlSprint(e.text)}</span>
-                <button type="button" class="todo-delete" data-id="${e.id}" aria-label="ลบ">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h1v-8H10zm3 0v8h1v-8h-1z"/></svg>
-                </button>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }).join('') || '<p class="key-messages-hint">ยังไม่มีรายการ</p>';
-
-    phasesEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-      cb.addEventListener('change', async () => {
-        await fetch(`/api/website-todos/${cb.dataset.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ done: cb.checked }),
-        });
-        loadSprintTodos();
-      });
-    });
-    phasesEl.querySelectorAll('.todo-delete').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        await fetch(`/api/website-todos/${btn.dataset.id}`, { method: 'DELETE' });
-        loadSprintTodos();
-      });
-    });
-  } catch (e) { console.error('Failed to load sprint todos:', e.message); }
-}
-
-document.getElementById('sprintAddForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const phase = document.getElementById('sprintPhaseInput').value;
-  const input = document.getElementById('sprintTextInput');
-  const text = input.value.trim();
-  if (!text) return;
-  await fetch('/api/website-todos', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phase, text }),
-  });
-  input.value = '';
-  loadSprintTodos();
-});
-
-document.getElementById('websiteTodoRefreshBtn').addEventListener('click', loadSprintTodos);
-
-loadSprintTodos();
