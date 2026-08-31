@@ -17,7 +17,12 @@ function yesterday() {
 }
 
 async function fetchInsights(since, until) {
-  const fields = 'campaign_name,ad_id,ad_name,adset_name,spend,reach,impressions,clicks,ctr,cpc';
+  // `clicks`/`ctr`/`cpc` count EVERY click on the ad unit (reactions, "..."
+  // menu, expanding the caption, etc.), not just clicks that land on the
+  // site — inflates the number a lot and doesn't line up with UTM pageview
+  // counts. inline_link_clicks is Facebook's dedicated "actually clicked
+  // through to your link" metric; use that instead.
+  const fields = 'campaign_name,ad_id,ad_name,adset_name,spend,reach,impressions,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click';
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${AD_ACCOUNT_ID}/insights?level=ad&time_increment=1&time_range=${timeRange}&fields=${fields}&access_token=${ACCESS_TOKEN}`;
   const res = await fetch(url);
@@ -48,9 +53,9 @@ async function postInsight(row, thumbnails) {
       spend: Number(row.spend) || 0,
       reach: Number(row.reach) || 0,
       impressions: Number(row.impressions) || 0,
-      clicks: Number(row.clicks) || 0,
-      ctr: Number(row.ctr) || 0,
-      cpc: Number(row.cpc) || 0,
+      clicks: Number(row.inline_link_clicks) || 0,
+      ctr: Number(row.inline_link_click_ctr) || 0,
+      cpc: Number(row.cost_per_inline_link_click) || 0,
       targetAudience: row.adset_name || '',
       creativeName: row.ad_name || '',
       creativeImageUrl: thumbnails[row.ad_id] || null,

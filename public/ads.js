@@ -45,7 +45,7 @@ function renderStatTiles(entries) {
   const tiles = [
     { label: 'งบใช้จ่ายรวม', value: fmtBaht(totalSpend) },
     { label: 'เข้าถึงรวม', value: fmtNum(totalReach) },
-    { label: 'คลิกรวม', value: fmtNum(totalClicks) },
+    { label: 'คลิกเข้าเว็บรวม', value: fmtNum(totalClicks) },
     { label: 'CTR เฉลี่ย', value: fmtPct(avgCtr) },
     { label: 'CPC เฉลี่ย', value: fmtBaht(avgCpc) },
   ];
@@ -491,7 +491,7 @@ function renderCtrChart(entries) {
       [
         ['งบใช้', fmtBaht(e.spend)],
         ['เข้าถึง', fmtNum(e.reach)],
-        ['คลิก', fmtNum(e.clicks)],
+        ['คลิกเข้าเว็บ', fmtNum(e.clicks)],
         ['CTR', fmtPct(e.ctr)],
         ['CPC', fmtBaht(e.cpc)],
       ].forEach(([label, value]) => {
