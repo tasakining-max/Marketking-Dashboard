@@ -1052,6 +1052,33 @@ app.get('/api/website-pageviews', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Page-by-page journey for one UTM row — lets "เข้าชม (หน้า) 13" resolve into
+// the actual sequence a visitor took (หน้าแรก → สินค้า → ... ) grouped by
+// session, instead of just a raw count.
+app.get('/api/website-utm-sessions', async (req, res) => {
+  const { source = '', medium = '', campaign = '', content = '' } = req.query;
+  const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
+  const untilParam = typeof req.query.until === 'string' ? new Date(req.query.until) : null;
+  const since = sinceParam && !isNaN(sinceParam) ? sinceParam : new Date(Date.now() - 30 * 86400000);
+  const until = untilParam && !isNaN(untilParam) ? untilParam : new Date();
+  try {
+    const { rows } = await tasakiWebPool.query(`
+      SELECT "sessionId", path, "createdAt"
+      FROM "PageView"
+      WHERE "createdAt" >= $1 AND "createdAt" <= $2
+        AND "utmSource" = $3 AND "utmMedium" = $4 AND "utmCampaign" = $5 AND "utmContent" = $6
+      ORDER BY "sessionId", "createdAt"
+    `, [since, until, source, medium, campaign, content]);
+    const bySession = new Map();
+    for (const r of rows) {
+      if (!bySession.has(r.sessionId)) bySession.set(r.sessionId, []);
+      bySession.get(r.sessionId).push({ path: r.path, createdAt: r.createdAt });
+    }
+    const sessions = [...bySession.entries()].map(([sessionId, views]) => ({ sessionId, views }));
+    res.json({ sessions });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Auto-post log ──────────────────────────────────────────────────────────
 // Will be written to by the postToFacebook(card) side effect once real Page
 // credentials exist (see server.js's card-published hook, not yet built) —

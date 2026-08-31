@@ -3588,6 +3588,18 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .ads-table td.ads-num { font-variant-numeric: tabular-nums; }
 .ads-log-table th, .ads-log-table td { text-align: left; }
+.utm-row-clickable { cursor: pointer; }
+.utm-row-clickable:hover { background: var(--hover-bg, rgba(128,128,128,0.08)); }
+.utm-journey-cell {
+  white-space: normal;
+  text-align: left !important;
+  background: var(--hover-bg, rgba(128,128,128,0.04));
+  padding: 12px 14px !important;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.utm-journey-line + .utm-journey-line { margin-top: 6px; }
+.utm-journey-label { font-weight: 600; color: var(--muted); }
 
 .ads-video-table th:nth-child(3), .ads-video-table td:nth-child(3),
 .ads-video-table th:nth-child(4), .ads-video-table td:nth-child(4) { text-align: right; }
