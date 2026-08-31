@@ -752,15 +752,21 @@ document.querySelectorAll('.cal-filter-btn').forEach((btn) => {
     if (mode === 'all') {
       filterDates = new Set();
     } else {
-      filterDates = new Set(datesInPreset(mode, [...dataDatesSet]));
-      const firstDate = [...filterDates].sort()[0];
+      const matched = datesInPreset(mode, [...dataDatesSet]);
+      // No synced data falls inside this preset yet (e.g. "วันนี้" before the
+      // daily sync has run) — an empty Set here would otherwise be read by
+      // filterEntries() as "no filter", silently showing all-time data
+      // instead of correctly showing "nothing for today". A sentinel date
+      // that can never match a real entry keeps the filter genuinely active.
+      filterDates = matched.length ? new Set(matched) : new Set(['__none__']);
+      const firstDate = matched.sort()[0];
       if (firstDate) {
         const view = new Date(firstDate + 'T12:00:00');
         calViewYear = view.getFullYear();
         calViewMonth = view.getMonth();
       }
     }
-    syncFilterBtns();
+    document.querySelectorAll('.cal-filter-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderDatePicker();
     applyFiltersAndRender();
   });
