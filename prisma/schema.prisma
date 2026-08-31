@@ -172,6 +172,11 @@ model PageVideoInsight {
   permalinkUrl  String   @default("") @db.Text
   views         Int      @default(0)
   postViews     Int      @default(0)
+  // Video-view count attributed to a Facebook ad promoting this exact video
+  // (matched via the ad's creative.video_id) — 0 for videos with no ad
+  // running against them. `views` above is the total across all sources;
+  // organic = views - adViews. See scripts/sync-video-ad-views.mjs.
+  adViews       Int      @default(0)
   likes         Int      @default(0)
   comments      Int      @default(0)
   shares        Int      @default(0)

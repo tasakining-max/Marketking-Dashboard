@@ -1178,6 +1178,7 @@ app.get('/api/page-video-insights', async (req, res) => {
         permalinkUrl: r.permalinkUrl,
         views: r.views,
         postViews: r.postViews,
+        adViews: r.adViews,
         likes: r.likes,
         comments: r.comments,
         shares: r.shares,
@@ -1213,6 +1214,22 @@ app.post('/api/page-video-insights', async (req, res) => {
     });
     invalidateCache('page-video-insights');
     res.status(201).json({ id: row.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Set by scripts/sync-video-ad-views.mjs — the view count attributable to a
+// Facebook ad promoting this exact video, kept separate from the regular
+// sync above so a normal re-sync never wipes it back to 0.
+app.patch('/api/page-video-insights/:videoId', async (req, res) => {
+  const { adViews } = req.body;
+  if (adViews == null) return res.status(400).json({ error: 'adViews is required' });
+  try {
+    const row = await prisma.pageVideoInsight.update({
+      where: { videoId: req.params.videoId },
+      data: { adViews: Number(adViews) || 0 },
+    });
+    invalidateCache('page-video-insights');
+    res.json({ id: row.id, videoId: row.videoId, adViews: row.adViews });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

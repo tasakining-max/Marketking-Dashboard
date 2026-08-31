@@ -3544,6 +3544,10 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-chart-svg .ads-bar { fill: var(--accent); cursor: pointer; }
 .ads-chart-svg .ads-bar.is-good { fill: var(--status-good); }
 .ads-chart-svg .ads-bar.is-warning { fill: var(--status-warning); }
+.ads-chart-svg .ads-bar-paid { fill: var(--status-warning); cursor: pointer; }
+.ads-chart-legend { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--muted); padding: 0 0 8px; }
+.ads-chart-legend-item { display: flex; align-items: center; gap: 6px; }
+.ads-chart-legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .ads-chart-svg .ads-bar:hover, .ads-chart-svg .ads-bar:focus { opacity: 0.85; }
 .ads-chart-svg .ads-bar-label { fill: var(--text); font-size: 12px; font-weight: 600; }
 .ads-chart-svg .ads-bar-name { fill: var(--text); font-size: 12px; }

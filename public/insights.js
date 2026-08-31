@@ -243,11 +243,27 @@ function renderTopVideosChart(videos) {
     nameLabel.appendChild(title);
     svg.appendChild(nameLabel);
 
-    const bar = svgEl('rect', {
+    // Only videos currently boosted by an ad have adViews > 0 (matched via
+    // the ad's creative.video_id — see scripts/sync-video-ad-views.mjs);
+    // everything else renders as a single fully-organic segment.
+    const paidViews = Math.min(v.adViews || 0, v.views);
+    const organicViews = v.views - paidViews;
+    const organicBarW = Math.max((organicViews / maxViews) * plotW, organicViews > 0 ? 2 : 0);
+    const paidBarW = Math.max((paidViews / maxViews) * plotW, paidViews > 0 ? 2 : 0);
+
+    const organicBar = svgEl('rect', {
       class: `ads-bar${isBest ? ' is-good' : ''}`,
-      x: labelW, y: cy, width: barW, height: barH, rx: 4, tabindex: 0,
+      'data-idx': i, x: labelW, y: cy, width: organicBarW, height: barH, rx: 4, tabindex: 0,
     });
-    svg.appendChild(bar);
+    svg.appendChild(organicBar);
+    if (paidViews > 0) {
+      const paidBar = svgEl('rect', {
+        class: 'ads-bar-paid',
+        'data-idx': i, x: labelW + organicBarW, y: cy, width: paidBarW, height: barH,
+        rx: organicViews > 0 ? 0 : 4,
+      });
+      svg.appendChild(paidBar);
+    }
 
     const valueLabel = svgEl('text', { class: 'ads-bar-label', x: labelW + barW + 8, y: cy + barH / 2 + 4 });
     valueLabel.textContent = fmtNum(v.views);
@@ -256,13 +272,25 @@ function renderTopVideosChart(videos) {
 
   container.appendChild(svg);
 
+  if (items.some((v) => v.adViews > 0)) {
+    const legend = document.createElement('div');
+    legend.className = 'ads-chart-legend';
+    legend.innerHTML = `
+      <span class="ads-chart-legend-item"><span class="ads-chart-legend-swatch" style="background:var(--accent)"></span>ออร์แกนิก</span>
+      <span class="ads-chart-legend-item"><span class="ads-chart-legend-swatch" style="background:var(--status-warning)"></span>จากโฆษณา</span>
+    `;
+    container.prepend(legend);
+  }
+
   const tooltip = document.createElement('div');
   tooltip.className = 'ads-chart-tooltip ads-chart-tooltip-rich';
   container.appendChild(tooltip);
 
-  const bars = svg.querySelectorAll('.ads-bar');
-  bars.forEach((bar, i) => {
-    const v = items[i];
+  const bars = svg.querySelectorAll('.ads-bar, .ads-bar-paid');
+  bars.forEach((bar) => {
+    const v = items[Number(bar.dataset.idx)];
+    const paidViews = Math.min(v.adViews || 0, v.views);
+    const organicViews = v.views - paidViews;
     function show() {
       tooltip.innerHTML = '';
       const nameRow = document.createElement('div');
@@ -272,7 +300,8 @@ function renderTopVideosChart(videos) {
       [
         ['วันที่', fmtDate(v.createdTime)],
         ['ความยาว', fmtLength(v.length)],
-        ['วิว', fmtNum(v.views)],
+        ['วิวรวม', fmtNum(v.views)],
+        ...(paidViews > 0 ? [['- ออร์แกนิก', fmtNum(organicViews)], ['- จากโฆษณา', fmtNum(paidViews)]] : []),
         ['Post views', fmtNum(v.postViews)],
         ['ไลก์', fmtNum(v.likes)],
         ['คอมเมนต์', fmtNum(v.comments)],
