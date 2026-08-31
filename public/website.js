@@ -471,13 +471,16 @@ function renderUtmTable(data) {
             sessions.forEach((s, i) => {
               const line = document.createElement('div');
               line.className = 'utm-journey-line';
-              const totalSec = s.views.length > 1
-                ? (new Date(s.views[s.views.length - 1].createdAt) - new Date(s.views[0].createdAt)) / 1000
-                : 0;
+              // A single-pageview session has no second timestamp to measure
+              // against — showing "0 วิ" would falsely imply they left
+              // instantly, when really we just can't tell how long they stayed.
+              const durationText = s.views.length > 1
+                ? fmtDuration((new Date(s.views[s.views.length - 1].createdAt) - new Date(s.views[0].createdAt)) / 1000)
+                : 'ดูหน้าเดียว ไม่ทราบระยะเวลา';
               const label = document.createElement('span');
               label.className = 'utm-journey-label';
               const who = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}` : 'อยู่บนเว็บ';
-              label.textContent = `${who} (${fmtDuration(totalSec)}): `;
+              label.textContent = `${who} (${durationText}): `;
               line.appendChild(label);
               const path = document.createElement('span');
               path.textContent = s.views.map((v, j) => {
