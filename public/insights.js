@@ -157,21 +157,38 @@ function renderInsights(videos) {
   if (videos.length < 3) return;
   const insights = [];
 
-  const byViewsDesc = [...videos].sort((a, b) => b.views - a.views);
-  const best = byViewsDesc[0];
+  // Views inflated by a running ad aren't a signal of organic appeal — every
+  // insight below ranks/compares by organicViews (views minus ad-attributed
+  // views) instead of raw views, so "best clip" and "short clips do better"
+  // reflect what the content itself did, not ad spend. See
+  // scripts/sync-video-ad-views.mjs for where adViews comes from.
+  const withOrganic = videos.map((v) => ({ ...v, organicViews: v.views - Math.min(v.adViews || 0, v.views) }));
+  const byOrganicDesc = [...withOrganic].sort((a, b) => b.organicViews - a.organicViews);
+  const byTotalDesc = [...withOrganic].sort((a, b) => b.views - a.views);
+
+  const bestOrganic = byOrganicDesc[0];
   insights.push({
     type: 'good', icon: '✅',
-    text: `"${firstLine(best.description, 50)}" ยอดวิวสูงสุด (${fmtNum(best.views)} วิว, ยาว ${fmtLength(best.length)}) — ลองดูว่ามีอะไรที่ทำให้โดนใจคนดูเป็นพิเศษ`,
+    text: `"${firstLine(bestOrganic.description, 50)}" ยอดวิวออร์แกนิกสูงสุด (${fmtNum(bestOrganic.organicViews)} วิว ไม่รวมยอดจากโฆษณา, ยาว ${fmtLength(bestOrganic.length)}) — ลองดูว่ามีอะไรที่ทำให้โดนใจคนดูเป็นพิเศษ`,
   });
 
-  const top5 = byViewsDesc.slice(0, 5);
-  const bottom5 = byViewsDesc.slice(-5);
+  const topTotal = byTotalDesc[0];
+  if (topTotal.videoId !== bestOrganic.videoId && (topTotal.adViews || 0) > 0) {
+    const adShare = Math.round((topTotal.adViews / topTotal.views) * 100);
+    insights.push({
+      type: 'neutral', icon: '📣',
+      text: `"${firstLine(topTotal.description, 50)}" วิวรวมสูงสุด (${fmtNum(topTotal.views)} วิว) แต่ ${adShare}% มาจากโฆษณา ไม่ใช่ยอดวิวออร์แกนิก — ไม่ควรใช้เป็นตัวชี้ว่าคอนเทนต์เองปังเป็นพิเศษ`,
+    });
+  }
+
+  const top5 = byOrganicDesc.slice(0, 5);
+  const bottom5 = byOrganicDesc.slice(-5);
   const avgLenTop = top5.reduce((s, v) => s + v.length, 0) / top5.length;
   const avgLenBottom = bottom5.reduce((s, v) => s + v.length, 0) / bottom5.length;
   if (avgLenTop < avgLenBottom * 0.8) {
     insights.push({
       type: 'neutral', icon: '📏',
-      text: `คลิปยอดวิวสูงสุด 5 อันดับ ยาวเฉลี่ย ${avgLenTop.toFixed(0)}s สั้นกว่ากลุ่มยอดวิวต่ำสุด (${avgLenBottom.toFixed(0)}s) — คลิปสั้นดูจะทำผลงานดีกว่า`,
+      text: `คลิปยอดวิวออร์แกนิกสูงสุด 5 อันดับ ยาวเฉลี่ย ${avgLenTop.toFixed(0)}s สั้นกว่ากลุ่มยอดวิวต่ำสุด (${avgLenBottom.toFixed(0)}s) — คลิปสั้นดูจะทำผลงานดีกว่า (ตัดผลจากโฆษณาออกแล้ว)`,
     });
   }
 
