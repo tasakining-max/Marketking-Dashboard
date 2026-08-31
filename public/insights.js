@@ -252,7 +252,7 @@ function renderTopVideosChart(videos) {
     const paidBarW = Math.max((paidViews / maxViews) * plotW, paidViews > 0 ? 2 : 0);
 
     const organicBar = svgEl('rect', {
-      class: `ads-bar${isBest ? ' is-good' : ''}`,
+      class: 'ads-bar',
       'data-idx': i, x: labelW, y: cy, width: organicBarW, height: barH, rx: 4, tabindex: 0,
     });
     svg.appendChild(organicBar);
