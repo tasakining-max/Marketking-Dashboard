@@ -391,6 +391,12 @@ const PATH_LABELS = {
 };
 function pathLabel(path) { return PATH_LABELS[path] || path; }
 function viewLabel(v) { return v.label || pathLabel(v.path); }
+function fmtDuration(seconds) {
+  if (seconds < 60) return `${Math.round(seconds)} วิ`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return s > 0 ? `${m} นาที ${s} วิ` : `${m} นาที`;
+}
 
 async function loadUtmSessionJourney(row) {
   const params = new URLSearchParams({
@@ -465,12 +471,20 @@ function renderUtmTable(data) {
             sessions.forEach((s, i) => {
               const line = document.createElement('div');
               line.className = 'utm-journey-line';
+              const totalSec = s.views.length > 1
+                ? (new Date(s.views[s.views.length - 1].createdAt) - new Date(s.views[0].createdAt)) / 1000
+                : 0;
               const label = document.createElement('span');
               label.className = 'utm-journey-label';
-              label.textContent = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}: ` : '';
+              const who = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}` : 'อยู่บนเว็บ';
+              label.textContent = `${who} (${fmtDuration(totalSec)}): `;
               line.appendChild(label);
               const path = document.createElement('span');
-              path.textContent = s.views.map(viewLabel).join(' → ');
+              path.textContent = s.views.map((v, j) => {
+                if (j === s.views.length - 1) return viewLabel(v);
+                const stepSec = (new Date(s.views[j + 1].createdAt) - new Date(v.createdAt)) / 1000;
+                return `${viewLabel(v)} (${fmtDuration(stepSec)})`;
+              }).join(' → ');
               line.appendChild(path);
               detailTd.appendChild(line);
             });
