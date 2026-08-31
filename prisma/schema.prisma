@@ -58,6 +58,18 @@ model Profile {
   imageUrl String @db.Text
 }
 
+// Last time a given profile (person) had a given dashboard tab open — one
+// row per profile+page, overwritten on every visit. Powers a "when did X
+// last check this tab" panel; not a full visit history/audit log.
+model TabView {
+  id          String   @id @default(uuid())
+  profileName String
+  page        String
+  viewedAt    DateTime @default(now())
+
+  @@unique([profileName, page])
+}
+
 model ActivityEntry {
   id        String   @id @default(uuid())
   text      String

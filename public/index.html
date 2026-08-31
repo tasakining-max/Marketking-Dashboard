@@ -75,6 +75,16 @@
       <button id="addKeyMessageBtn" class="add-key-message-btn" type="button">+ Add key message</button>
     </aside>
 
+    <aside id="tabViewsPanel" class="key-messages-panel collapsible-panel" hidden>
+      <div class="panel-header-row">
+        <h2><span class="panel-icon">👀</span><span class="panel-title-text"> เปิดดูล่าสุด</span></h2>
+        <button id="tabViewsRefreshBtn" class="panel-refresh-btn" type="button" aria-label="Refresh" title="Refresh">🔄</button>
+        <button class="panel-toggle-btn" type="button" aria-label="Collapse panel" title="Collapse">‹</button>
+      </div>
+      <p class="key-messages-hint">แต่ละคนเปิดแท็บไหนล่าสุดเมื่อไหร่ (เห็นเฉพาะเครื่องนี้)</p>
+      <div id="tabViewsList" class="key-messages-list"></div>
+    </aside>
+
     <div class="main-content">
       <main id="board">
         <section class="column" data-column="idea">
@@ -250,5 +260,6 @@
 
   <div id="toastContainer" class="toast-container"></div>
   <script src="app.js?v=20260708d"></script>
+  <script src="tab-tracker.js"></script>
 </body>
 </html>

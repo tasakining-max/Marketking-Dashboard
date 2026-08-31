@@ -2184,3 +2184,71 @@ document.querySelectorAll('.collapsible-panel').forEach((panel) => {
     if (panel.classList.contains('collapsed')) setCollapsed(false);
   });
 });
+
+// ─── "เปิดดูล่าสุด" panel — visible only on devices that have opened this
+// page with ?admin=1 once (see tab-tracker.js); everyone else never sees it.
+(function () {
+  const panel = document.getElementById('tabViewsPanel');
+  if (!panel) return;
+  if (localStorage.getItem('show_tab_tracker') !== '1') return;
+  panel.hidden = false;
+
+  const list = document.getElementById('tabViewsList');
+
+  function fmtRelative(iso) {
+    const d = new Date(iso);
+    const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+    if (diffMin < 1) return 'เมื่อสักครู่';
+    if (diffMin < 60) return `${diffMin} นาทีที่แล้ว`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} ชม.ที่แล้ว`;
+    return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function loadTabViews() {
+    try {
+      const res = await fetch('/api/tab-views');
+      const { entries } = await res.json();
+      list.innerHTML = '';
+      if (!entries.length) {
+        list.innerHTML = '<p class="key-messages-hint">ยังไม่มีข้อมูล</p>';
+        return;
+      }
+      const byProfile = new Map();
+      entries.forEach((e) => {
+        if (!byProfile.has(e.profileName)) byProfile.set(e.profileName, []);
+        byProfile.get(e.profileName).push(e);
+      });
+      [...byProfile.entries()].forEach(([profileName, rows]) => {
+        const group = document.createElement('div');
+        group.style.marginBottom = '12px';
+        const heading = document.createElement('p');
+        heading.style.fontWeight = '600';
+        heading.style.fontSize = '13px';
+        heading.textContent = profileName;
+        group.appendChild(heading);
+        rows.sort((a, b) => new Date(b.viewedAt) - new Date(a.viewedAt)).forEach((r) => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.justifyContent = 'space-between';
+          row.style.fontSize = '12px';
+          row.style.color = 'var(--muted)';
+          row.style.padding = '2px 0';
+          const tab = document.createElement('span');
+          tab.textContent = r.page;
+          const when = document.createElement('span');
+          when.textContent = fmtRelative(r.viewedAt);
+          row.appendChild(tab);
+          row.appendChild(when);
+          group.appendChild(row);
+        });
+        list.appendChild(group);
+      });
+    } catch (e) { console.error('Failed to load tab views', e); }
+  }
+
+  loadTabViews();
+  document.getElementById('tabViewsRefreshBtn').addEventListener('click', loadTabViews);
+  setInterval(() => { if (!document.hidden) loadTabViews(); }, 30000);
+})();

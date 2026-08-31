@@ -1423,6 +1423,28 @@ app.post('/api/profiles', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// "When did X last have this tab open" — one row per profile+page,
+// overwritten on every visit (see server.js's TabView model comment).
+app.post('/api/tab-views', async (req, res) => {
+  const { profileName, page } = req.body;
+  if (!profileName || !page) return res.status(400).json({ error: 'profileName and page are required' });
+  try {
+    await prisma.tabView.upsert({
+      where: { profileName_page: { profileName: String(profileName), page: String(page) } },
+      update: { viewedAt: new Date() },
+      create: { profileName: String(profileName), page: String(page) },
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tab-views', async (req, res) => {
+  try {
+    const rows = await prisma.tabView.findMany({ orderBy: { viewedAt: 'desc' } });
+    res.json({ entries: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Dashboard running at http://localhost:${PORT}`));
