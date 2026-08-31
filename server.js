@@ -1069,10 +1069,47 @@ app.get('/api/website-utm-sessions', async (req, res) => {
         AND "utmSource" = $3 AND "utmMedium" = $4 AND "utmCampaign" = $5 AND "utmContent" = $6
       ORDER BY "sessionId", "createdAt"
     `, [since, until, source, medium, campaign, content]);
+
+    // /products/{typeId}/{productId}/{btu?} paths are IDs, not readable —
+    // resolve them to real category/model names so the journey reads like
+    // "หมวดติดผนัง → FWCE09-AF2M 9,000 BTU" instead of raw path segments.
+    const typeIds = new Set();
+    const productIds = new Set();
+    for (const r of rows) {
+      const m = r.path.match(/^\/products\/(\d+)(?:\/([^/]+))?/);
+      if (m) {
+        typeIds.add(Number(m[1]));
+        if (m[2]) productIds.add(m[2]);
+      }
+    }
+    const [typeRows, productRows] = await Promise.all([
+      typeIds.size
+        ? tasakiWebPool.query(`SELECT id, "nameTh" FROM "ProductType" WHERE id = ANY($1)`, [[...typeIds]])
+        : { rows: [] },
+      productIds.size
+        ? tasakiWebPool.query(`SELECT id, "nameTh", model FROM "Product" WHERE id = ANY($1)`, [[...productIds]])
+        : { rows: [] },
+    ]);
+    const typeNameById = new Map(typeRows.rows.map((t) => [t.id, t.nameTh]));
+    const productById = new Map(productRows.rows.map((p) => [p.id, p]));
+
+    function labelForPath(path) {
+      const m = path.match(/^\/products\/(\d+)(?:\/([^/]+)(?:\/(\d+))?)?$/);
+      if (!m) return null;
+      const typeName = typeNameById.get(Number(m[1]));
+      if (!typeName) return null;
+      if (!m[2]) return `หมวด${typeName}`;
+      const product = productById.get(m[2]);
+      if (!product) return `หมวด${typeName}`;
+      const productLabel = [product.nameTh, product.model].filter(Boolean).join(' ');
+      const btuLabel = m[3] ? ` ${Number(m[3]).toLocaleString('th-TH')} BTU` : '';
+      return `${productLabel}${btuLabel}`;
+    }
+
     const bySession = new Map();
     for (const r of rows) {
       if (!bySession.has(r.sessionId)) bySession.set(r.sessionId, []);
-      bySession.get(r.sessionId).push({ path: r.path, createdAt: r.createdAt });
+      bySession.get(r.sessionId).push({ path: r.path, label: labelForPath(r.path), createdAt: r.createdAt });
     }
     const sessions = [...bySession.entries()].map(([sessionId, views]) => ({ sessionId, views }));
     res.json({ sessions });

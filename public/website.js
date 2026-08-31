@@ -390,6 +390,7 @@ const PATH_LABELS = {
   '/troubleshooting': 'แก้ปัญหาเบื้องต้น',
 };
 function pathLabel(path) { return PATH_LABELS[path] || path; }
+function viewLabel(v) { return v.label || pathLabel(v.path); }
 
 async function loadUtmSessionJourney(row) {
   const params = new URLSearchParams({
@@ -430,8 +431,8 @@ function renderUtmTable(data) {
       r.medium || '-',
       r.campaign || '-',
       r.content || '-',
-      fmtNum(r.views),
       fmtNum(r.sessions),
+      fmtNum(r.views),
       new Date(r.firstSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
       new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
     ].forEach((val, idx) => {
@@ -469,7 +470,7 @@ function renderUtmTable(data) {
               label.textContent = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}: ` : '';
               line.appendChild(label);
               const path = document.createElement('span');
-              path.textContent = s.views.map((v) => pathLabel(v.path)).join(' → ');
+              path.textContent = s.views.map(viewLabel).join(' → ');
               line.appendChild(path);
               detailTd.appendChild(line);
             });
