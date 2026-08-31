@@ -416,6 +416,22 @@ function renderUtmTable(data) {
 const siteEmpty = document.getElementById('siteEmpty');
 const siteBody = document.getElementById('siteBody');
 let currentDays = 30;
+let currentRange = null; // [sinceDate, untilDate] when a วันนี้/เมื่อวาน preset is active
+
+function presetRange(preset) {
+  const now = new Date();
+  if (preset === 'today') {
+    const s = new Date(now); s.setHours(0, 0, 0, 0);
+    const e = new Date(now); e.setHours(23, 59, 59, 999);
+    return [s, e];
+  }
+  if (preset === 'yesterday') {
+    const s = new Date(now); s.setDate(s.getDate() - 1); s.setHours(0, 0, 0, 0);
+    const e = new Date(s); e.setHours(23, 59, 59, 999);
+    return [s, e];
+  }
+  return null;
+}
 
 function renderAll(data) {
   if (!data.totals.views) {
@@ -436,7 +452,10 @@ function renderAll(data) {
 
 async function fetchAndRender() {
   try {
-    const res = await fetch(`/api/website-pageviews?days=${currentDays}`);
+    const url = currentRange
+      ? `/api/website-pageviews?since=${encodeURIComponent(currentRange[0].toISOString())}&until=${encodeURIComponent(currentRange[1].toISOString())}`
+      : `/api/website-pageviews?days=${currentDays}`;
+    const res = await fetch(url);
     const data = await res.json();
     renderAll(data);
   } catch (e) {
@@ -448,7 +467,12 @@ document.querySelectorAll('.cal-filter-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.cal-filter-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    currentDays = Number(btn.dataset.days);
+    if (btn.dataset.preset) {
+      currentRange = presetRange(btn.dataset.preset);
+    } else {
+      currentRange = null;
+      currentDays = Number(btn.dataset.days);
+    }
     fetchAndRender();
   });
 });

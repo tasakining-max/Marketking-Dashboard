@@ -988,47 +988,55 @@ app.post('/api/ad-insights', async (req, res) => {
 // straight from the LAN Postgres server rather than duplicating the tracker.
 app.get('/api/website-pageviews', async (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  // Explicit calendar-day range (e.g. "วันนี้"/"เมื่อวาน" presets computed
+  // client-side) overrides the rolling `days` window when both are given.
+  const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
+  const untilParam = typeof req.query.until === 'string' ? new Date(req.query.until) : null;
+  const hasRange = sinceParam && !isNaN(sinceParam) && untilParam && !isNaN(untilParam);
+  const sinceDate = hasRange ? sinceParam : new Date(Date.now() - days * 86400000);
+  const untilDate = hasRange ? untilParam : new Date();
+  const cacheKey = hasRange ? `${sinceDate.toISOString()}:${untilDate.toISOString()}` : `days:${days}`;
   try {
-    const data = await cached(`website-pageviews:${days}`, async () => {
-      const since = `now() - interval '${days} days'`;
+    const data = await cached(`website-pageviews:${cacheKey}`, async () => {
+      const range = [sinceDate, untilDate];
       const [totals, daily, topPages, devices, statusBreakdown, referrers, utmCampaigns] = await Promise.all([
         tasakiWebPool.query(`
           SELECT count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
-          FROM "PageView" WHERE "createdAt" >= ${since}
-        `),
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
+        `, range),
         tasakiWebPool.query(`
           SELECT to_char("createdAt", 'YYYY-MM-DD') AS date, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
-          FROM "PageView" WHERE "createdAt" >= ${since}
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
           GROUP BY 1 ORDER BY 1
-        `),
+        `, range),
         tasakiWebPool.query(`
           SELECT path, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
-          FROM "PageView" WHERE "createdAt" >= ${since}
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
           GROUP BY path ORDER BY views DESC LIMIT 25
-        `),
+        `, range),
         tasakiWebPool.query(`
           SELECT device, count(*)::int AS views
-          FROM "PageView" WHERE "createdAt" >= ${since}
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
           GROUP BY device ORDER BY views DESC
-        `),
+        `, range),
         tasakiWebPool.query(`
           SELECT status, count(*)::int AS views
-          FROM "PageView" WHERE "createdAt" >= ${since}
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
           GROUP BY status ORDER BY views DESC
-        `),
+        `, range),
         tasakiWebPool.query(`
           SELECT referrer, count(*)::int AS views
-          FROM "PageView" WHERE "createdAt" >= ${since}
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
           GROUP BY referrer ORDER BY views DESC LIMIT 200
-        `),
+        `, range),
         tasakiWebPool.query(`
           SELECT "utmSource" AS source, "utmMedium" AS medium, "utmCampaign" AS campaign, "utmContent" AS content,
             count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions,
             min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
-          FROM "PageView" WHERE "createdAt" >= ${since} AND "utmSource" != ''
+          FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmSource" != ''
           GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
           ORDER BY views DESC
-        `),
+        `, range),
       ]);
       return {
         totals: totals.rows[0],
