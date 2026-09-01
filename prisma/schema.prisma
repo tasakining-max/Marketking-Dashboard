@@ -163,6 +163,21 @@ model CompetitorSeoNote {
   createdAt DateTime @default(now())
 }
 
+// Checklist of 30 target keywords for tasaki.co.th's organic/paid Google
+// presence — since Google blocks automated checking (see ส่องคู่แข่ง page
+// notes), the checkmarks are filled in by hand after a real browser search.
+model SeoKeyword {
+  id          String    @id @default(uuid())
+  keyword     String
+  category    String    @default("")
+  organic     Boolean   @default(false)
+  ads         Boolean   @default(false)
+  note        String    @default("") @db.Text
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  checkedAt   DateTime?
+}
+
 // "แผนเว็บไซต์เป็นอันดับ 1" 1-month sprint to-do list (see the ส่องคู่แข่ง
 // competitive report this was derived from). phase groups items into weeks.
 model WebsiteTodo {

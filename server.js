@@ -886,6 +886,50 @@ app.delete('/api/competitor-seo-notes/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── SEO keyword checklist (30 target keywords, checked by hand) ────────────
+app.get('/api/seo-keywords', async (req, res) => {
+  try {
+    const entries = await cached('seo-keywords', async () => {
+      return prisma.seoKeyword.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] });
+    });
+    res.json({ entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/seo-keywords', async (req, res) => {
+  const { keyword, category, sortOrder } = req.body;
+  if (!keyword || !String(keyword).trim()) return res.status(400).json({ error: 'keyword is required' });
+  try {
+    const row = await prisma.seoKeyword.create({
+      data: { keyword: String(keyword).trim(), category: category ? String(category) : '', sortOrder: Number(sortOrder) || 0 },
+    });
+    invalidateCache('seo-keywords');
+    res.status(201).json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/seo-keywords/:id', async (req, res) => {
+  const { organic, ads, note } = req.body;
+  try {
+    const data = {};
+    if (organic !== undefined) data.organic = Boolean(organic);
+    if (ads !== undefined) data.ads = Boolean(ads);
+    if (note !== undefined) data.note = String(note).trim();
+    if (organic !== undefined || ads !== undefined) data.checkedAt = new Date();
+    const row = await prisma.seoKeyword.update({ where: { id: req.params.id }, data });
+    invalidateCache('seo-keywords');
+    res.json(row);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/seo-keywords/:id', async (req, res) => {
+  try {
+    await prisma.seoKeyword.delete({ where: { id: req.params.id } });
+    invalidateCache('seo-keywords');
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Website Todo ("แผนเว็บไซต์เป็นอันดับ 1") ───────────────────────────────
 app.get('/api/website-todos', async (req, res) => {
   try {

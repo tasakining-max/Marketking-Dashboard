@@ -96,7 +96,38 @@
     </section>
 
     <section class="report-section">
-      <h2>🔍 3. Website — Google Ads / SEO Keyword</h2>
+      <div class="report-section-header">
+        <h2>🎯 3. Checklist คีย์เวิร์ดเป้าหมาย (30 คำ)</h2>
+        <div class="report-nav">
+          <button id="seoKeywordRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+        </div>
+      </div>
+      <p class="key-messages-hint">ลองค้นแต่ละคำใน Google จริง (เช็คอัตโนมัติไม่ได้ Google บล็อก bot) แล้วติ๊กว่า tasaki.co.th ขึ้น Organic และ/หรือ Ads ไหม — <span id="seoKeywordProgress"></span></p>
+      <div class="ads-table-wrap">
+        <table class="ads-table">
+          <thead>
+            <tr>
+              <th>คีย์เวิร์ด</th>
+              <th>หมวด</th>
+              <th>Organic</th>
+              <th>Ads</th>
+              <th>เช็คล่าสุด</th>
+              <th>โน้ต</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="seoKeywordBody"></tbody>
+        </table>
+      </div>
+      <form id="seoKeywordAddForm" class="ads-action-log-form">
+        <input id="seoKeywordInput" type="text" placeholder="เพิ่มคีย์เวิร์ดใหม่" maxlength="150" style="flex:1; min-width:200px;" />
+        <input id="seoKeywordCategoryInput" type="text" placeholder="หมวด (เช่น BTU, แบรนด์)" maxlength="60" style="max-width:180px;" />
+        <button type="submit" class="report-nav-btn">+ เพิ่มคีย์เวิร์ด</button>
+      </form>
+    </section>
+
+    <section class="report-section">
+      <h2>🔍 4. Website — Google Ads / SEO Keyword (บันทึกอิสระ)</h2>
       <p class="key-messages-hint">บันทึกสิ่งที่เจอเวลาค้นหาคำที่ลูกค้าน่าจะใช้ (เช่น "แอร์ 12000 btu ยี่ห้อไหนดี") — ใครติด Google Ads, ใครติดอันดับ SEO ธรรมชาติ</p>
 
       <form id="seoNoteForm" class="ads-action-log-form">

@@ -168,6 +168,76 @@ async function loadSeoNotes() {
   } catch (e) { console.error('Failed to load SEO notes:', e.message); }
 }
 
+// ─── 3. SEO keyword checklist ───────────────────────────────────────────
+async function loadSeoKeywords() {
+  try {
+    const res = await fetch('/api/seo-keywords');
+    const { entries } = await res.json();
+    const tbody = document.getElementById('seoKeywordBody');
+    const progress = document.getElementById('seoKeywordProgress');
+    const hitCount = entries.filter((e) => e.organic || e.ads).length;
+    progress.textContent = `ติดแล้ว ${hitCount}/${entries.length} คำ`;
+
+    tbody.innerHTML = entries.map((e) => `
+      <tr data-id="${e.id}">
+        <td>${escapeHtml(e.keyword)}</td>
+        <td>${escapeHtml(e.category || '-')}</td>
+        <td class="ads-num"><input type="checkbox" class="kw-organic" ${e.organic ? 'checked' : ''} /></td>
+        <td class="ads-num"><input type="checkbox" class="kw-ads" ${e.ads ? 'checked' : ''} /></td>
+        <td>${e.checkedAt ? formatLogDate(e.checkedAt) : '-'}</td>
+        <td><input type="text" class="kw-note" value="${escapeHtml(e.note || '')}" placeholder="โน้ต..." style="width:100%; border:none; background:transparent; font-size:12px;" /></td>
+        <td><button type="button" class="ads-action-log-delete kw-delete" title="ลบ">✕</button></td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('tr').forEach((tr) => {
+      const id = tr.dataset.id;
+      tr.querySelector('.kw-organic').addEventListener('change', async (ev) => {
+        await fetch(`/api/seo-keywords/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organic: ev.target.checked }),
+        });
+        loadSeoKeywords();
+      });
+      tr.querySelector('.kw-ads').addEventListener('change', async (ev) => {
+        await fetch(`/api/seo-keywords/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ads: ev.target.checked }),
+        });
+        loadSeoKeywords();
+      });
+      tr.querySelector('.kw-note').addEventListener('change', async (ev) => {
+        await fetch(`/api/seo-keywords/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: ev.target.value }),
+        });
+      });
+      tr.querySelector('.kw-delete').addEventListener('click', async () => {
+        await fetch(`/api/seo-keywords/${id}`, { method: 'DELETE' });
+        loadSeoKeywords();
+      });
+    });
+  } catch (e) { console.error('Failed to load SEO keywords:', e.message); }
+}
+
+document.getElementById('seoKeywordAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const kwInput = document.getElementById('seoKeywordInput');
+  const catInput = document.getElementById('seoKeywordCategoryInput');
+  const keyword = kwInput.value.trim();
+  if (!keyword) return;
+  await fetch('/api/seo-keywords', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword, category: catInput.value.trim() }),
+  });
+  kwInput.value = '';
+  catInput.value = '';
+  loadSeoKeywords();
+});
+
+document.getElementById('seoKeywordRefreshBtn').addEventListener('click', loadSeoKeywords);
+loadSeoKeywords();
+
 document.getElementById('seoNoteForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = document.getElementById('seoNoteInput');
