@@ -186,17 +186,26 @@ async function loadSeoKeywords() {
       return bHit - aHit;
     });
 
-    tbody.innerHTML = sorted.map((e) => `
+    tbody.innerHTML = sorted.map((e) => {
+      // "ทำแล้ว รอผล" in the note means we've shipped a page/article for this
+      // keyword and are just waiting on Google to index it — orange makes
+      // that pending-but-in-progress state easy to scan at a glance.
+      const pending = (e.note || '').includes('รอผล');
+      const noteStyle = pending
+        ? 'width:100%; border:none; background:transparent; font-size:12px; color:var(--status-warning); font-weight:600;'
+        : 'width:100%; border:none; background:transparent; font-size:12px;';
+      return `
       <tr data-id="${e.id}">
         <td>${escapeHtml(e.keyword)}</td>
         <td>${escapeHtml(e.category || '-')}</td>
         <td class="ads-num"><input type="checkbox" class="kw-organic" ${e.organic ? 'checked' : ''} /></td>
         <td class="ads-num"><input type="checkbox" class="kw-ads" ${e.ads ? 'checked' : ''} /></td>
         <td>${e.checkedAt ? formatLogDate(e.checkedAt) : '-'}</td>
-        <td><input type="text" class="kw-note" value="${escapeHtml(e.note || '')}" placeholder="โน้ต..." style="width:100%; border:none; background:transparent; font-size:12px;" /></td>
+        <td><input type="text" class="kw-note" value="${escapeHtml(e.note || '')}" placeholder="โน้ต..." style="${noteStyle}" /></td>
         <td><button type="button" class="ads-action-log-delete kw-delete" title="ลบ">✕</button></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     tbody.querySelectorAll('tr').forEach((tr) => {
       const id = tr.dataset.id;
