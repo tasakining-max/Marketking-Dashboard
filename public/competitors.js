@@ -178,7 +178,15 @@ async function loadSeoKeywords() {
     const hitCount = entries.filter((e) => e.organic || e.ads).length;
     progress.textContent = `ติดแล้ว ${hitCount}/${entries.length} คำ`;
 
-    tbody.innerHTML = entries.map((e) => `
+    // Keywords that hit (organic or ads) float to the top automatically —
+    // stable sort keeps each group's original order otherwise.
+    const sorted = [...entries].sort((a, b) => {
+      const aHit = a.organic || a.ads ? 1 : 0;
+      const bHit = b.organic || b.ads ? 1 : 0;
+      return bHit - aHit;
+    });
+
+    tbody.innerHTML = sorted.map((e) => `
       <tr data-id="${e.id}">
         <td>${escapeHtml(e.keyword)}</td>
         <td>${escapeHtml(e.category || '-')}</td>
