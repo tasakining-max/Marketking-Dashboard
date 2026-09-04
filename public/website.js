@@ -155,11 +155,12 @@ function renderInsights(data) {
       text: `มีคนคลิกจากโฆษณา Facebook ที่ติด UTM เข้าเว็บแล้ว ${fmtNum(fbClicks)} ครั้ง`,
     });
   }
-  const aiReferralSources = ['chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'claude.ai', 'gemini.google.com', 'copilot.microsoft.com'];
-  const aiReferralRows = utmRows.filter((r) => aiReferralSources.includes(r.source));
-  const aiReferralViews = aiReferralRows.reduce((sum, r) => sum + r.views, 0);
+  // Domain-based, not UTM-based — catches Gemini/Perplexity/Copilot/Claude
+  // referrals too, not just ChatGPT (the only one that auto-tags UTM).
+  const aiRows = (data.aiReferrals || []).filter((r) => r.source && !r.source.startsWith('Bing'));
+  const aiReferralViews = aiRows.reduce((sum, r) => sum + r.views, 0);
   if (aiReferralViews > 0) {
-    const names = [...new Set(aiReferralRows.map((r) => r.source))].join(', ');
+    const names = aiRows.map((r) => r.source).join(', ');
     insights.push({
       type: 'good', icon: '🤖',
       text: `AI Search ส่งคนเข้าเว็บจริงแล้ว ${fmtNum(aiReferralViews)} ครั้ง (จาก ${names}) — สัญญาณว่างาน AI Search citability เริ่มเห็นผล`,
@@ -524,6 +525,72 @@ function presetRange(preset) {
   return null;
 }
 
+function renderAiReferralTable(data) {
+  const tbody = document.getElementById('siteAiReferralBody');
+  tbody.innerHTML = '';
+  const rows = data.aiReferrals || [];
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.textContent = 'ยังไม่มีคนคลิกเข้ามาจาก AI ในช่วงเวลานี้';
+    td.style.textAlign = 'center';
+    td.style.color = 'var(--text-muted, #888)';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    [
+      r.source || '-',
+      fmtNum(r.sessions),
+      fmtNum(r.views),
+      new Date(r.firstSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+      new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+    ].forEach((val, idx) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      if (idx === 1 || idx === 2) td.className = 'ads-num';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAiBotTable(data) {
+  const tbody = document.getElementById('siteAiBotBody');
+  tbody.innerHTML = '';
+  const rows = data.aiBotHits || [];
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.textContent = 'ยังไม่มี AI bot เข้ามาดึงเนื้อหาในช่วงเวลานี้';
+    td.style.textAlign = 'center';
+    td.style.color = 'var(--text-muted, #888)';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    [
+      r.botName || '-',
+      fmtNum(r.hits),
+      fmtNum(r.paths),
+      new Date(r.firstSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+      new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+    ].forEach((val, idx) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      if (idx === 1 || idx === 2) td.className = 'ads-num';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
 function renderAll(data) {
   if (!data.totals.views) {
     siteEmpty.hidden = false;
@@ -536,6 +603,8 @@ function renderAll(data) {
   renderInsights(data);
   renderTrendChart(data);
   renderSourceChart(data);
+  renderAiReferralTable(data);
+  renderAiBotTable(data);
   renderUtmTable(data);
   renderDeviceGrid(data);
   renderTopPages(data);

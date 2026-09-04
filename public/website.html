@@ -70,6 +70,44 @@
             </div>
 
             <div class="report-list-wrap" style="margin-bottom:24px;">
+              <h3>🤖 ทราฟฟิกจาก AI (ChatGPT, Gemini, Perplexity ฯลฯ)</h3>
+              <p class="key-messages-hint">นับจากโดเมนของ referrer โดยตรง ไม่ต้องพึ่ง UTM — เห็นได้แม้ลิงก์นั้นไม่ได้ติด utm_source (ChatGPT เป็นเจ้าเดียวที่ติด UTM ให้อัตโนมัติ) แถว Bing แยกไว้ต่างหากเพราะ Bing Copilot กับผลค้นหาปกติใช้ referrer โดเมนเดียวกัน แยกไม่ออกว่าอันไหนเป็น AI</p>
+              <div class="ads-table-wrap">
+                <table class="ads-table">
+                  <thead>
+                    <tr>
+                      <th>แหล่ง AI</th>
+                      <th>ผู้เข้าชม</th>
+                      <th>เข้าชม (หน้า)</th>
+                      <th>เจอครั้งแรก</th>
+                      <th>เจอล่าสุด</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siteAiReferralBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="report-list-wrap" style="margin-bottom:24px;">
+              <h3>🕷️ AI Bot ที่มาดึงเนื้อหา (ไม่ใช่คนคลิก)</h3>
+              <p class="key-messages-hint">บอทของ AI (GPTBot, ClaudeBot, PerplexityBot ฯลฯ) ที่เข้ามาดึงเนื้อหาเว็บไปอ้างอิง/เทรน — ต่างจากตารางด้านบนที่นับ "คนคลิกลิงก์จาก AI เข้ามา" ตารางนี้บอกว่า AI ตัวไหนกำลังอ่านเว็บเราอยู่บ้าง ไม่รวม Googlebot/Bingbot เพราะปนกับการค้นหาปกติแยกไม่ออก</p>
+              <div class="ads-table-wrap">
+                <table class="ads-table">
+                  <thead>
+                    <tr>
+                      <th>บอท</th>
+                      <th>จำนวนครั้ง</th>
+                      <th>หน้าที่เข้าดึง</th>
+                      <th>เจอครั้งแรก</th>
+                      <th>เจอล่าสุด</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siteAiBotBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="report-list-wrap" style="margin-bottom:24px;">
               <h3>แคมเปญ UTM (จากโฆษณา/ลิงก์ที่ติด UTM)</h3>
               <p class="key-messages-hint">คลิกที่มาจากลิงก์ที่ติด utm_source/utm_medium/utm_campaign (เช่น จาก Facebook Ads) เท่านั้น — คลิกจากลิงก์ทั่วไปที่ไม่ได้ติด UTM จะไม่ขึ้นในตารางนี้ — คลิกที่แถวเพื่อดูเส้นทางการเข้าชมแต่ละหน้า พร้อมชื่อรุ่นสินค้าจริงและระยะเวลาที่อยู่แต่ละหน้า</p>
               <div class="ads-table-wrap">

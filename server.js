@@ -1043,7 +1043,7 @@ app.get('/api/website-pageviews', async (req, res) => {
   try {
     const data = await cached(`website-pageviews:${cacheKey}`, async () => {
       const range = [sinceDate, untilDate];
-      const [totals, daily, topPages, devices, statusBreakdown, referrers, utmCampaigns] = await Promise.all([
+      const [totals, daily, topPages, devices, statusBreakdown, referrers, utmCampaigns, aiReferrals, aiBotHits] = await Promise.all([
         tasakiWebPool.query(`
           SELECT count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions
           FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2
@@ -1081,6 +1081,44 @@ app.get('/api/website-pageviews', async (req, res) => {
           GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
           ORDER BY views DESC
         `, range),
+        // Referrer-domain based (not UTM-based) AI referral detection — most AI
+        // engines besides ChatGPT don't tag outbound links with utm_source, so
+        // this is the only way to see Gemini/Perplexity/Copilot/Claude clicks
+        // at all. Bing is deliberately kept separate: its Copilot chat answers
+        // share the same bing.com referrer as plain search, so a Bing hit can't
+        // be attributed to AI vs. regular search.
+        tasakiWebPool.query(`
+          SELECT
+            CASE
+              WHEN referrer ILIKE '%chatgpt.com%' OR referrer ILIKE '%chat.openai.com%' THEN 'ChatGPT'
+              WHEN referrer ILIKE '%perplexity.ai%' THEN 'Perplexity'
+              WHEN referrer ILIKE '%gemini.google.com%' THEN 'Gemini'
+              WHEN referrer ILIKE '%copilot.microsoft.com%' THEN 'Copilot'
+              WHEN referrer ILIKE '%claude.ai%' THEN 'Claude'
+              WHEN referrer ILIKE '%you.com%' THEN 'You.com'
+              WHEN referrer ILIKE '%bing.com%' THEN 'Bing (ค้นหา+AI ปนกัน)'
+            END AS source,
+            count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions,
+            min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
+          FROM "PageView"
+          WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND (
+            referrer ILIKE '%chatgpt.com%' OR referrer ILIKE '%chat.openai.com%' OR
+            referrer ILIKE '%perplexity.ai%' OR referrer ILIKE '%gemini.google.com%' OR
+            referrer ILIKE '%copilot.microsoft.com%' OR referrer ILIKE '%claude.ai%' OR
+            referrer ILIKE '%you.com%' OR referrer ILIKE '%bing.com%'
+          )
+          GROUP BY source ORDER BY views DESC
+        `, range),
+        // Server-side AI crawler hits (GPTBot, ClaudeBot, PerplexityBot, etc.)
+        // — logged by tasaki-web's proxy.ts on every request, separate from
+        // PageView (which only fires from client-side JS that bots never run).
+        // Table may not exist yet on older DB snapshots, so tolerate that.
+        tasakiWebPool.query(`
+          SELECT "botName", count(*)::int AS hits, count(DISTINCT path)::int AS paths,
+            min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
+          FROM "AiBotHit" WHERE "createdAt" >= $1 AND "createdAt" <= $2
+          GROUP BY "botName" ORDER BY hits DESC
+        `, range).catch((e) => (e.code === '42P01' ? { rows: [] } : Promise.reject(e))),
       ]);
       return {
         totals: totals.rows[0],
@@ -1090,6 +1128,8 @@ app.get('/api/website-pageviews', async (req, res) => {
         statusBreakdown: statusBreakdown.rows,
         referrers: referrers.rows,
         utmCampaigns: utmCampaigns.rows,
+        aiReferrals: aiReferrals.rows,
+        aiBotHits: aiBotHits.rows,
       };
     });
     res.json(data);
