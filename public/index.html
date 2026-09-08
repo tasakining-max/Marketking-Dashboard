@@ -201,6 +201,15 @@
               <button type="button" id="cardPlanDateClearBtn" class="plan-date-clear-btn">✕ Clear</button>
             </div>
           </div>
+          <div id="cardScheduleLabel" class="plan-date-label" hidden>
+            <span>🤖 เวลาโพส Facebook อัตโนมัติ</span>
+            <div class="plan-date-row">
+              <label class="tag-checkbox" style="font-weight:400;"><input type="radio" name="cardScheduleMode" id="cardScheduleModeNow" value="now" checked /> โพสทันที (Publish Now)</label>
+              <label class="tag-checkbox" style="font-weight:400;"><input type="radio" name="cardScheduleMode" id="cardScheduleModeLater" value="later" /> ตั้งเวลา (Set a date)</label>
+            </div>
+            <input type="datetime-local" id="cardScheduleAt" hidden />
+            <span class="key-messages-hint" style="font-weight:400;">Reel ตั้งเวลาผ่าน Facebook โดยตรง ส่วน Story จะโพสตามให้อัตโนมัติตอนถึงเวลา (คลาดเคลื่อนได้ไม่เกิน ~1 นาที) — ต้องมากกว่า 10 นาที และไม่เกิน 29 วันจากตอนนี้</span>
+          </div>
           <div id="cardPublishedDateLabel" class="plan-date-label" hidden>
             <span>✅ Published Date</span>
             <div class="plan-date-row">

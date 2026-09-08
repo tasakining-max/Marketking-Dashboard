@@ -21,7 +21,7 @@ const PLATFORM_ICONS = {
   tiktok: '/assets/tiktok.jpg',
   youtube: '/assets/youtube.png',
 };
-const STATUS_LABELS = { success: '✓ สำเร็จ', failed: '✕ ล้มเหลว', pending: '… กำลังโพสต์', dry_run: '🧪 Dry-run (ยังไม่โพสต์จริง)', manual: '📝 โพสเอง' };
+const STATUS_LABELS = { success: '✓ สำเร็จ', scheduled: '🕒 ตั้งเวลาไว้แล้ว', failed: '✕ ล้มเหลว', pending: '… กำลังโพสต์', dry_run: '🧪 Dry-run (ยังไม่โพสต์จริง)', manual: '📝 โพสเอง' };
 
 function renderAutoPostLog(entries) {
   const empty = document.getElementById('autoPostEmpty');

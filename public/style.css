@@ -3662,6 +3662,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   font-weight: 600;
 }
 .ads-status-badge.is-success { background: color-mix(in srgb, var(--status-good) 15%, transparent); color: var(--status-good); }
+.ads-status-badge.is-scheduled { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: #8a6100; }
 .ads-status-badge.is-failed { background: color-mix(in srgb, var(--status-critical) 15%, transparent); color: var(--status-critical); }
 .ads-status-badge.is-pending { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: #8a6100; }
 .ads-status-badge.is-dry_run { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }

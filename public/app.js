@@ -90,6 +90,10 @@ const shootNoteInput = document.getElementById('cardShootNote');
 const planDateLabel = document.getElementById('cardPlanDateLabel');
 const planDateInput = document.getElementById('cardPlanDate');
 const planDateClearBtn = document.getElementById('cardPlanDateClearBtn');
+const scheduleLabel = document.getElementById('cardScheduleLabel');
+const scheduleModeNowInput = document.getElementById('cardScheduleModeNow');
+const scheduleModeLaterInput = document.getElementById('cardScheduleModeLater');
+const scheduleAtInput = document.getElementById('cardScheduleAt');
 const publishedDateLabel = document.getElementById('cardPublishedDateLabel');
 const publishedDateInput = document.getElementById('cardPublishedDate');
 const todoLabel = document.getElementById('cardTodoLabel');
@@ -1313,6 +1317,12 @@ shootDateClearBtn.addEventListener('click', () => {
   shootDateClearRequested = true;
 });
 
+function updateScheduleAtVisibility() {
+  scheduleAtInput.hidden = !scheduleModeLaterInput.checked;
+}
+scheduleModeNowInput.addEventListener('change', updateScheduleAtVisibility);
+scheduleModeLaterInput.addEventListener('change', updateScheduleAtVisibility);
+
 issueAddBtn.addEventListener('click', addIssue);
 issueInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -1664,6 +1674,17 @@ function openDialog(card) {
   planDateLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube') && !card.publishedAt);
   planDateInput.value = (card && card.plannedPublishDate) ? card.plannedPublishDate.slice(0, 10) : '';
   planDateClearRequested = false;
+  scheduleLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube') && !card.publishedAt);
+  if (card && card.scheduledPublishAt) {
+    scheduleModeLaterInput.checked = true;
+    const d = new Date(card.scheduledPublishAt);
+    const pad = (n) => String(n).padStart(2, '0');
+    scheduleAtInput.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } else {
+    scheduleModeNowInput.checked = true;
+    scheduleAtInput.value = '';
+  }
+  updateScheduleAtVisibility();
   publishedDateLabel.hidden = !(card && card.publishedAt);
   publishedDateInput.value = (card && card.publishedAt) ? card.publishedAt.slice(0, 10) : '';
   todoLabel.hidden = !(card && (card.column === 'clip' || card.column === 'youtube'));
@@ -1748,6 +1769,11 @@ function setCardSaveLoading(isLoading) {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   cardFormError.hidden = true;
+  if (!scheduleLabel.hidden && scheduleModeLaterInput.checked && !scheduleAtInput.value) {
+    cardFormError.textContent = 'กรุณาเลือกวันที่และเวลาสำหรับตั้งเวลาโพส หรือเปลี่ยนกลับเป็นโพสทันที';
+    cardFormError.hidden = false;
+    return;
+  }
   setCardSaveLoading(true);
   try {
   const payload = { title: titleInput.value, description: descInput.value, caption: captionInput.value };
@@ -1766,6 +1792,13 @@ form.addEventListener('submit', async (e) => {
   }
   if (!planDateLabel.hidden) {
     payload.plannedPublishDate = planDateClearRequested ? null : (planDateInput.value || null);
+  }
+  if (!scheduleLabel.hidden) {
+    if (scheduleModeLaterInput.checked && scheduleAtInput.value) {
+      payload.scheduledPublishAt = new Date(scheduleAtInput.value).toISOString();
+    } else {
+      payload.scheduledPublishAt = null;
+    }
   }
   if (!publishedDateLabel.hidden) {
     payload.publishedAt = publishedDateInput.value ? `${publishedDateInput.value}T12:00:00.000Z` : null;

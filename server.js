@@ -134,7 +134,10 @@ async function logAutoPostAttempt(card, dest, status, extra = {}) {
 
 // Facebook's resumable upload protocol: start -> upload raw bytes -> finish.
 // Reels and Stories use the same 3-phase shape on sibling endpoints.
-async function uploadFacebookReelOrStory(card, kind) {
+// scheduledPublishTime (unix seconds, reel only) queues it in Facebook's own
+// scheduler instead of publishing immediately — Meta requires it to be more
+// than 10 minutes and no more than 29 days from now.
+async function uploadFacebookReelOrStory(card, kind, scheduledPublishTime = null) {
   const pageId = process.env.FB_PAGE_ID;
   const token = process.env.FB_PAGE_ACCESS_TOKEN;
   const endpoint = kind === 'reel' ? 'video_reels' : 'video_stories';
@@ -153,7 +156,13 @@ async function uploadFacebookReelOrStory(card, kind) {
   const uploadJson = await uploadRes.json().catch(() => ({}));
   if (uploadJson.error) throw new Error(uploadJson.error.message);
 
-  const finishParams = new URLSearchParams({ upload_phase: 'finish', video_id, video_state: 'PUBLISHED', access_token: token });
+  const finishParams = new URLSearchParams({ upload_phase: 'finish', video_id, access_token: token });
+  if (kind === 'reel' && scheduledPublishTime) {
+    finishParams.set('video_state', 'SCHEDULED');
+    finishParams.set('scheduled_publish_time', String(scheduledPublishTime));
+  } else {
+    finishParams.set('video_state', 'PUBLISHED');
+  }
   if (kind === 'reel' && card.caption) finishParams.set('description', card.caption);
   const finishRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/${endpoint}?${finishParams}`, { method: 'POST' });
   const finishJson = await finishRes.json();
@@ -179,18 +188,44 @@ async function postToFacebook(card) {
     return;
   }
 
+  // Reels can be queued in Facebook's own scheduler (video_state=SCHEDULED) so we
+  // upload right away but it only goes live at card.scheduledPublishAt. Facebook
+  // Stories have no such scheduling support, so to still land together with the
+  // Reel, the Story leg is deferred to postDueScheduledStories() below instead of
+  // posting (or skipping) it now — scheduledPublishAt is left on the card so that
+  // poll loop can find it once the time actually arrives.
+  let scheduledPublishTime = null;
+  if (card.scheduledPublishAt) {
+    const ts = Math.floor(new Date(card.scheduledPublishAt).getTime() / 1000);
+    const now = Math.floor(Date.now() / 1000);
+    if (isNaN(ts) || ts < now + 11 * 60 || ts > now + 29 * 24 * 60 * 60) {
+      const errorMessage = 'เวลาที่ตั้งไว้อยู่นอกช่วงที่ Facebook อนุญาตให้ตั้งเวลาล่วงหน้า (ต้องมากกว่า 10 นาที และไม่เกิน 29 วันจากตอนนี้) — ไม่ได้โพสอัตโนมัติ กรุณาโพสเองหรือแก้เวลาแล้วลองย้ายการ์ดใหม่';
+      for (const dest of AUTO_POST_DESTINATIONS) {
+        await logAutoPostAttempt(card, dest, 'failed', { errorMessage });
+      }
+      await prisma.card.update({ where: { id: card.id }, data: { scheduledPublishAt: null } }).catch(() => {});
+      invalidateCache('cards');
+      return;
+    }
+    scheduledPublishTime = ts;
+  }
+
   try {
-    const r = await uploadFacebookReelOrStory(card, 'reel');
-    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Reel' }, 'success', { postUrl: r.postUrl });
+    const r = await uploadFacebookReelOrStory(card, 'reel', scheduledPublishTime);
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Reel' }, scheduledPublishTime ? 'scheduled' : 'success', { postUrl: r.postUrl });
   } catch (e) {
     await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Reel' }, 'failed', { errorMessage: e.message });
   }
 
-  try {
-    await uploadFacebookReelOrStory(card, 'story');
-    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'success', {});
-  } catch (e) {
-    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'failed', { errorMessage: e.message });
+  if (scheduledPublishTime) {
+    await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'scheduled', {});
+  } else {
+    try {
+      await uploadFacebookReelOrStory(card, 'story');
+      await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'success', {});
+    } catch (e) {
+      await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'failed', { errorMessage: e.message });
+    }
   }
 
   // Instagram's Content Publishing API needs a `video_url` its own servers can
@@ -202,6 +237,31 @@ async function postToFacebook(card) {
     errorMessage: 'ยังโพสต์ Instagram อัตโนมัติไม่ได้ — ต้องมี URL วิดีโอที่เข้าถึงได้จากอินเทอร์เน็ต แต่วิดีโอตอนนี้เก็บอยู่ที่ localhost เท่านั้น',
   });
 }
+
+// Polls once a minute for published cards whose scheduledPublishAt has arrived —
+// this is what actually posts the deferred Story leg from postToFacebook() above,
+// so it lands alongside the Reel (already scheduled natively in Facebook) instead
+// of hours/days early. Relies on this Node process being alive at that minute —
+// same caveat as the insights-sync launchd jobs (not itself launchd/pm2-managed).
+async function postDueScheduledStories() {
+  if (!AUTO_POST_ENABLED) return;
+  const nowIso = new Date().toISOString();
+  const dueCards = await prisma.card.findMany({
+    where: { column: 'published', scheduledPublishAt: { lte: nowIso }, videoUrl: { not: null } },
+  });
+  for (const card of dueCards) {
+    // Clear first so a slow request can't get picked up twice by the next tick.
+    await prisma.card.update({ where: { id: card.id }, data: { scheduledPublishAt: null } }).catch(() => {});
+    invalidateCache('cards');
+    try {
+      await uploadFacebookReelOrStory(card, 'story');
+      await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'success', {});
+    } catch (e) {
+      await logAutoPostAttempt(card, { platform: 'facebook', placement: 'Story' }, 'failed', { errorMessage: e.message });
+    }
+  }
+}
+setInterval(() => postDueScheduledStories().catch((e) => console.error('postDueScheduledStories failed:', e.message)), 60 * 1000);
 
 const app = express();
 app.use(express.json({ limit: '15mb' }));
@@ -591,7 +651,7 @@ app.patch('/api/cards/:id', async (req, res) => {
     const card = await prisma.card.findUnique({ where: { id: req.params.id }, omit: { imageUrl: true } });
     if (!card) return res.status(404).json({ error: 'card not found' });
 
-    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, publishedAt, shootDate, shootNote, caption, linkedVideoId, pinned } = req.body;
+    const { title, description, column, status, rejectionReason, tags, platforms, todos, issues, comments, links, plannedPublishDate, scheduledPublishAt, publishedAt, shootDate, shootNote, caption, linkedVideoId, pinned } = req.body;
     const data = {};
 
     if (title !== undefined) {
@@ -659,6 +719,10 @@ app.patch('/api/cards/:id', async (req, res) => {
       data.links = links.map((l) => ({ id: l.id, label: typeof l.label === 'string' ? l.label.trim() : '', url: l.url.trim() }));
     }
     if (plannedPublishDate !== undefined) data.plannedPublishDate = plannedPublishDate || null;
+    if (scheduledPublishAt !== undefined) {
+      if (scheduledPublishAt !== null && isNaN(new Date(scheduledPublishAt).getTime())) return res.status(400).json({ error: 'scheduledPublishAt must be a valid date' });
+      data.scheduledPublishAt = scheduledPublishAt || null;
+    }
     if (publishedAt !== undefined) {
       if (publishedAt !== null && isNaN(new Date(publishedAt).getTime())) return res.status(400).json({ error: 'publishedAt must be a valid date' });
       data.publishedAt = publishedAt;
@@ -909,13 +973,14 @@ app.post('/api/seo-keywords', async (req, res) => {
 });
 
 app.patch('/api/seo-keywords/:id', async (req, res) => {
-  const { organic, ads, note } = req.body;
+  const { organic, ads, note, sortOrder } = req.body;
   try {
     const data = {};
     if (organic !== undefined) data.organic = Boolean(organic);
     if (ads !== undefined) data.ads = Boolean(ads);
     if (note !== undefined) data.note = String(note).trim();
-    if (organic !== undefined || ads !== undefined) data.checkedAt = new Date();
+    if (sortOrder !== undefined) data.sortOrder = Number(sortOrder) || 0;
+    if (organic !== undefined || ads !== undefined || note !== undefined) data.checkedAt = new Date();
     const row = await prisma.seoKeyword.update({ where: { id: req.params.id }, data });
     invalidateCache('seo-keywords');
     res.json(row);

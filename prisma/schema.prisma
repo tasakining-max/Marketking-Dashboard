@@ -23,6 +23,7 @@ model Card {
   order              Float    @default(0)
   pinned             Boolean  @default(false)
   plannedPublishDate String?
+  scheduledPublishAt String?
   publishedAt        String?
   shootDate          String?
   shootNote          String   @default("")
@@ -106,6 +107,7 @@ model WebsiteChangelog {
 model AdInsight {
   id               String   @id @default(uuid())
   date             DateTime
+  adId             String   @default("")
   campaignName     String
   spend            Float    @default(0)
   reach            Int      @default(0)
@@ -117,6 +119,8 @@ model AdInsight {
   creativeName     String   @default("")
   creativeImageUrl String?  @db.Text
   createdAt        DateTime @default(now())
+
+  @@unique([date, adId])
 }
 
 model AutoPostLog {
