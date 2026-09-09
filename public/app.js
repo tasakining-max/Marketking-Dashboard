@@ -140,6 +140,7 @@ const NAV_COLUMNS = COLUMNS.filter((col) => {
 const TAG_LABELS = {
   factory: '🏭 ถ่ายที่โรงงาน',
   office: '🏢 ถ่ายที่ออฟฟิศ',
+  onsite: '📍 ถ่ายนอกสถานที่',
   ai: '🤖 AI VDO',
   archive: '🗂 ใช้รูป/วิดีโอเก่า',
   motion: '🎨 Motion Graphic',
