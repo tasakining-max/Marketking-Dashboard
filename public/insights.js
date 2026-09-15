@@ -28,6 +28,71 @@ function firstLine(text, max) {
   return line.length > max ? line.slice(0, max - 1) + '…' : line;
 }
 
+// ─── Real page posts only ───────────────────────────────────────────────
+// Every publish also fires a Facebook Story leg alongside the Reel (see
+// server.js postToFacebook) — same clip, no caption, gone in 24h. Facebook's
+// /videos feed returns both, but a Story isn't a real post on the Page the
+// way a Reel is, so it's dropped before anything else counts these as posts.
+// Reels permalink as /reel/{id}/; everything else (Stories, plain uploads)
+// permalinks as {page_id}/videos/{id}.
+function isRealPagePost(v) {
+  return /\/reel\//.test(v.permalinkUrl || '');
+}
+
+// ─── Duplicate-post filtering ───────────────────────────────────────────
+// Same clip sometimes gets posted twice by hand (e.g. the first one looked
+// like it failed to distribute — 0 views — so หนึ่ง reposted it). Those
+// ghost copies shouldn't count as real posts anywhere on this page — stats,
+// chart, table — so they're dropped before anything else renders, keeping
+// only the one in each near-duplicate group that actually distributed
+// (highest views).
+function normalizeDesc(text) {
+  return (text || '')
+    .split('\n')[0]
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .trim();
+}
+
+const DUPLICATE_WINDOW_DAYS = 14;
+
+function keepRealPosts(videos) {
+  const byDesc = new Map();
+  for (const v of videos) {
+    const key = normalizeDesc(v.description);
+    if (!key) { byDesc.set(Symbol(), [v]); continue; }
+    if (!byDesc.has(key)) byDesc.set(key, []);
+    byDesc.get(key).push(v);
+  }
+  const dropped = new Set();
+  for (const group of byDesc.values()) {
+    if (group.length < 2) continue;
+    // Cluster by time so unrelated re-uses of a short/generic caption months
+    // apart aren't treated as duplicates of each other.
+    const sorted = [...group].sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+    let cluster = [sorted[0]];
+    const flushCluster = () => {
+      if (cluster.length > 1) {
+        const keeper = cluster.reduce((best, v) => (v.views > best.views ? v : best));
+        for (const v of cluster) if (v !== keeper) dropped.add(v.videoId);
+      }
+      cluster = [];
+    };
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1].createdTime);
+      const cur = new Date(sorted[i].createdTime);
+      if ((cur - prev) <= DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
+        cluster.push(sorted[i]);
+      } else {
+        flushCluster();
+        cluster = [sorted[i]];
+      }
+    }
+    flushCluster();
+  }
+  return videos.filter((v) => !dropped.has(v.videoId));
+}
+
 function niceMax(value) {
   if (value <= 0) return 1;
   const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
@@ -417,7 +482,8 @@ const insightsEmpty = document.getElementById('insightsEmpty');
 const insightsBody = document.getElementById('insightsBody');
 let insightsSignature = null;
 
-function render(videos) {
+function render(rawVideos) {
+  const videos = keepRealPosts(rawVideos.filter(isRealPagePost));
   if (!videos.length) {
     insightsEmpty.hidden = false;
     insightsBody.hidden = true;

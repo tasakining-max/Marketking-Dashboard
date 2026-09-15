@@ -1382,6 +1382,21 @@ app.patch('/api/page-video-insights/:videoId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Used by sync-page-video-insights.mjs to drop rows that no longer belong —
+// a Facebook Story leg (not a real Page post) or a near-zero-view upload that
+// never actually distributed (test cut, failed retry). See that script for
+// the filtering rules; this just removes what it decides to exclude.
+app.delete('/api/page-video-insights/:videoId', async (req, res) => {
+  try {
+    await prisma.pageVideoInsight.delete({ where: { videoId: req.params.videoId } });
+    invalidateCache('page-video-insights');
+    res.status(204).end();
+  } catch (e) {
+    if (e.code === 'P2025') return res.status(404).json({ error: 'not found' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Website Issues ───────────────────────────────────────────────────────────
 app.get('/api/website-issues', async (req, res) => {
   try {

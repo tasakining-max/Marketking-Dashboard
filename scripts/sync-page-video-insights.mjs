@@ -55,11 +55,35 @@ async function postVideo(v, shares) {
   return res.json();
 }
 
+async function deleteVideo(videoId) {
+  await fetch(`http://localhost:${PORT}/api/page-video-insights/${videoId}`, { method: 'DELETE' });
+}
+
+// ─── Real, distributed page posts only ──────────────────────────────────
+// The Page's /videos feed also returns things that aren't a real published
+// clip: the Facebook Story leg every auto-post fires alongside the Reel
+// (same clip, no caption, permalinks as {page_id}/videos/{id} instead of
+// /reel/{id}/), and stray uploads that never actually went out (test cuts,
+// failed retries — views stay in single digits forever; real posts start
+// in the thousands, so 50 is a safe floor with a lot of headroom on both
+// sides). Filtered here, before anything reaches the database, rather than
+// hidden later at render time.
+const MIN_DISTRIBUTED_VIEWS = 50;
+function isRealDistributedPost(v) {
+  return /\/reel\//.test(v.permalink_url || '') && (v.views || 0) >= MIN_DISTRIBUTED_VIEWS;
+}
+
 const monthsBack = Number(process.argv[2]) || 3;
 const videos = await fetchVideos(monthsAgo(monthsBack));
 console.log(`Fetched ${videos.length} video(s) from the last ${monthsBack} month(s)`);
-for (const v of videos) {
+const keep = videos.filter(isRealDistributedPost);
+const skip = videos.filter((v) => !isRealDistributedPost(v));
+for (const v of keep) {
   const shares = await fetchShares(v.id);
   const result = await postVideo(v, shares);
   console.log('Synced:', v.created_time.slice(0, 10), v.id, `(shares: ${shares})`, '->', result.id || result.error);
+}
+for (const v of skip) {
+  await deleteVideo(v.id);
+  console.log('Skipped (not a real distributed page post):', v.created_time.slice(0, 10), v.id, `views:${v.views || 0}`, v.permalink_url || '');
 }
