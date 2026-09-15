@@ -41,6 +41,7 @@ for (const c of unlinkedCards) {
   cardsByDate.get(key).push(c);
 }
 
+const claimedCardIds = new Set();
 let linked = 0;
 for (const video of unlinkedVideos) {
   const key = dateKey(video.createdTime);
@@ -50,6 +51,14 @@ for (const video of unlinkedVideos) {
     continue;
   }
   const card = candidates[0];
+  // Card just got claimed by an earlier video this same run (e.g. 2+ real
+  // videos landed the same day as only one candidate card) — don't hand it
+  // a second video, that'd silently overwrite the first, correct link.
+  if (claimedCardIds.has(card.id)) {
+    console.log(`SKIP videoId=${video.videoId} (${key}) — card "${card.title}" already linked to a video this run, need manual review`);
+    continue;
+  }
+  claimedCardIds.add(card.id);
   const cover = TOKEN ? await fetchVideoCover(video.videoId).catch(() => null) : null;
   if (cover) {
     await fetch(`${BASE}/api/cards/${card.id}/image`, {
