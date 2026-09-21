@@ -2128,7 +2128,7 @@ async function buildSummary() {
       helpLines.push(`- [คลิป] ${c.title}: ${i.text}`);
     });
   });
-  Object.values(issuesRes).flat().forEach((i) => {
+  Object.values(issuesRes).flat().filter((i) => !i.solved).forEach((i) => {
     helpLines.push(`- [เว็บ] ${i.text}`);
   });
   if (helpLines.length) {
