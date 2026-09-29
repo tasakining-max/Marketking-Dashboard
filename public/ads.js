@@ -722,9 +722,9 @@ async function renderAdUtmVisits() {
     const res = await fetch(`/api/ad-utm-visits?${params.toString()}`);
     const data = await res.json();
     if (requestId !== adUtmRequestId) return; // a newer filter change already re-rendered
-    renderUtmTable(tbody, data.utmCampaigns || [], () => range, 'ยังไม่มีผู้เข้าชมจากโฆษณาในช่วงเวลานี้');
+    renderUtmTable(tbody, data.utmCampaigns || [], () => range, 'ยังไม่มีผู้เข้าชมจากโฆษณาในช่วงเวลานี้', { withScroll: true });
   } catch (e) {
-    if (requestId === adUtmRequestId) tbody.innerHTML = '<tr><td colspan="8">โหลดข้อมูลผู้เข้าชมไม่สำเร็จ</td></tr>';
+    if (requestId === adUtmRequestId) tbody.innerHTML = '<tr><td colspan="11">โหลดข้อมูลผู้เข้าชมไม่สำเร็จ</td></tr>';
   }
 }
 

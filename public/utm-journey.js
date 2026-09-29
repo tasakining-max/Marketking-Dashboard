@@ -83,12 +83,21 @@ function renderUtmPageSummary(sessions) {
   return frag;
 }
 
-function renderUtmTable(tbody, rows, getRange, emptyText) {
+// withScroll adds scroll-depth / dealer-button columns (Ads page). Those are
+// counted only over visitors whose scroll was measured, so "–" means none were.
+function utmScrollCells(r) {
+  if (!r.scrollTracked) return ['–', '–', '–'];
+  const of = ` / ${utmFmtNum(r.scrollTracked)}`;
+  return [`${r.avgScrollPct}%`, `${utmFmtNum(r.ctaSeen)}${of}`, `${utmFmtNum(r.ctaClicked)}${of}`];
+}
+
+function renderUtmTable(tbody, rows, getRange, emptyText, { withScroll = false } = {}) {
+  const colCount = withScroll ? 11 : 8;
   tbody.innerHTML = '';
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 8;
+    td.colSpan = colCount;
     td.textContent = emptyText;
     td.style.textAlign = 'center';
     td.style.color = 'var(--text-muted, #888)';
@@ -109,17 +118,18 @@ function renderUtmTable(tbody, rows, getRange, emptyText) {
       utmFmtNum(r.views),
       utmFmtDateTime(r.firstSeen),
       utmFmtDateTime(r.lastSeen),
+      ...(withScroll ? utmScrollCells(r) : []),
     ].forEach((val, idx) => {
       const td = document.createElement('td');
       td.textContent = val;
-      if (idx === 4 || idx === 5) td.className = 'ads-num';
+      if (idx === 4 || idx === 5 || idx >= 8) td.className = 'ads-num';
       tr.appendChild(td);
     });
 
     const detailTr = document.createElement('tr');
     detailTr.hidden = true;
     const detailTd = document.createElement('td');
-    detailTd.colSpan = 8;
+    detailTd.colSpan = colCount;
     detailTd.className = 'utm-journey-cell';
     detailTr.appendChild(detailTd);
 

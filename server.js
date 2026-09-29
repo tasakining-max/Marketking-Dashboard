@@ -1229,7 +1229,12 @@ app.get('/api/ad-utm-visits', async (req, res) => {
     const { rows } = await tasakiWebPool.query(`
       SELECT "utmSource" AS source, "utmMedium" AS medium, "utmCampaign" AS campaign, "utmContent" AS content,
         count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions,
-        min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
+        min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen",
+        -- Scroll depth only exists from 2026-09-29 16:17 on; 0 = not measured.
+        count(DISTINCT "sessionId") FILTER (WHERE "maxScrollPct" > 0)::int AS "scrollTracked",
+        round(avg("maxScrollPct") FILTER (WHERE "maxScrollPct" > 0))::int AS "avgScrollPct",
+        count(DISTINCT "sessionId") FILTER (WHERE "dealerCtaSeen")::int AS "ctaSeen",
+        count(DISTINCT "sessionId") FILTER (WHERE "dealerCtaClicked")::int AS "ctaClicked"
       FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmMedium" = 'paid'
       GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
       ORDER BY max("createdAt") DESC
