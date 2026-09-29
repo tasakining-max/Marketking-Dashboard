@@ -157,7 +157,7 @@ function renderCampaignTree(entries) {
   tbody.innerHTML = '';
   const tree = buildDateTree(entries);
 
-  function makeRow({ level, label, thumb, metrics, toggle, childRows }) {
+  function makeRow({ level, label, thumb, metrics, toggle, childRows, collapsed = false }) {
     const tr = document.createElement('tr');
     tr.className = `ads-tree-row ads-tree-level-${level}`;
 
@@ -169,7 +169,8 @@ function renderCampaignTree(entries) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ads-tree-toggle';
-      btn.textContent = '▾';
+      btn.textContent = collapsed ? '▸' : '▾';
+      if (collapsed) tr.classList.add('is-collapsed');
       btn.setAttribute('aria-label', 'ย่อ/ขยาย');
       btn.addEventListener('click', () => {
         const collapsed = tr.classList.toggle('is-collapsed');
@@ -207,10 +208,14 @@ function renderCampaignTree(entries) {
     return tr;
   }
 
-  tree.forEach((dateBucket) => {
+  // Only the newest day opens by default (down to each creative); older days
+  // start collapsed so the latest results are what you see first.
+  tree.forEach((dateBucket, dateIndex) => {
     const dateChildRows = [];
+    const dateCollapsed = dateIndex > 0;
     tbody.appendChild(makeRow({
       level: 0, label: `📅 ${fmtDate(dateBucket.date)}`, metrics: dateBucket, toggle: true, childRows: dateChildRows,
+      collapsed: dateCollapsed,
     }));
 
     dateBucket.campaigns.forEach((campaign) => {
@@ -241,6 +246,7 @@ function renderCampaignTree(entries) {
         });
       });
     });
+    dateChildRows.forEach((r) => { r.hidden = dateCollapsed; });
   });
 }
 
@@ -693,6 +699,33 @@ function applyFiltersAndRender() {
   renderSpendChart(filtered);
   renderCtrChart(filtered);
   renderCampaignTree(filtered);
+  renderAdUtmVisits();
+}
+
+// Site-side visits from paid-ad links, over the same days as the date filter
+// (or from the first ad day onward when no filter is set).
+function adUtmRange() {
+  const days = filterDates.size ? [...filterDates] : rawEntries.map((e) => dateKey(e.date));
+  const sorted = days.sort();
+  const since = new Date(`${sorted[0]}T00:00:00`);
+  const until = filterDates.size ? new Date(`${sorted[sorted.length - 1]}T23:59:59.999`) : new Date();
+  return [since, until];
+}
+
+let adUtmRequestId = 0;
+async function renderAdUtmVisits() {
+  const tbody = document.getElementById('adUtmBody');
+  const requestId = ++adUtmRequestId;
+  const range = adUtmRange();
+  try {
+    const params = new URLSearchParams({ since: range[0].toISOString(), until: range[1].toISOString() });
+    const res = await fetch(`/api/ad-utm-visits?${params.toString()}`);
+    const data = await res.json();
+    if (requestId !== adUtmRequestId) return; // a newer filter change already re-rendered
+    renderUtmTable(tbody, data.utmCampaigns || [], () => range, 'ยังไม่มีผู้เข้าชมจากโฆษณาในช่วงเวลานี้');
+  } catch (e) {
+    if (requestId === adUtmRequestId) tbody.innerHTML = '<tr><td colspan="8">โหลดข้อมูลผู้เข้าชมไม่สำเร็จ</td></tr>';
+  }
 }
 
 let calInitialized = false;

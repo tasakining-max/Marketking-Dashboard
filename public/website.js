@@ -376,134 +376,6 @@ function renderTopPages(data) {
   });
 }
 
-// ─── UTM campaigns table ────────────────────────────────────────────────
-const PATH_LABELS = {
-  '/': 'หน้าแรก',
-  '/products': 'สินค้า',
-  '/articles': 'บทความ',
-  '/compare': 'เปรียบเทียบรุ่น',
-  '/btu-guide': 'คู่มือเลือก BTU',
-  '/error-code': 'รหัสข้อผิดพลาด',
-  '/repair-parts': 'แจ้งซ่อม/อะไหล่',
-  '/warranty': 'ลงทะเบียนรับประกัน',
-  '/dealers': 'ตัวแทนจำหน่าย',
-  '/contact': 'ติดต่อ',
-  '/troubleshooting': 'แก้ปัญหาเบื้องต้น',
-};
-function pathLabel(path) { return PATH_LABELS[path] || path; }
-function viewLabel(v) { return v.label || pathLabel(v.path); }
-function fmtDuration(seconds) {
-  if (seconds < 60) return `${Math.round(seconds)} วิ`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return s > 0 ? `${m} นาที ${s} วิ` : `${m} นาที`;
-}
-
-async function loadUtmSessionJourney(row) {
-  const params = new URLSearchParams({
-    source: row.source || '', medium: row.medium || '', campaign: row.campaign || '', content: row.content || '',
-  });
-  if (currentRange) {
-    params.set('since', currentRange[0].toISOString());
-    params.set('until', currentRange[1].toISOString());
-  } else {
-    params.set('since', new Date(Date.now() - currentDays * 86400000).toISOString());
-    params.set('until', new Date().toISOString());
-  }
-  const res = await fetch(`/api/website-utm-sessions?${params.toString()}`);
-  return res.json();
-}
-
-function renderUtmTable(data) {
-  const tbody = document.getElementById('siteUtmBody');
-  tbody.innerHTML = '';
-  const rows = data.utmCampaigns || [];
-  if (!rows.length) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 8;
-    td.textContent = 'ยังไม่มีคลิกที่ติด UTM ในช่วงเวลานี้';
-    td.style.textAlign = 'center';
-    td.style.color = 'var(--text-muted, #888)';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-    return;
-  }
-  rows.forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.className = 'utm-row-clickable';
-    tr.title = 'คลิกเพื่อดูเส้นทางการเข้าชม';
-    [
-      r.source || '-',
-      r.medium || '-',
-      r.campaign || '-',
-      r.content || '-',
-      fmtNum(r.sessions),
-      fmtNum(r.views),
-      new Date(r.firstSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
-      new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
-    ].forEach((val, idx) => {
-      const td = document.createElement('td');
-      td.textContent = val;
-      if (idx === 4 || idx === 5) td.className = 'ads-num';
-      tr.appendChild(td);
-    });
-
-    const detailTr = document.createElement('tr');
-    detailTr.hidden = true;
-    const detailTd = document.createElement('td');
-    detailTd.colSpan = 8;
-    detailTd.className = 'utm-journey-cell';
-    detailTr.appendChild(detailTd);
-
-    let loaded = false;
-    tr.addEventListener('click', async () => {
-      const opening = detailTr.hidden;
-      detailTr.hidden = !opening;
-      if (opening && !loaded) {
-        detailTd.textContent = 'กำลังโหลด...';
-        try {
-          const { sessions } = await loadUtmSessionJourney(r);
-          loaded = true;
-          detailTd.innerHTML = '';
-          if (!sessions.length) {
-            detailTd.textContent = 'ไม่พบข้อมูลเส้นทางในช่วงเวลานี้';
-          } else {
-            sessions.forEach((s, i) => {
-              const line = document.createElement('div');
-              line.className = 'utm-journey-line';
-              // A single-pageview session has no second timestamp to measure
-              // against — showing "0 วิ" would falsely imply they left
-              // instantly, when really we just can't tell how long they stayed.
-              const durationText = s.views.length > 1
-                ? fmtDuration((new Date(s.views[s.views.length - 1].createdAt) - new Date(s.views[0].createdAt)) / 1000)
-                : 'ดูหน้าเดียว ไม่ทราบระยะเวลา';
-              const label = document.createElement('span');
-              label.className = 'utm-journey-label';
-              const who = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}` : 'อยู่บนเว็บ';
-              label.textContent = `${who} (${durationText}): `;
-              line.appendChild(label);
-              const path = document.createElement('span');
-              path.textContent = s.views.map((v, j) => {
-                if (j === s.views.length - 1) return viewLabel(v);
-                const stepSec = (new Date(s.views[j + 1].createdAt) - new Date(v.createdAt)) / 1000;
-                return `${viewLabel(v)} (${fmtDuration(stepSec)})`;
-              }).join(' → ');
-              line.appendChild(path);
-              detailTd.appendChild(line);
-            });
-          }
-        } catch (e) {
-          detailTd.textContent = 'โหลดเส้นทางไม่สำเร็จ';
-        }
-      }
-    });
-
-    tbody.appendChild(tr);
-    tbody.appendChild(detailTr);
-  });
-}
-
 // ─── Load + filter ────────────────────────────────────────────────────────
 const siteEmpty = document.getElementById('siteEmpty');
 const siteBody = document.getElementById('siteBody');
@@ -605,7 +477,12 @@ function renderAll(data) {
   renderSourceChart(data);
   renderAiReferralTable(data);
   renderAiBotTable(data);
-  renderUtmTable(data);
+  renderUtmTable(
+    document.getElementById('siteUtmBody'),
+    data.utmCampaigns || [],
+    () => currentRange || [new Date(Date.now() - currentDays * 86400000), new Date()],
+    'ยังไม่มีคลิกที่ติด UTM ในช่วงเวลานี้',
+  );
   renderDeviceGrid(data);
   renderTopPages(data);
 }

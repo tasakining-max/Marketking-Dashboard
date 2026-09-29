@@ -18,7 +18,20 @@ const prisma = new PrismaClient({ adapter });
 
 // tasaki-web keeps its own DB (same LAN Postgres server, different database).
 // Read-only access to its PageView table powers the Website Updates page below.
-const tasakiWebPool = new pg.Pool({ connectionString: process.env.TASAKI_WEB_DATABASE_URL });
+// Prisma writes its `timestamp without time zone` columns (PageView.createdAt
+// etc.) as UTC, but this Postgres server's session timezone is Asia/Bangkok
+// and pg parses such values as local time — so both reads and range filters
+// came out 7 hours early. Pin the session to UTC and read those columns as UTC.
+const TIMESTAMP_OID = 1114;
+const tasakiWebPool = new pg.Pool({
+  connectionString: process.env.TASAKI_WEB_DATABASE_URL,
+  options: '-c timezone=UTC',
+  types: {
+    getTypeParser: (oid, format) => (oid === TIMESTAMP_OID
+      ? (value) => new Date(`${value.replace(' ', 'T')}Z`)
+      : pg.types.getTypeParser(oid, format)),
+  },
+});
 ///// END /////
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
 const GRAPHIC_COLUMNS = ['todo', 'in_progress', 'done'];
@@ -1204,6 +1217,27 @@ app.get('/api/website-pageviews', async (req, res) => {
 // Page-by-page journey for one UTM row — lets "เข้าชม (หน้า) 13" resolve into
 // the actual sequence a visitor took (หน้าแรก → สินค้า → ... ) grouped by
 // session, instead of just a raw count.
+// Paid-ad UTM rows only (utm_medium=paid, as set in each ad's URL
+// parameters) for the Ads page — same shape as website-pageviews'
+// utmCampaigns so both pages share public/utm-journey.js.
+app.get('/api/ad-utm-visits', async (req, res) => {
+  const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
+  const untilParam = typeof req.query.until === 'string' ? new Date(req.query.until) : null;
+  const since = sinceParam && !isNaN(sinceParam) ? sinceParam : new Date(Date.now() - 90 * 86400000);
+  const until = untilParam && !isNaN(untilParam) ? untilParam : new Date();
+  try {
+    const { rows } = await tasakiWebPool.query(`
+      SELECT "utmSource" AS source, "utmMedium" AS medium, "utmCampaign" AS campaign, "utmContent" AS content,
+        count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions,
+        min("createdAt") AS "firstSeen", max("createdAt") AS "lastSeen"
+      FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmMedium" = 'paid'
+      GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
+      ORDER BY max("createdAt") DESC
+    `, [since, until]);
+    res.json({ utmCampaigns: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/website-utm-sessions', async (req, res) => {
   const { source = '', medium = '', campaign = '', content = '' } = req.query;
   const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
@@ -1212,7 +1246,7 @@ app.get('/api/website-utm-sessions', async (req, res) => {
   const until = untilParam && !isNaN(untilParam) ? untilParam : new Date();
   try {
     const { rows } = await tasakiWebPool.query(`
-      SELECT "sessionId", path, "createdAt"
+      SELECT "sessionId", path, "createdAt", "maxScrollPct", "dealerCtaSeen", "dealerCtaClicked"
       FROM "PageView"
       WHERE "createdAt" >= $1 AND "createdAt" <= $2
         AND "utmSource" = $3 AND "utmMedium" = $4 AND "utmCampaign" = $5 AND "utmContent" = $6
@@ -1258,7 +1292,10 @@ app.get('/api/website-utm-sessions', async (req, res) => {
     const bySession = new Map();
     for (const r of rows) {
       if (!bySession.has(r.sessionId)) bySession.set(r.sessionId, []);
-      bySession.get(r.sessionId).push({ path: r.path, label: labelForPath(r.path), createdAt: r.createdAt });
+      bySession.get(r.sessionId).push({
+        path: r.path, label: labelForPath(r.path), createdAt: r.createdAt,
+        maxScrollPct: r.maxScrollPct, dealerCtaSeen: r.dealerCtaSeen, dealerCtaClicked: r.dealerCtaClicked,
+      });
     }
     const sessions = [...bySession.entries()].map(([sessionId, views]) => ({ sessionId, views }));
     res.json({ sessions });

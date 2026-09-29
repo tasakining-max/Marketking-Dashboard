@@ -107,6 +107,28 @@
               </table>
             </div>
           </div>
+
+          <div class="report-list-wrap" style="margin-bottom:24px;">
+            <h3>ผู้เข้าชมจากโฆษณา — ไปหน้าไหนบ้าง</h3>
+            <p class="key-messages-hint">นับจากระบบของเว็บเอง (ลิงก์โฆษณาที่ติด utm_medium=paid) นับได้ทุกคน ไม่ต้องรอให้กดยอมรับคุกกี้ — คลิกที่แถวเพื่อดูว่าผู้เข้าชมแต่ละคนเปิดหน้าไหนบ้าง อยู่นานเท่าไร เลื่อนลงไปกี่ % และเห็น/กดปุ่มหาตัวแทนหรือไม่ (ข้อมูลการเลื่อนมีตั้งแต่ 29 ก.ย. 16:17)</p>
+            <div class="ads-table-wrap">
+              <table class="ads-table">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Medium</th>
+                    <th>Campaign</th>
+                    <th>Content</th>
+                    <th>ผู้เข้าชม</th>
+                    <th>เข้าชม (หน้า)</th>
+                    <th>เจอครั้งแรก</th>
+                    <th>เจอล่าสุด</th>
+                  </tr>
+                </thead>
+                <tbody id="adUtmBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -125,6 +147,7 @@
     </section>
   </main>
 
+  <script src="utm-journey.js"></script>
   <script src="ads.js"></script>
   <script src="tab-tracker.js"></script>
 </body>
