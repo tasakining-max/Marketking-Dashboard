@@ -1239,6 +1239,23 @@ app.get('/api/ad-utm-visits', async (req, res) => {
       GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent"
       ORDER BY max("createdAt") DESC
     `, [since, until]);
+    // Every measured visitor's own furthest scroll, not just the average —
+    // a few "didn't scroll at all" visitors and a few "read to the end" ones
+    // average out to a middle number nobody actually scrolled to.
+    const { rows: perVisitor } = await tasakiWebPool.query(`
+      SELECT "utmSource" AS source, "utmMedium" AS medium, "utmCampaign" AS campaign, "utmContent" AS content,
+        max("maxScrollPct")::int AS pct
+      FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmMedium" = 'paid'
+      GROUP BY "utmSource", "utmMedium", "utmCampaign", "utmContent", "sessionId"
+      HAVING max("maxScrollPct") > 0
+    `, [since, until]);
+    const keyOf = (r) => [r.source, r.medium, r.campaign, r.content].join('\u0000');
+    const lists = new Map();
+    perVisitor.forEach((r) => {
+      if (!lists.has(keyOf(r))) lists.set(keyOf(r), []);
+      lists.get(keyOf(r)).push(r.pct);
+    });
+    rows.forEach((r) => { r.scrollList = (lists.get(keyOf(r)) || []).sort((a, b) => b - a); });
     res.json({ utmCampaigns: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

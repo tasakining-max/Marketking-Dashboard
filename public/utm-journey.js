@@ -88,7 +88,28 @@ function renderUtmPageSummary(sessions) {
 function utmScrollCells(r) {
   if (!r.scrollTracked) return ['–', '–', '–'];
   const of = ` / ${utmFmtNum(r.scrollTracked)}`;
-  return [`${r.avgScrollPct}%`, `${utmFmtNum(r.ctaSeen)}${of}`, `${utmFmtNum(r.ctaClicked)}${of}`];
+  const each = (r.scrollList || []).map((p) => `${p}%`).join(' · ');
+  return [each, `${utmFmtNum(r.ctaSeen)}${of}`, `${utmFmtNum(r.ctaClicked)}${of}`];
+}
+
+// One visitor's furthest scroll across their pages + what happened with the
+// dealer button, shown up front on their journey line.
+function utmVisitorScrollBadge(views) {
+  const pct = Math.max(0, ...views.map((v) => v.maxScrollPct || 0));
+  if (!pct) return null;
+  const badge = document.createElement('span');
+  badge.className = 'utm-scroll-badge';
+  const bar = document.createElement('span');
+  bar.className = 'utm-scroll-bar';
+  const fill = document.createElement('span');
+  fill.style.width = `${pct}%`;
+  bar.appendChild(fill);
+  badge.appendChild(bar);
+  let cta = 'ไม่ถึงปุ่มหาตัวแทน';
+  if (views.some((v) => v.dealerCtaClicked)) cta = 'กดปุ่มหาตัวแทน';
+  else if (views.some((v) => v.dealerCtaSeen)) cta = 'เห็นปุ่มหาตัวแทน';
+  badge.appendChild(document.createTextNode(` เลื่อน ${pct}% · ${cta} `));
+  return badge;
 }
 
 function renderUtmTable(tbody, rows, getRange, emptyText, { withScroll = false } = {}) {
@@ -161,6 +182,8 @@ function renderUtmTable(tbody, rows, getRange, emptyText, { withScroll = false }
               const who = sessions.length > 1 ? `ผู้เข้าชมคนที่ ${i + 1}` : 'อยู่บนเว็บ';
               label.textContent = `${who} (${durationText}): `;
               line.appendChild(label);
+              const badge = utmVisitorScrollBadge(s.views);
+              if (badge) line.appendChild(badge);
               const path = document.createElement('span');
               path.textContent = s.views.map((v, j) => {
                 const name = `${utmViewLabel(v)}${utmScrollNote(v)}`;

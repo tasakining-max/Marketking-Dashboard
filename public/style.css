@@ -3739,3 +3739,6 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-action-log-delete:hover {
   color: var(--text);
 }
+.utm-scroll-badge { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-weight: 600; color: var(--text, inherit); white-space: nowrap; }
+.utm-scroll-bar { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: rgba(128,128,128,0.25); overflow: hidden; }
+.utm-scroll-bar > span { display: block; height: 100%; background: #1877f2; }
