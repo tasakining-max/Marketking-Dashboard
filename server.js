@@ -1081,26 +1081,42 @@ app.get('/api/ad-insights', async (req, res) => {
 });
 
 app.post('/api/ad-insights', async (req, res) => {
-  const { date, campaignName, spend, reach, impressions, clicks, ctr, cpc, targetAudience, creativeName, creativeImageUrl } = req.body;
+  const { date, adId, campaignName, spend, reach, impressions, clicks, ctr, cpc, targetAudience, creativeName, creativeImageUrl } = req.body;
   if (!date || !campaignName) return res.status(400).json({ error: 'date and campaignName are required' });
   try {
-    const row = await prisma.adInsight.create({
-      data: {
-        date: new Date(date),
-        campaignName: String(campaignName),
-        spend: Number(spend) || 0,
-        reach: Number(reach) || 0,
-        impressions: Number(impressions) || 0,
-        clicks: Number(clicks) || 0,
-        ctr: Number(ctr) || 0,
-        cpc: Number(cpc) || 0,
-        targetAudience: targetAudience ? String(targetAudience) : '',
-        creativeName: creativeName ? String(creativeName) : '',
-        ...(creativeImageUrl ? { creativeImageUrl: String(creativeImageUrl) } : {}),
+    const data = {
+      date: new Date(date),
+      adId: adId ? String(adId) : '',
+      campaignName: String(campaignName),
+      spend: Number(spend) || 0,
+      reach: Number(reach) || 0,
+      impressions: Number(impressions) || 0,
+      clicks: Number(clicks) || 0,
+      ctr: Number(ctr) || 0,
+      cpc: Number(cpc) || 0,
+      targetAudience: targetAudience ? String(targetAudience) : '',
+      creativeName: creativeName ? String(creativeName) : '',
+      ...(creativeImageUrl ? { creativeImageUrl: String(creativeImageUrl) } : {}),
+    };
+    // Re-syncing a day (overlapping ranges, a manual re-pull after the 8:15
+    // job) must replace that day's row, not add a second one — duplicates
+    // doubled the day's spend on the Ads page. Older rows have no adId, so
+    // also match on the names.
+    const existing = await prisma.adInsight.findFirst({
+      where: {
+        date: data.date,
+        OR: [
+          ...(data.adId ? [{ adId: data.adId }] : []),
+          { campaignName: data.campaignName, targetAudience: data.targetAudience, creativeName: data.creativeName },
+        ],
       },
+      orderBy: { createdAt: 'desc' },
     });
+    const row = existing
+      ? await prisma.adInsight.update({ where: { id: existing.id }, data })
+      : await prisma.adInsight.create({ data });
     invalidateCache('ad-insights');
-    res.status(201).json({ id: row.id });
+    res.status(existing ? 200 : 201).json({ id: row.id, updated: Boolean(existing) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1257,6 +1273,110 @@ app.get('/api/ad-utm-visits', async (req, res) => {
     });
     rows.forEach((r) => { r.scrollList = (lists.get(keyOf(r)) || []).sort((a, b) => b - a); });
     res.json({ utmCampaigns: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Marketing funnel for one Facebook campaign: Meta's side (reach,
+// engagement, link clicks) straight from the Graph API — reach is only
+// correct when Meta de-duplicates it over the whole range, so it can't be
+// summed from the daily AdInsight rows — joined to the website's own tracker
+// for what happened after the click. The campaign's utm_campaign comes from
+// its ads' URL tags (FB name "FWEEIAFM36_Leads_Sep26" ≠ utm "FWEEIAFM_Leads_Sep26").
+const AD_FUNNEL_TTL_MS = 5 * 60 * 1000;
+const adFunnelCache = new Map();
+async function graphGet(pathAndQuery) {
+  const sep = pathAndQuery.includes('?') ? '&' : '?';
+  const r = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pathAndQuery}${sep}access_token=${process.env.FB_USER_ACCESS_TOKEN}`);
+  const json = await r.json();
+  if (json.error) throw new Error(`Graph API: ${json.error.message}`);
+  return json;
+}
+const actionValue = (row, type) => Number((row?.actions || []).find((a) => a.action_type === type)?.value || 0);
+const bkkDate = (d) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+
+app.get('/api/ad-funnel', async (req, res) => {
+  const { campaign } = req.query;
+  const since = typeof req.query.since === 'string' ? req.query.since : '';
+  const until = typeof req.query.until === 'string' ? req.query.until : '';
+  if (!campaign || !/^\d{4}-\d{2}-\d{2}$/.test(since) || !/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+    return res.status(400).json({ error: 'campaign, since and until (YYYY-MM-DD) are required' });
+  }
+  if (!process.env.FB_AD_ACCOUNT_ID || !process.env.FB_USER_ACCESS_TOKEN) {
+    return res.status(503).json({ error: 'Missing FB_AD_ACCOUNT_ID or FB_USER_ACCESS_TOKEN' });
+  }
+  const cacheKey = `${campaign}|${since}|${until}`;
+  const hit = adFunnelCache.get(cacheKey);
+  if (hit && hit.expires > Date.now()) return res.json(hit.data);
+  try {
+    const account = process.env.FB_AD_ACCOUNT_ID;
+    const filtering = encodeURIComponent(JSON.stringify([{ field: 'campaign.name', operator: 'EQUAL', value: campaign }]));
+    const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
+    const fields = 'reach,impressions,frequency,spend,inline_link_clicks,actions';
+    const [total, daily, ads] = await Promise.all([
+      graphGet(`${account}/insights?level=campaign&filtering=${filtering}&time_range=${timeRange}&fields=${fields}`),
+      graphGet(`${account}/insights?level=campaign&filtering=${filtering}&time_range=${timeRange}&time_increment=1&fields=${fields}&limit=200`),
+      graphGet(`${account}/ads?fields=campaign{name},creative{url_tags}&limit=200`),
+    ]);
+    const utmCampaigns = [...new Set((ads.data || [])
+      .filter((a) => a.campaign?.name === campaign)
+      .map((a) => new URLSearchParams(a.creative?.url_tags || '').get('utm_campaign'))
+      .filter(Boolean))];
+
+    // Bangkok-day range → UTC instants for the PageView filter.
+    const sinceUtc = new Date(`${since}T00:00:00+07:00`);
+    const untilUtc = new Date(`${until}T23:59:59.999+07:00`);
+    const { rows: sessions } = utmCampaigns.length ? await tasakiWebPool.query(`
+      SELECT "sessionId", min("createdAt") AS t0, count(*)::int AS views,
+        max("maxScrollPct")::int AS scroll, bool_or("dealerCtaSeen") AS seen, bool_or("dealerCtaClicked") AS clicked
+      FROM "PageView"
+      WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmMedium" = 'paid' AND "utmCampaign" = ANY($3)
+      GROUP BY "sessionId"
+    `, [sinceUtc, untilUtc, utmCampaigns]) : { rows: [] };
+
+    const t = total.data?.[0] || {};
+    // Scroll depth / dealer button only exist from 2026-09-29 16:17 on (0 = not measured).
+    const measured = sessions.filter((s) => s.scroll > 0);
+    const site = {
+      visitors: sessions.length,
+      measured: measured.length,
+      read50: measured.filter((s) => s.scroll >= 50).length,
+      ctaSeen: sessions.filter((s) => s.seen).length,
+      ctaClicked: sessions.filter((s) => s.clicked).length,
+      multiPage: sessions.filter((s) => s.views > 1).length,
+    };
+    const meta = {
+      reach: Number(t.reach || 0),
+      impressions: Number(t.impressions || 0),
+      frequency: Number(t.frequency || 0),
+      spend: Number(t.spend || 0),
+      engagement: actionValue(t, 'post_engagement'),
+      reactions: actionValue(t, 'post_reaction'),
+      saves: actionValue(t, 'onsite_conversion.post_save'),
+      comments: actionValue(t, 'comment'),
+      linkClicks: Number(t.inline_link_clicks || 0),
+      landingPageViews: actionValue(t, 'landing_page_view'),
+      leads: actionValue(t, 'lead'),
+    };
+
+    const days = new Map();
+    const day = (d) => {
+      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0 });
+      return days.get(d);
+    };
+    for (const r of daily.data || []) {
+      const d = day(r.date_start);
+      d.reach = Number(r.reach || 0);
+      d.engagement = actionValue(r, 'post_engagement');
+      d.linkClicks = Number(r.inline_link_clicks || 0);
+    }
+    for (const s of sessions) {
+      const d = day(bkkDate(s.t0));
+      d.visitors += 1;
+      if (s.clicked) d.ctaClicked += 1;
+    }
+    const data = { campaign, since, until, utmCampaigns, meta, site, daily: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
+    adFunnelCache.set(cacheKey, { data, expires: Date.now() + AD_FUNNEL_TTL_MS });
+    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

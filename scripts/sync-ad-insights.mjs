@@ -49,6 +49,7 @@ async function postInsight(row, thumbnails) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       date: row.date_start,
+      adId: row.ad_id || '',
       campaignName: row.campaign_name,
       spend: Number(row.spend) || 0,
       reach: Number(row.reach) || 0,

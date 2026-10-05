@@ -3742,3 +3742,82 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .utm-scroll-badge { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-weight: 600; color: var(--text, inherit); white-space: nowrap; }
 .utm-scroll-bar { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: rgba(128,128,128,0.25); overflow: hidden; }
 .utm-scroll-bar > span { display: block; height: 100%; background: #1877f2; }
+
+/* ─── Ads: marketing funnel ─────────────────────────────────────────── */
+.ads-funnel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ads-funnel-select { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); }
+/* Hologram funnel: translucent glass layers nested inside each other on a
+   dark stage, glowing light-blue dots, a violet-lit spout at the bottom. */
+.ads-funnel {
+  position: relative; display: flex; flex-direction: column; margin: 12px auto 24px;
+  padding: 28px 24px 18px; border-radius: 14px; overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 170, 80, 0.55) 0 2px, transparent 3px),
+    radial-gradient(circle at 88% 30%, rgba(255, 170, 80, 0.45) 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 82%, rgba(255, 170, 80, 0.4) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 22% 70%, rgba(120, 210, 255, 0.5) 0 1.5px, transparent 2.5px),
+    radial-gradient(ellipse at 35% 0%, rgba(80, 160, 255, 0.28), transparent 60%),
+    radial-gradient(ellipse at 35% 100%, rgba(150, 110, 255, 0.22), transparent 55%),
+    linear-gradient(180deg, #0b1830 0%, #060c1a 100%);
+  color: #dcefff;
+}
+.ads-funnel-canvas { display: block; width: 100%; height: 820px; }
+.ads-funnel-label {
+  position: absolute; transform: translate(-50%, -50%); z-index: 1;
+  display: flex; align-items: center; gap: 8px; pointer-events: none; white-space: nowrap;
+  color: #fff; text-shadow: 0 0 8px rgba(80, 180, 255, 0.9), 0 1px 2px rgba(0, 20, 60, 0.8);
+  padding: 6px 18px; border-radius: 999px;
+  background: radial-gradient(ellipse at center, rgba(6, 16, 40, 0.7) 35%, rgba(6, 16, 40, 0) 72%);
+}
+.ads-funnel-label strong { display: block; font-size: 16px; font-weight: 500; letter-spacing: 0.02em; }
+.ads-funnel-label small { display: block; font-size: 11px; color: #cfeeff; }
+.ads-funnel-icon svg { width: 24px; height: 24px; display: block; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px rgba(120, 210, 255, 0.9)); }
+.ads-funnel-stats { position: absolute; right: 16px; transform: translateY(-50%); padding: 0 0 0 4px; }
+.ads-funnel-stats-name { display: none; margin: 0 0 2px; font-size: 12px; font-weight: 600; color: #cfeeff; }
+.ads-funnel-number { margin: 0; font-size: 13px; color: #9fc4e6; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; }
+.ads-funnel-number strong { font-size: 20px; color: #fff; text-shadow: 0 0 10px rgba(90, 200, 255, 0.7); }
+.ads-funnel-number.is-empty { font-size: 14px; }
+.ads-funnel-conv { font-size: 11px; font-weight: 600; color: #e6f7ff; background: rgba(90, 180, 255, 0.18); border: 1px solid rgba(140, 215, 255, 0.35); border-radius: 10px; padding: 0 8px; }
+.ads-funnel-detail { margin: 1px 0 0; font-size: 11.5px; color: #9fc4e6; line-height: 1.35; }
+.ads-funnel-legend { flex-wrap: wrap; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: #9fc4e6; }
+.ads-funnel-legend-dot { width: 6px; height: 6px; border-radius: 50%; background: #a0e6ff; box-shadow: 0 0 6px #5ad2ff; display: inline-block; }
+/* Phone: funnel full width, stats as a list underneath. */
+.ads-funnel.is-stacked .ads-funnel-canvas { height: 440px; }
+.ads-funnel.is-stacked .ads-funnel-stats { position: static; transform: none; margin-top: 12px; padding-left: 12px; border-left: 2px solid rgba(140, 215, 255, 0.6); }
+.ads-funnel.is-stacked .ads-funnel-stats-name { display: block; }
+.ads-funnel.is-stacked .ads-funnel-label strong { font-size: 14px; }
+:root:not([data-theme="dark"]) .ads-funnel {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 160, 60, 0.5) 0 2px, transparent 3px),
+    radial-gradient(circle at 88% 30%, rgba(255, 160, 60, 0.4) 0 2px, transparent 3px),
+    radial-gradient(circle at 22% 70%, rgba(60, 150, 255, 0.45) 0 1.5px, transparent 2.5px),
+    radial-gradient(ellipse at 30% 0%, rgba(120, 180, 255, 0.35), transparent 60%),
+    radial-gradient(ellipse at 30% 100%, rgba(160, 130, 255, 0.18), transparent 55%),
+    linear-gradient(180deg, #f2f7ff 0%, #e3edfc 100%);
+  border: 1px solid #cfdcf2;
+  color: #10284d;
+}
+:root:not([data-theme="dark"]) .ads-funnel-label { color: #0b2a5c; text-shadow: 0 0 6px rgba(255, 255, 255, 0.9); background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.8) 35%, rgba(255, 255, 255, 0) 72%); }
+:root:not([data-theme="dark"]) .ads-funnel-label small { color: #2c4f80; }
+:root:not([data-theme="dark"]) .ads-funnel-icon svg { stroke: #1d5fc4; filter: drop-shadow(0 0 3px rgba(60, 150, 255, 0.5)); }
+:root:not([data-theme="dark"]) .ads-funnel-number { color: #4a6283; }
+:root:not([data-theme="dark"]) .ads-funnel-number strong { color: #0b2a5c; text-shadow: none; }
+:root:not([data-theme="dark"]) .ads-funnel-conv { color: #0b2a5c; background: rgba(60, 140, 240, 0.12); border-color: rgba(40, 110, 220, 0.3); }
+:root:not([data-theme="dark"]) .ads-funnel-detail,
+:root:not([data-theme="dark"]) .ads-funnel-legend { color: #4a6283; }
+:root:not([data-theme="dark"]) .ads-funnel-stats-name { color: #1d5fc4; }
+:root:not([data-theme="dark"]) .ads-funnel.is-stacked .ads-funnel-stats { border-left-color: rgba(40, 110, 220, 0.5); }
+:root:not([data-theme="dark"]) .ads-funnel-legend-dot { background: #2f7de0; box-shadow: 0 0 5px rgba(60, 150, 255, 0.6); }
+.ads-funnel-subtitle { margin-top: 8px; }
+.ads-funnel-daily { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.ads-funnel-mini { position: relative; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 6px; background: var(--bg); }
+.ads-funnel-mini-title { margin: 0 0 4px; font-size: 13px; color: var(--text); display: flex; justify-content: space-between; gap: 8px; }
+.ads-funnel-mini-title span { color: var(--muted); font-size: 12px; }
+.ads-chart-svg .ads-funnel-marker { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+@media (max-width: 640px) {
+  .ads-funnel { padding: 16px 12px 14px; }
+}
+
+
+
+

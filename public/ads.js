@@ -412,6 +412,428 @@ function renderSpendChart(entries) {
   hitRect.addEventListener('pointerleave', hide);
 }
 
+// ─── Marketing funnel (เห็น → จดจำ → สนใจ → พิจารณา → ลงมือ) ──────────────
+// Meta numbers come live from /api/ad-funnel (reach must be de-duplicated
+// over the whole range by Meta, so it can't be summed from daily rows); the
+// site stages come from tasaki-web's own tracker.
+const SITE_REDESIGN_DATE = '2026-10-02'; // mobile product page + dealer button update
+const SCROLL_TRACKING_START = '2026-09-29';
+let adFunnelCampaignChoice = null;
+let adFunnelRequestId = 0;
+
+function addDays(key, n) {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+const FUNNEL_ICONS = {
+  awareness: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  interest: '<svg viewBox="0 0 24 24"><path d="M9 9l5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2L8 5M2.2 7.2L5 8M14 4.1l-2.1 1.4M4.1 14l1.4-2.1"/></svg>',
+  consideration: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6M11 8v6"/></svg>',
+  purchase: '<svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg>',
+  retention: '<svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+};
+
+let adFunnelResizeObserver = null;
+let adFunnelThemeObserver = null;
+let adFunnelRedraw = null;
+
+// Hologram funnel drawn as ONE continuous glass shape on a single canvas:
+// a straight cone that curves smoothly into a neck, cut into stage layers by
+// elliptical rims. Inside each layer `count` glowing dots (1 dot = 1 person)
+// fill the front surface, seeded so they don't jump around on redraw.
+// Returns each layer's centre y + right edge so labels/stats can line up.
+function funnelRand(seed) {
+  let a = seed * 2654435761;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function drawHoloFunnel(canvas, stages, { stacked }) {
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (!W || !H) return null;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  // Same hologram in both themes: on the dark stage the glass glows light
+  // blue; on the light stage it's a deeper blue glass with blue dots
+  // (additive "lighter" blending would wash out on white).
+  const light = document.documentElement.getAttribute('data-theme') !== 'dark';
+  const C = light ? {
+    edge: '40, 110, 220', streak: '255, 255, 255', mid: '60, 130, 230', fill: '70, 140, 235',
+    dotCore: (tw) => `rgba(${20 + tw * 30}, ${110 + tw * 40}, ${220 + tw * 30}, ${0.45 + tw * 0.5})`, dotGlow: 'rgba(60, 150, 255, 0.6)',
+    outline: 'rgba(40, 110, 220, 0.9)', rimBack: 'rgba(40, 110, 220, 0.3)', rimFront: 'rgba(30, 95, 210, 0.95)', rimTop: 'rgba(90, 160, 240, 0.12)',
+    glow: 'rgba(60, 150, 255, 0.5)', lineA: 'rgba(40, 110, 220, 0.85)', lineB: 'rgba(40, 110, 220, 0.12)', pin: 'rgba(30, 95, 210, 1)',
+    blend: 'source-over', bodyAlpha: 0.75,
+  } : {
+    edge: '120, 200, 255', streak: '170, 225, 255', mid: '80, 160, 255', fill: '90, 170, 255',
+    dotCore: (tw) => `rgba(${190 + tw * 50}, ${235 + tw * 20}, 255, ${0.35 + tw * 0.6})`, dotGlow: 'rgba(110, 215, 255, 0.95)',
+    outline: 'rgba(190, 235, 255, 0.85)', rimBack: 'rgba(190, 235, 255, 0.35)', rimFront: 'rgba(235, 250, 255, 0.95)', rimTop: 'rgba(170, 225, 255, 0.12)',
+    glow: 'rgba(120, 210, 255, 0.9)', lineA: 'rgba(170, 230, 255, 0.9)', lineB: 'rgba(170, 230, 255, 0.15)', pin: 'rgba(220, 245, 255, 1)',
+    blend: 'lighter', bodyAlpha: 1,
+  };
+
+  const funnelW = stacked ? W * 0.96 : W * 0.78;
+  const cx = stacked ? W / 2 : funnelW / 2 + 8;
+  const TILT = 0.15; // rim ry ÷ rx
+  const R0 = funnelW / 2 - 4, R1 = R0 * 0.3;
+  const y0 = R0 * TILT + 6;
+  const y1 = H - R1 * TILT - 10; // flat bottom, no spout
+
+  // Straight cone y0→y1.
+  const slope = (R1 - R0) / (y1 - y0);
+  const rAt = (y) => R0 + slope * (Math.min(Math.max(y, y0), y1) - y0);
+  const frontY = (yc, dx) => { const r = rAt(yc); return yc + r * TILT * Math.sqrt(Math.max(0, 1 - (dx / r) ** 2)); };
+
+  // Layer boundaries: all stages on the cone, the top one a bit taller.
+  const weights = [1.3, 1, 1, 1, 0.9];
+  const wSum = weights.reduce((x, v) => x + v, 0);
+  const cuts = [y0];
+  weights.forEach((wt) => cuts.push(cuts[cuts.length - 1] + ((y1 - y0) * wt) / wSum));
+
+  const silhouette = new Path2D();
+  silhouette.moveTo(cx - R0, y0);
+  silhouette.lineTo(cx - R1, y1);
+  silhouette.ellipse(cx, y1, R1, R1 * TILT, 0, Math.PI, 0, true);
+  silhouette.lineTo(cx + R0, y0);
+  silhouette.closePath();
+
+  // Glass body: one horizontal gradient per scanline, scaled to that
+  // scanline's radius so the bright edges follow the silhouette.
+  for (let y = Math.floor(y0); y <= y1 + R1 * TILT; y++) {
+    const r = rAt(y);
+    const fade = (1 - 0.35 * ((y - y0) / (y1 - y0))) * C.bodyAlpha;
+    const g = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+    g.addColorStop(0, `rgba(${C.edge}, ${0.5 * fade})`);
+    g.addColorStop(0.12, `rgba(${C.fill}, ${0.2 * fade})`);
+    g.addColorStop(0.28, `rgba(${C.streak}, ${0.26 * fade})`); // specular streak
+    g.addColorStop(0.5, `rgba(${C.mid}, ${0.14 * fade})`);
+    g.addColorStop(0.88, `rgba(${C.fill}, ${0.2 * fade})`);
+    g.addColorStop(1, `rgba(${C.edge}, ${0.48 * fade})`);
+    ctx.save();
+    ctx.clip(silhouette);
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r - 1, y, r * 2 + 2, 1.2);
+    ctx.restore();
+  }
+
+  // Dots.
+  const layout = [];
+  stages.forEach((st, i) => {
+    const ya = cuts[i], yb = cuts[i + 1];
+    layout.push({ y: (ya + yb) / 2 + rAt((ya + yb) / 2) * TILT * 0.6, edge: cx + rAt((ya + yb) / 2) });
+    if (!st.value) return;
+    const rand = funnelRand(i + 1);
+    const rTop = rAt(ya);
+    ctx.save();
+    ctx.clip(silhouette);
+    ctx.globalCompositeOperation = C.blend;
+    ctx.shadowColor = C.dotGlow;
+    ctx.shadowBlur = 3;
+    for (let n = 0, guard = 0; n < st.value && guard < st.value * 30; guard++) {
+      const dx = (rand() * 2 - 1) * rTop;
+      const y = ya + rand() * (yb - ya + rTop * TILT);
+      if (Math.abs(dx) > rAt(y) - 2) continue;
+      if (y < frontY(ya, dx) + 1 || y > frontY(yb, dx) - 1) continue;
+      const tw = rand();
+      ctx.fillStyle = C.dotCore(tw);
+      ctx.beginPath();
+      ctx.arc(cx + dx, y, 0.45 + tw * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      n++;
+    }
+    ctx.restore();
+  });
+
+  // Outline + rims (back half dim, front half bright → reads as 3D glass).
+  ctx.save();
+  ctx.shadowColor = C.glow;
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 1.3;
+  ctx.strokeStyle = C.outline;
+  ctx.stroke(silhouette);
+  cuts.forEach((y, i) => {
+    const r = rAt(y), ry = r * TILT;
+    ctx.beginPath();
+    ctx.ellipse(cx, y, r, ry, 0, Math.PI, 0);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = C.rimBack;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, y, r, ry, 0, 0, Math.PI);
+    ctx.lineWidth = i === 0 ? 2 : 1.4;
+    ctx.strokeStyle = C.rimFront;
+    ctx.stroke();
+    if (i === 0) {
+      ctx.beginPath();
+      ctx.ellipse(cx, y, r, ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = C.rimTop;
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+
+  // Glowing leader lines from each layer's edge to its stats.
+  if (!stacked) {
+    ctx.save();
+    ctx.shadowColor = C.glow;
+    ctx.shadowBlur = 4;
+    layout.forEach(({ y, edge }) => {
+      const xEnd = funnelW + 14;
+      const g = ctx.createLinearGradient(edge, 0, xEnd, 0);
+      g.addColorStop(0, C.lineA);
+      g.addColorStop(1, C.lineB);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(edge + 4, y);
+      ctx.lineTo(xEnd, y);
+      ctx.stroke();
+      ctx.fillStyle = C.pin;
+      ctx.beginPath();
+      ctx.arc(edge + 4, y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+  return { layout, cx, statsLeft: funnelW + 20 };
+}
+
+async function renderAdFunnel(entries) {
+  const funnelEl = document.getElementById('adFunnel');
+  const dailyEl = document.getElementById('adFunnelDaily');
+  const select = document.getElementById('adFunnelCampaign');
+
+  const campaigns = aggregateByCampaign(entries).sort((a, b) => b.spend - a.spend).map((c) => c.campaignName);
+  if (!campaigns.length) return;
+  if (!campaigns.includes(adFunnelCampaignChoice)) adFunnelCampaignChoice = campaigns[0];
+  select.innerHTML = '';
+  campaigns.forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+  select.value = adFunnelCampaignChoice;
+  select.hidden = campaigns.length < 2;
+  select.onchange = () => { adFunnelCampaignChoice = select.value; renderAdFunnel(entries); };
+
+  const days = entries.filter((e) => e.campaignName === adFunnelCampaignChoice).map((e) => dateKey(e.date)).sort();
+  const since = days[0];
+  const until = days[days.length - 1];
+
+  const requestId = ++adFunnelRequestId;
+  funnelEl.innerHTML = '<p class="key-messages-hint">กำลังโหลด…</p>';
+  dailyEl.innerHTML = '';
+  let data;
+  try {
+    const params = new URLSearchParams({ campaign: adFunnelCampaignChoice, since, until });
+    const res = await fetch(`/api/ad-funnel?${params.toString()}`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+  } catch (e) {
+    if (requestId === adFunnelRequestId) funnelEl.innerHTML = `<p class="key-messages-hint">โหลดกรวยไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  if (requestId !== adFunnelRequestId) return; // a newer filter change already re-rendered
+
+  const { meta, site } = data;
+  const partlyUnmeasured = since < SCROLL_TRACKING_START && site.measured < site.visitors;
+  const pct = (n, base) => {
+    if (!base) return '';
+    const p = (n / base) * 100;
+    return `${p.toFixed(p < 10 ? 1 : 0)}%`;
+  };
+  // Seen-button % is over the visitors whose scroll was actually measured.
+  const considerBase = partlyUnmeasured ? site.measured : site.visitors;
+  const stages = [
+    {
+      key: 'awareness', en: 'Awareness', th: 'เห็นโฆษณา',
+      value: meta.reach, unit: 'คน',
+      lines: [
+        `แสดง ${fmtNum(meta.impressions)} ครั้ง · เฉลี่ยคนละ ${meta.frequency.toFixed(1)} ครั้ง`,
+        `จดจำ / มีส่วนร่วม ${fmtNum(meta.engagement)} ครั้ง (ไลก์ ${fmtNum(meta.reactions)} · เซฟ ${fmtNum(meta.saves)} · คอมเมนต์ ${fmtNum(meta.comments)})`,
+      ],
+    },
+    {
+      key: 'interest', en: 'Interest', th: 'สนใจ คลิกเข้าเว็บ',
+      value: site.visitors, unit: 'คน', conv: `${pct(site.visitors, meta.reach)} ของคนที่เห็น`,
+      lines: [
+        `คลิกลิงก์ ${fmtNum(meta.linkClicks)} ครั้ง · คลิกละ ${fmtBaht(meta.linkClicks ? meta.spend / meta.linkClicks : 0)}`,
+        `ดูหน้าอื่นต่อ ${fmtNum(site.multiPage)} คน`,
+      ],
+    },
+    {
+      key: 'consideration', en: 'Consideration', th: 'พิจารณา เห็นปุ่มหาตัวแทน',
+      value: site.ctaSeen, unit: 'คน', conv: `${pct(site.ctaSeen, considerBase)} ของคนที่เข้าเว็บ`,
+      lines: [
+        `อ่านเกินครึ่งหน้า ${fmtNum(site.read50)} คน`,
+        ...(partlyUnmeasured ? [`วัดได้ตั้งแต่ 29 ก.ย. (${fmtNum(site.measured)} จาก ${fmtNum(site.visitors)} คน)`] : []),
+      ],
+    },
+    {
+      key: 'purchase', en: 'Purchase', th: 'กดสั่งซื้อผ่านตัวแทน',
+      value: site.ctaClicked, unit: 'คน', conv: `${pct(site.ctaClicked, site.ctaSeen)} ของคนที่เห็นปุ่ม`,
+      lines: [
+        `฿${fmtNum(site.ctaClicked ? meta.spend / site.ctaClicked : 0)} ต่อคน`,
+        `Facebook นับเป็น Lead ได้ ${fmtNum(meta.leads)}`,
+        'ยอดขายจริงเกิดที่ร้านตัวแทน ยังวัดไม่ได้',
+      ],
+    },
+    {
+      key: 'retention', en: 'Retention', th: 'ซื้อซ้ำ / บอกต่อ',
+      value: null, unit: '',
+      lines: ['ยังไม่มีข้อมูล ต้องเชื่อมกับการลงทะเบียนรับประกันหรือข้อมูลจากตัวแทน'],
+    },
+  ];
+
+  funnelEl.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'ads-funnel-canvas';
+  canvas.setAttribute('aria-hidden', 'true');
+  funnelEl.appendChild(canvas);
+  const items = stages.map((s) => {
+    const label = document.createElement('div');
+    label.className = 'ads-funnel-label';
+    label.innerHTML = `<span class="ads-funnel-icon">${FUNNEL_ICONS[s.key]}</span><span><strong>${s.en}</strong><small>${escapeHtml(s.th)}</small></span>`;
+
+    const stats = document.createElement('div');
+    stats.className = `ads-funnel-stats is-${s.key}`;
+    stats.innerHTML = `<p class="ads-funnel-stats-name">${s.en} · ${escapeHtml(s.th)}</p>`
+      + (s.value === null
+        ? '<p class="ads-funnel-number is-empty"><strong>—</strong></p>'
+        : `<p class="ads-funnel-number"><strong>${fmtNum(s.value)}</strong> ${s.unit}${s.conv ? `<span class="ads-funnel-conv">${escapeHtml(s.conv)}</span>` : ''}</p>`)
+      + s.lines.map((l) => `<p class="ads-funnel-detail">${escapeHtml(l)}</p>`).join('');
+    funnelEl.append(label, stats);
+    return { label, stats };
+  });
+  const legend = document.createElement('p');
+  legend.className = 'ads-funnel-legend';
+  legend.innerHTML = '<span class="ads-funnel-legend-dot"></span> 1 จุด = 1 คน';
+  funnelEl.appendChild(legend);
+
+  const drawAll = () => {
+    // On narrow screens the funnel takes the full width and stats stack below.
+    const stacked = funnelEl.clientWidth < 620;
+    funnelEl.classList.toggle('is-stacked', stacked);
+    const geo = drawHoloFunnel(canvas, stages, { stacked });
+    if (!geo) return;
+    items.forEach(({ label, stats }, i) => {
+      const { y } = geo.layout[i];
+      label.style.left = `${geo.cx}px`;
+      label.style.top = `${y + canvas.offsetTop}px`;
+      stats.style.left = stacked ? '' : `${geo.statsLeft}px`;
+      stats.style.top = stacked ? '' : `${y + canvas.offsetTop}px`;
+    });
+  };
+  drawAll();
+  if (adFunnelResizeObserver) adFunnelResizeObserver.disconnect();
+  let lastWidth = 0;
+  adFunnelResizeObserver = new ResizeObserver(() => {
+    if (funnelEl.clientWidth === lastWidth) return;
+    lastWidth = funnelEl.clientWidth;
+    drawAll();
+  });
+  adFunnelResizeObserver.observe(funnelEl);
+  if (!adFunnelThemeObserver) {
+    adFunnelThemeObserver = new MutationObserver(() => adFunnelRedraw && adFunnelRedraw());
+    adFunnelThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  adFunnelRedraw = drawAll;
+
+  // Fill no-spend days so the x-axis is continuous.
+  const byDate = new Map(data.daily.map((d) => [d.date, d]));
+  const series = [];
+  for (let d = since; d <= until; d = addDays(d, 1)) {
+    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0 });
+  }
+  dailyEl.innerHTML = '';
+  [
+    { key: 'reach', label: 'เห็นโฆษณา (คน)' },
+    { key: 'engagement', label: 'มีส่วนร่วม (ครั้ง)' },
+    { key: 'linkClicks', label: 'คลิกเข้าเว็บ (ครั้ง)' },
+    { key: 'visitors', label: 'เข้าถึงเว็บ (คน)' },
+    { key: 'ctaClicked', label: 'กดปุ่มหาตัวแทน (คน)' },
+  ].forEach((m) => dailyEl.appendChild(renderFunnelMiniChart(series, m.key, m.label)));
+}
+
+function renderFunnelMiniChart(points, key, title) {
+  const card = document.createElement('div');
+  card.className = 'ads-funnel-mini';
+  const h = document.createElement('p');
+  h.className = 'ads-funnel-mini-title';
+  const total = points.reduce((s, p) => s + p[key], 0);
+  h.innerHTML = `${escapeHtml(title)} <span>รวม ${fmtNum(total)}</span>`;
+  card.appendChild(h);
+
+  const W = 300, H = 130;
+  const padL = 34, padR = 10, padT = 10, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxV = niceMax(Math.max(...points.map((p) => p[key]), 1));
+  const x = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
+  const y = (v) => padT + plotH - (v / maxV) * plotH;
+
+  const svg = svgEl('svg', { class: 'ads-chart-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': title });
+  [0, maxV / 2, maxV].forEach((v) => {
+    svg.appendChild(svgEl('line', { class: 'ads-grid-line', x1: padL, x2: W - padR, y1: y(v), y2: y(v) }));
+    const lbl = svgEl('text', { class: 'ads-axis-label', x: padL - 6, y: y(v) + 4, 'text-anchor': 'end' });
+    lbl.textContent = v.toLocaleString('th-TH', { maximumFractionDigits: 1 });
+    svg.appendChild(lbl);
+  });
+  const edgeIdx = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+  edgeIdx.forEach((i) => {
+    const lbl = svgEl('text', { class: 'ads-axis-label', x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle' });
+    lbl.textContent = fmtDate(points[i].date);
+    svg.appendChild(lbl);
+  });
+
+  const markIdx = points.findIndex((p) => p.date === SITE_REDESIGN_DATE);
+  if (markIdx >= 0) {
+    svg.appendChild(svgEl('line', { class: 'ads-funnel-marker', x1: x(markIdx), x2: x(markIdx), y1: padT, y2: padT + plotH }));
+  }
+
+  svg.appendChild(svgEl('path', { class: 'ads-line-mark', d: points.map((p, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(p[key])}`).join(' ') }));
+  points.forEach((p, i) => svg.appendChild(svgEl('circle', { class: 'ads-end-dot', cx: x(i), cy: y(p[key]), r: 3.5 })));
+
+  const crosshair = svgEl('line', { class: 'ads-crosshair', x1: 0, x2: 0, y1: padT, y2: padT + plotH });
+  svg.appendChild(crosshair);
+  const hit = svgEl('rect', { x: padL - 8, y: 0, width: plotW + 16, height: H, fill: 'transparent' });
+  svg.appendChild(hit);
+  card.appendChild(svg);
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'ads-chart-tooltip';
+  card.appendChild(tooltip);
+
+  hit.addEventListener('pointermove', (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const px = ((evt.clientX - rect.left) / rect.width) * W;
+    let i = 0;
+    points.forEach((_, j) => { if (Math.abs(x(j) - px) < Math.abs(x(i) - px)) i = j; });
+    crosshair.setAttribute('x1', x(i));
+    crosshair.setAttribute('x2', x(i));
+    crosshair.style.opacity = '1';
+    tooltip.innerHTML = `<div class="tt-row"><span class="tt-label">${fmtDate(points[i].date)}</span><span class="tt-value">${fmtNum(points[i][key])}</span></div>`;
+    tooltip.classList.add('visible');
+    const scale = rect.width / W;
+    tooltip.style.left = Math.min(x(i) * scale, rect.width - 100) + 'px';
+    tooltip.style.top = (svg.offsetTop + y(points[i][key]) * scale - 44) + 'px';
+  });
+  hit.addEventListener('pointerleave', () => {
+    crosshair.style.opacity = '0';
+    tooltip.classList.remove('visible');
+  });
+  return card;
+}
+
 // ─── CTR by campaign bar chart ─────────────────────────────────────────
 function renderCtrChart(entries) {
   const container = document.getElementById('adCtrChart');
@@ -696,6 +1118,7 @@ function applyFiltersAndRender() {
   adInsightsContent.hidden = false;
   renderStatTiles(filtered);
   renderInsights(filtered);
+  renderAdFunnel(filtered);
   renderSpendChart(filtered);
   renderCtrChart(filtered);
   renderCampaignTree(filtered);
