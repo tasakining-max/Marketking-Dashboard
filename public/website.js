@@ -97,7 +97,6 @@ function aggregateSources(referrers) {
 // ─── KPI tiles ──────────────────────────────────────────────────────────
 function renderStatTiles(data) {
   const total = data.totals.views || 0;
-  const notFound = (data.statusBreakdown.find((s) => s.status === 404) || {}).views || 0;
   const adViews = (data.utmCampaigns || [])
     .filter((r) => r.medium === 'paid')
     .reduce((sum, r) => sum + r.views, 0);
@@ -106,7 +105,6 @@ function renderStatTiles(data) {
     { label: 'เข้าชมทั้งหมด', value: fmtNum(total) },
     { label: 'ผู้เข้าชม (sessions)', value: fmtNum(data.totals.sessions || 0) },
     { label: 'เข้าชมจากโฆษณา (Ads)', value: `${fmtNum(adViews)} (${fmtPct(total ? (adViews / total) * 100 : 0)})` },
-    { label: 'หน้าไม่พบ (404)', value: fmtNum(notFound) },
   ];
 
   const grid = document.getElementById('siteStatGrid');
@@ -136,14 +134,6 @@ function renderInsights(data) {
     insights.push({
       type: 'good', icon: '✅',
       text: `หน้าที่มีคนเข้าดูมากสุดคือ "${topPage.path}" (${fmtNum(topPage.views)} ครั้ง)`,
-    });
-  }
-
-  const notFound = (data.statusBreakdown.find((s) => s.status === 404) || {}).views || 0;
-  if (notFound > 0) {
-    insights.push({
-      type: 'warning', icon: '⚠️',
-      text: `มีการเข้าหน้าที่ไม่พบ (404) ${fmtNum(notFound)} ครั้ง — น่าจะมีลิงก์เสียหรือ URL เก่าที่ยังมีคนคลิกเข้ามา`,
     });
   }
 
@@ -393,12 +383,13 @@ function render404s(data) {
   tbody.innerHTML = '';
   const rows = data.paths || [];
   if (!rows.length) {
-    summary.textContent = 'ไม่มีการเข้าหน้าที่ไม่พบในช่วงเวลานี้';
+    summary.textContent = data.fixed?.paths
+      ? `ไม่มีลิงก์ที่ยังเสียอยู่ — ลิงก์ 404 ทั้ง ${fmtNum(data.fixed.paths)} ลิงก์ในช่วงนี้ redirect/เปิดได้แล้ว`
+      : 'ไม่มีการเข้าหน้าที่ไม่พบในช่วงเวลานี้';
     return;
   }
-  const fixed = rows.filter((r) => liveStatusLabel(r.live).cls === 'is-fixed').length;
   const broken = rows.filter((r) => liveStatusLabel(r.live).cls === 'is-broken').length;
-  summary.textContent = `รวม ${fmtNum(data.totals.views)} ครั้ง จาก ${fmtNum(data.totals.paths)} ลิงก์ — แสดง ${rows.length} ลิงก์ที่ถูกเข้าบ่อยสุด: แก้แล้ว ${fixed} · ยังเสีย ${broken} (เช็กกับเว็บจริงทุก 10 นาที)`;
+  summary.textContent = `แสดงเฉพาะลิงก์ที่ยังไม่ได้ redirect ${rows.length} ลิงก์ (ยังเสีย ${broken}) — ซ่อนลิงก์ที่ redirect/เปิดได้แล้ว ${fmtNum(data.fixed?.paths || 0)} ลิงก์ (เช็กกับเว็บจริงทุก 10 นาที)`;
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
     const status = liveStatusLabel(r.live);

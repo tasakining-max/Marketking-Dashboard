@@ -1303,14 +1303,31 @@ app.get('/api/website-404s', async (req, res) => {
       tasakiWebPool.query(`
         SELECT path, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions, max("createdAt") AS "lastSeen"
         FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND status = 404
-        GROUP BY path ORDER BY views DESC, "lastSeen" DESC LIMIT 50
+        GROUP BY path ORDER BY views DESC, "lastSeen" DESC LIMIT 200
       `, range),
     ]);
-    const { rows: refRows } = paths.length ? await tasakiWebPool.query(`
+    // Check a wider pool than the 50 we show: paths that now redirect (or open
+    // fine) are dropped, and the still-broken ones further down move up.
+    // A handful of checks at a time so a cold cache doesn't fire them all at once.
+    const live = new Array(paths.length);
+    for (let i = 0; i < paths.length; i += 6) {
+      const batch = paths.slice(i, i + 6);
+      const results = await Promise.all(batch.map((p) => (p.path.startsWith('/') ? liveStatus(p.path) : { status: 0, location: '' })));
+      results.forEach((r, j) => { live[i + j] = r; });
+    }
+    const isFixed = (l) => l && ((l.status >= 300 && l.status < 400) || l.status === 200);
+    const fixed = { paths: 0, views: 0 };
+    const shown = [];
+    paths.forEach((p, i) => {
+      if (isFixed(live[i])) { fixed.paths++; fixed.views += p.views; return; }
+      if (shown.length < 50) shown.push({ ...p, live: live[i] });
+    });
+
+    const { rows: refRows } = shown.length ? await tasakiWebPool.query(`
       SELECT path, referrer, count(*)::int AS views
       FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND status = 404 AND path = ANY($3)
       GROUP BY path, referrer
-    `, [...range, paths.map((p) => p.path)]) : { rows: [] };
+    `, [...range, shown.map((p) => p.path)]) : { rows: [] };
 
     const sources = new Map();
     for (const r of refRows) {
@@ -1320,20 +1337,12 @@ app.get('/api/website-404s', async (req, res) => {
       sources.set(r.path, bucket);
     }
 
-    // A handful of checks at a time so a cold cache doesn't fire 50 requests at once.
-    const live = new Array(paths.length);
-    for (let i = 0; i < paths.length; i += 6) {
-      const batch = paths.slice(i, i + 6);
-      const results = await Promise.all(batch.map((p) => (p.path.startsWith('/') ? liveStatus(p.path) : { status: 0, location: '' })));
-      results.forEach((r, j) => { live[i + j] = r; });
-    }
-
     res.json({
       totals: totals[0],
-      paths: paths.map((p, i) => ({
+      fixed,
+      paths: shown.map((p) => ({
         ...p,
         sources: [...(sources.get(p.path) || new Map())].map(([label, views]) => ({ label, views })).sort((a, b) => b.views - a.views),
-        live: live[i],
       })),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }

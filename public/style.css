@@ -3834,7 +3834,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .ads-budget-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 0 6px; margin-left: 4px; white-space: nowrap; }
 @media (max-width: 640px) { .ads-budget-list { padding-left: 0; border-left: 0; } }
 
-.site-404-wrap { white-space: normal; word-break: break-all; max-width: 320px; }
-.site-404-status { white-space: normal; font-size: 12px; }
+.ads-table td.site-404-wrap { white-space: normal; overflow-wrap: anywhere; word-break: break-all; min-width: 160px; max-width: 320px; }
+.ads-table td.site-404-status { white-space: normal; font-size: 12px; }
 .site-404-status.is-fixed { color: #16a34a; }
 .site-404-status.is-broken { color: #dc2626; font-weight: 600; }
