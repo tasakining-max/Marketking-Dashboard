@@ -376,6 +376,67 @@ function renderTopPages(data) {
   });
 }
 
+// ─── 404 detail: where broken links are clicked, and the live fix status ──
+// The live column asks tasaki.co.th what the path does right now, so a path
+// redirected after its 404s were logged shows as fixed rather than broken.
+function liveStatusLabel(live) {
+  if (!live || !live.status) return { text: 'เช็กไม่ได้', cls: '' };
+  if (live.status >= 300 && live.status < 400) return { text: `✅ Redirect → ${live.location || '?'}`, cls: 'is-fixed' };
+  if (live.status === 200) return { text: '✅ เปิดได้แล้ว', cls: 'is-fixed' };
+  if (live.status === 404 || live.status === 410) return { text: '❌ ยังเสียอยู่', cls: 'is-broken' };
+  return { text: `HTTP ${live.status}`, cls: '' };
+}
+
+function render404s(data) {
+  const tbody = document.getElementById('site404Body');
+  const summary = document.getElementById('site404Summary');
+  tbody.innerHTML = '';
+  const rows = data.paths || [];
+  if (!rows.length) {
+    summary.textContent = 'ไม่มีการเข้าหน้าที่ไม่พบในช่วงเวลานี้';
+    return;
+  }
+  const fixed = rows.filter((r) => liveStatusLabel(r.live).cls === 'is-fixed').length;
+  const broken = rows.filter((r) => liveStatusLabel(r.live).cls === 'is-broken').length;
+  summary.textContent = `รวม ${fmtNum(data.totals.views)} ครั้ง จาก ${fmtNum(data.totals.paths)} ลิงก์ — แสดง ${rows.length} ลิงก์ที่ถูกเข้าบ่อยสุด: แก้แล้ว ${fixed} · ยังเสีย ${broken} (เช็กกับเว็บจริงทุก 10 นาที)`;
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const status = liveStatusLabel(r.live);
+    const cells = [
+      String(i + 1),
+      r.path,
+      fmtNum(r.views),
+      fmtNum(r.sessions),
+      r.sources.map((s) => (r.sources.length > 1 ? `${s.label} (${fmtNum(s.views)})` : s.label)).join(' · '),
+      new Date(r.lastSeen).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }),
+      status.text,
+    ];
+    cells.forEach((val, idx) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      if (idx === 2 || idx === 3) td.className = 'ads-num';
+      if (idx === 1 || idx === 4) td.className = 'site-404-wrap';
+      if (idx === 6) td.className = `site-404-status ${status.cls}`;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+async function fetch404s() {
+  try {
+    const url = currentRange
+      ? `/api/website-404s?since=${encodeURIComponent(currentRange[0].toISOString())}&until=${encodeURIComponent(currentRange[1].toISOString())}`
+      : `/api/website-404s?days=${currentDays}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    render404s(data);
+  } catch (e) {
+    document.getElementById('site404Summary').textContent = `โหลดข้อมูล 404 ไม่สำเร็จ: ${e.message}`;
+  }
+}
+
 // ─── Load + filter ────────────────────────────────────────────────────────
 const siteEmpty = document.getElementById('siteEmpty');
 const siteBody = document.getElementById('siteBody');
@@ -495,6 +556,7 @@ async function fetchAndRender() {
     const res = await fetch(url);
     const data = await res.json();
     renderAll(data);
+    fetch404s();
   } catch (e) {
     console.error('Failed to load website page views', e);
   }

@@ -1236,6 +1236,109 @@ app.get('/api/website-pageviews', async (req, res) => {
 // Paid-ad UTM rows only (utm_medium=paid, as set in each ad's URL
 // parameters) for the Ads page — same shape as website-pageviews'
 // utmCampaigns so both pages share public/utm-journey.js.
+
+// ─── Website 404s: where they come from, and are they redirected yet ────────
+// tasaki-web logs a 404 as a PageView with status 404. For the top paths we
+// group the referrers (where the broken link was clicked) and ask the live
+// site what the path does *now* — a 3xx means a redirect has since been
+// added (lib/wixRedirects.ts, proxy.ts, or a product page's own redirect),
+// so the count is history, not an open problem. Checked against www (the
+// apex host only 308s to www, which would hide the real answer).
+const LIVE_STATUS_TTL_MS = 10 * 60 * 1000;
+const liveStatusCache = new Map();
+async function liveStatus(path) {
+  const hit = liveStatusCache.get(path);
+  if (hit && hit.expires > Date.now()) return hit.data;
+  let data;
+  try {
+    const r = await fetch(`https://www.tasaki.co.th${path}`, {
+      redirect: 'manual',
+      headers: { 'user-agent': 'TasakiMarketingDashboard/1.0 (404 check)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    data = { status: r.status, location: r.headers.get('location') || '' };
+    // A redirect thrown from a Next.js page after streaming has started
+    // (tasaki-web's deleted-product / missing-BTU redirects) arrives as a 200
+    // carrying a meta refresh instead of a 3xx — report it as the redirect it is.
+    if (r.status === 200) {
+      const html = await r.text();
+      const m = html.match(/id="__next-page-redirect"[^>]*content="\d+;url=([^"]+)"/);
+      if (m) data = { status: 308, location: m[1], soft: true };
+    } else {
+      r.body?.cancel().catch(() => {});
+    }
+  } catch (e) {
+    data = { status: 0, location: '', error: e.cause?.code || e.name };
+  }
+  liveStatusCache.set(path, { data, expires: Date.now() + LIVE_STATUS_TTL_MS });
+  return data;
+}
+
+function referrerSource(referrer) {
+  if (!referrer) return 'ไม่มี referrer (พิมพ์เอง/บุ๊กมาร์ก/แอป/บอต)';
+  let url;
+  try { url = new URL(referrer); } catch { return referrer.slice(0, 80); }
+  const host = url.hostname.replace(/^www\./, '');
+  if (host === 'tasaki.co.th') return `ลิงก์ในเว็บเอง: ${url.pathname}`;
+  if (/(^|\.)google\./.test(host)) return 'Google';
+  if (/facebook\.com$|fb\.com$|fb\.me$/.test(host)) return 'Facebook';
+  if (/(^|\.)line\.me$/.test(host)) return 'LINE';
+  if (/(^|\.)bing\.com$/.test(host)) return 'Bing';
+  if (/chatgpt\.com$|openai\.com$/.test(host)) return 'ChatGPT';
+  return host;
+}
+
+app.get('/api/website-404s', async (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
+  const untilParam = typeof req.query.until === 'string' ? new Date(req.query.until) : null;
+  const hasRange = sinceParam && !isNaN(sinceParam) && untilParam && !isNaN(untilParam);
+  const range = hasRange ? [sinceParam, untilParam] : [new Date(Date.now() - days * 86400000), new Date()];
+  try {
+    const [{ rows: totals }, { rows: paths }] = await Promise.all([
+      tasakiWebPool.query(`
+        SELECT count(*)::int AS views, count(DISTINCT path)::int AS paths
+        FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND status = 404
+      `, range),
+      tasakiWebPool.query(`
+        SELECT path, count(*)::int AS views, count(DISTINCT "sessionId")::int AS sessions, max("createdAt") AS "lastSeen"
+        FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND status = 404
+        GROUP BY path ORDER BY views DESC, "lastSeen" DESC LIMIT 50
+      `, range),
+    ]);
+    const { rows: refRows } = paths.length ? await tasakiWebPool.query(`
+      SELECT path, referrer, count(*)::int AS views
+      FROM "PageView" WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND status = 404 AND path = ANY($3)
+      GROUP BY path, referrer
+    `, [...range, paths.map((p) => p.path)]) : { rows: [] };
+
+    const sources = new Map();
+    for (const r of refRows) {
+      const bucket = sources.get(r.path) || new Map();
+      const label = referrerSource(r.referrer);
+      bucket.set(label, (bucket.get(label) || 0) + r.views);
+      sources.set(r.path, bucket);
+    }
+
+    // A handful of checks at a time so a cold cache doesn't fire 50 requests at once.
+    const live = new Array(paths.length);
+    for (let i = 0; i < paths.length; i += 6) {
+      const batch = paths.slice(i, i + 6);
+      const results = await Promise.all(batch.map((p) => (p.path.startsWith('/') ? liveStatus(p.path) : { status: 0, location: '' })));
+      results.forEach((r, j) => { live[i + j] = r; });
+    }
+
+    res.json({
+      totals: totals[0],
+      paths: paths.map((p, i) => ({
+        ...p,
+        sources: [...(sources.get(p.path) || new Map())].map(([label, views]) => ({ label, views })).sort((a, b) => b.views - a.views),
+        live: live[i],
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ad-utm-visits', async (req, res) => {
   const sinceParam = typeof req.query.since === 'string' ? new Date(req.query.since) : null;
   const untilParam = typeof req.query.until === 'string' ? new Date(req.query.until) : null;
