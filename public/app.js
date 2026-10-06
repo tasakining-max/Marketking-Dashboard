@@ -2107,9 +2107,10 @@ function thaiDateToday() {
 }
 
 async function buildSummary() {
-  const [cardsRes, issuesRes] = await Promise.all([
+  const [cardsRes, issuesRes, webLogRes] = await Promise.all([
     fetch('/api/cards').then((r) => r.json()),
-    fetch('/api/website-issues').then((r) => r.json())
+    fetch('/api/website-issues').then((r) => r.json()),
+    fetch('/api/website-changelog').then((r) => r.json()).catch(() => ({ entries: [] }))
   ]);
 
   const cards = cardsRes.cards;
@@ -2157,6 +2158,21 @@ async function buildSummary() {
   // Done today
   if (publishedToday.length) {
     lines.push(`✅ เผยแพร่วันนี้: ${publishedToday.map((c) => c.title).join(', ')}`);
+    lines.push('');
+  }
+
+  // Tasaki website work today (from the Website Updates log). Dates are
+  // stored in UTC, so compare by local calendar day — isToday() would drop
+  // anything logged before 07:00 Bangkok time.
+  const webToday = (webLogRes.entries || [])
+    .filter((e) => {
+      const d = new Date(e.date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === todayKey();
+    })
+    .sort((x, y) => new Date(x.date) - new Date(y.date));
+  if (webToday.length) {
+    lines.push(`🌐 งานเว็บ Tasaki วันนี้ (${webToday.length})`);
+    webToday.forEach((e) => lines.push(`- ${e.feature}`));
     lines.push('');
   }
 
