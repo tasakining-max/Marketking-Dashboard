@@ -432,6 +432,7 @@ const FUNNEL_ICONS = {
   interest: '<svg viewBox="0 0 24 24"><path d="M9 9l5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2L8 5M2.2 7.2L5 8M14 4.1l-2.1 1.4M4.1 14l1.4-2.1"/></svg>',
   consideration: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6M11 8v6"/></svg>',
   purchase: '<svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6"/></svg>',
+  contact: '<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',
   retention: '<svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
 };
 
@@ -494,7 +495,7 @@ function drawHoloFunnel(canvas, stages, { stacked }) {
   const frontY = (yc, dx) => { const r = rAt(yc); return yc + r * TILT * Math.sqrt(Math.max(0, 1 - (dx / r) ** 2)); };
 
   // Layer boundaries: all stages on the cone, the top one a bit taller.
-  const weights = [1.3, 1, 1, 1, 0.9];
+  const weights = stages.map((_, i) => (i === 0 ? 1.3 : i === stages.length - 1 ? 0.9 : 1));
   const wSum = weights.reduce((x, v) => x + v, 0);
   const cuts = [y0];
   weights.forEach((wt) => cuts.push(cuts[cuts.length - 1] + ((y1 - y0) * wt) / wSum));
@@ -689,6 +690,20 @@ async function renderAdFunnel(entries) {
       ],
     },
     {
+      key: 'contact', en: 'Contact', th: 'ติดต่อร้านตัวแทน (โทร/นำทาง)',
+      value: site.dealerContacted, unit: 'คน',
+      conv: site.dealerContacted === null ? '' : `${pct(site.dealerContacted, site.ctaClicked)} ของคนที่กดปุ่ม`,
+      lines: site.dealerContacted === null
+        ? ['ยังไม่เริ่มเก็บข้อมูล (รอ deploy ระบบนับการโทร/นำทาง)']
+        : [
+          `โทรหาร้าน ${fmtNum(site.contactBreakdown.phone)} คน · กดนำทาง ${fmtNum(site.contactBreakdown.directions)} คน`,
+          `ปุ่มลอย LINE ${fmtNum(site.contactBreakdown.floatingLine)} คน · โทร ${fmtNum(site.contactBreakdown.floatingPhone)} คน (ไม่นับรวม)`,
+          site.contactTrackingSince
+            ? (since < site.contactTrackingSince ? `เริ่มนับตั้งแต่ ${fmtDate(site.contactTrackingSince)} ช่วงก่อนหน้านั้นไม่มีข้อมูล (ไม่ใช่ 0)` : `เริ่มนับตั้งแต่ ${fmtDate(site.contactTrackingSince)}`)
+            : 'ระบบพร้อมนับแล้ว ยังไม่มีคนกดโทร/นำทาง',
+        ],
+    },
+    {
       key: 'retention', en: 'Retention', th: 'ซื้อซ้ำ / บอกต่อ',
       value: null, unit: '',
       lines: ['ยังไม่มีข้อมูล ต้องเชื่อมกับการลงทะเบียนรับประกันหรือข้อมูลจากตัวแทน'],
@@ -753,7 +768,7 @@ async function renderAdFunnel(entries) {
   const byDate = new Map(data.daily.map((d) => [d.date, d]));
   const series = [];
   for (let d = since; d <= until; d = addDays(d, 1)) {
-    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0 });
+    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, dealerContacted: 0 });
   }
   dailyEl.innerHTML = '';
   [
@@ -762,6 +777,7 @@ async function renderAdFunnel(entries) {
     { key: 'linkClicks', label: 'คลิกเข้าเว็บ (ครั้ง)' },
     { key: 'visitors', label: 'เข้าถึงเว็บ (คน)' },
     { key: 'ctaClicked', label: 'กดปุ่มหาตัวแทน (คน)' },
+    ...(site.dealerContacted === null ? [] : [{ key: 'dealerContacted', label: 'ติดต่อร้านตัวแทน (คน)' }]),
   ].forEach((m) => dailyEl.appendChild(renderFunnelMiniChart(series, m.key, m.label)));
 }
 
@@ -1193,12 +1209,40 @@ async function fetchAdInsights() {
   renderAdLastSynced(data.lastSyncedAt);
 }
 
+// ─── Daily budget box (live from Meta, not affected by the date filter) ───
+async function renderAdBudgets(fresh) {
+  const box = document.getElementById('adBudgetBox');
+  try {
+    const res = await fetch(`/api/ad-budgets${fresh ? '?fresh=1' : ''}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    const rows = data.campaigns.map((c) => {
+      const amount = c.daily > 0 ? `${fmtBaht(c.daily)}/วัน` : c.lifetime > 0 ? `${fmtBaht(c.lifetime)} ทั้งแคมเปญ` : '–';
+      const status = c.running ? '' : c.pendingReview ? '<span class="ads-budget-tag">รอ Facebook ตรวจ</span>' : '<span class="ads-budget-tag">ยังไม่วิ่ง</span>';
+      return `<li><span class="ads-budget-name">${escapeHtml(c.name)} ${status}</span><span class="ads-budget-amount">${amount}</span></li>`;
+    }).join('');
+    box.innerHTML = `
+      <div class="ads-budget-head">
+        <p class="ads-stat-label">งบที่ตั้งไว้ตอนนี้ (ทุกแคมเปญที่เปิดอยู่)</p>
+        <p class="ads-budget-total">${fmtBaht(data.totalDaily)}<span>/วัน</span></p>
+        <p class="ads-budget-month">ประมาณ ${fmtBaht(data.totalDaily * 30)} ต่อเดือน</p>
+      </div>
+      ${rows ? `<ul class="ads-budget-list">${rows}</ul>` : '<p class="key-messages-hint">ไม่มีแคมเปญที่เปิดอยู่</p>'}`;
+    box.hidden = false;
+  } catch (e) {
+    box.innerHTML = `<p class="key-messages-hint">โหลดงบไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
+    box.hidden = false;
+  }
+}
+
 fetchAdInsights();
-setInterval(() => { if (!document.hidden) fetchAdInsights(); }, 30000);
+renderAdBudgets();
+setInterval(() => { if (!document.hidden) { fetchAdInsights(); renderAdBudgets(); } }, 30000);
 
 document.getElementById('adInsightsRefreshBtn').addEventListener('click', () => {
   adInsightsSignature = null;
   fetchAdInsights();
+  renderAdBudgets(true);
 });
 
 document.querySelectorAll('.cal-filter-btn').forEach((btn) => {

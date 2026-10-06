@@ -1294,6 +1294,45 @@ async function graphGet(pathAndQuery) {
 const actionValue = (row, type) => Number((row?.actions || []).find((a) => a.action_type === type)?.value || 0);
 const bkkDate = (d) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
 
+// Daily budget currently set on every running campaign, live from Meta.
+// Budget sits on the campaign (Advantage campaign budget) or on each ad set,
+// in satang. Only ACTIVE campaigns/ad sets count — a paused one spends nothing.
+// Lifetime budgets have no per-day figure, so they're listed separately.
+const AD_BUDGETS_TTL_MS = 60 * 1000;
+let adBudgetsCache = null;
+app.get('/api/ad-budgets', async (req, res) => {
+  if (!process.env.FB_AD_ACCOUNT_ID || !process.env.FB_USER_ACCESS_TOKEN) {
+    return res.status(503).json({ error: 'Missing FB_AD_ACCOUNT_ID or FB_USER_ACCESS_TOKEN' });
+  }
+  if (adBudgetsCache && adBudgetsCache.expires > Date.now() && req.query.fresh !== '1') return res.json(adBudgetsCache.data);
+  try {
+    const account = process.env.FB_AD_ACCOUNT_ID;
+    const active = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]));
+    const json = await graphGet(`${account}/campaigns?filtering=${active}&limit=100`
+      + '&fields=name,daily_budget,lifetime_budget,adsets.limit(100){name,effective_status,daily_budget,lifetime_budget,ads.limit(100){effective_status}}');
+    const baht = (v) => Number(v || 0) / 100;
+    const campaigns = (json.data || []).map((c) => {
+      const adsets = (c.adsets?.data || []).filter((a) => a.effective_status === 'ACTIVE');
+      const adStatuses = adsets.flatMap((a) => (a.ads?.data || []).map((ad) => ad.effective_status));
+      const campaignLevel = baht(c.daily_budget) > 0 || baht(c.lifetime_budget) > 0;
+      const daily = campaignLevel ? baht(c.daily_budget) : adsets.reduce((sum, a) => sum + baht(a.daily_budget), 0);
+      const lifetime = campaignLevel ? baht(c.lifetime_budget) : adsets.reduce((sum, a) => sum + baht(a.lifetime_budget), 0);
+      return {
+        name: c.name,
+        daily,
+        lifetime,
+        adsets: adsets.length,
+        // Running = at least one ad actually delivering; otherwise e.g. still in review.
+        running: adStatuses.includes('ACTIVE'),
+        pendingReview: adStatuses.some((st) => st === 'PENDING_REVIEW' || st === 'IN_PROCESS'),
+      };
+    }).filter((c) => c.adsets > 0 || c.daily > 0 || c.lifetime > 0);
+    const data = { campaigns, totalDaily: campaigns.reduce((sum, c) => sum + c.daily, 0), fetchedAt: new Date().toISOString() };
+    adBudgetsCache = { data, expires: Date.now() + AD_BUDGETS_TTL_MS };
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ad-funnel', async (req, res) => {
   const { campaign } = req.query;
   const since = typeof req.query.since === 'string' ? req.query.since : '';
@@ -1333,6 +1372,36 @@ app.get('/api/ad-funnel', async (req, res) => {
       GROUP BY "sessionId"
     `, [sinceUtc, untilUtc, utmCampaigns]) : { rows: [] };
 
+    // Dealer contact taps (ClickEvent rows carry sessionId only since the
+    // add_clickevent_session_id deploy, so earlier sessions can't match;
+    // contactTrackingSince tells the page where the data starts). Before the
+    // migration runs, the column doesn't exist (42703) → contacts = null.
+    let contacts = null;
+    let contactTrackingSince = null;
+    try {
+      const sessionIds = sessions.map((s) => s.sessionId).filter(Boolean);
+      const [{ rows: clicks }, { rows: [start] }] = await Promise.all([
+        sessionIds.length ? tasakiWebPool.query(`
+          SELECT "sessionId",
+            bool_or(label LIKE 'DealerContact:%') AS dealer,
+            bool_or(label LIKE 'DealerContact:phone:%') AS phone,
+            bool_or(label LIKE 'DealerContact:directions:%') AS directions,
+            bool_or(label = 'FloatingContact:LINE') AS "floatingLine",
+            bool_or(label = 'FloatingContact:Phone') AS "floatingPhone"
+          FROM "ClickEvent"
+          WHERE "sessionId" = ANY($1)
+            AND (label LIKE 'DealerContact:%' OR label IN ('FloatingContact:LINE', 'FloatingContact:Phone'))
+          GROUP BY "sessionId"
+        `, [sessionIds]) : { rows: [] },
+        tasakiWebPool.query(`SELECT min("createdAt") AS t FROM "ClickEvent" WHERE "sessionId" <> ''`),
+      ]);
+      contacts = new Map(clicks.map((c) => [c.sessionId, c]));
+      contactTrackingSince = start?.t ? bkkDate(start.t) : null;
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+    }
+    const contactCount = (key) => (contacts ? [...contacts.values()].filter((c) => c[key]).length : null);
+
     const t = total.data?.[0] || {};
     // Scroll depth / dealer button only exist from 2026-09-29 16:17 on (0 = not measured).
     const measured = sessions.filter((s) => s.scroll > 0);
@@ -1343,6 +1412,14 @@ app.get('/api/ad-funnel', async (req, res) => {
       ctaSeen: sessions.filter((s) => s.seen).length,
       ctaClicked: sessions.filter((s) => s.clicked).length,
       multiPage: sessions.filter((s) => s.views > 1).length,
+      dealerContacted: contactCount('dealer'),
+      contactBreakdown: {
+        phone: contactCount('phone'),
+        directions: contactCount('directions'),
+        floatingLine: contactCount('floatingLine'),
+        floatingPhone: contactCount('floatingPhone'),
+      },
+      contactTrackingSince,
     };
     const meta = {
       reach: Number(t.reach || 0),
@@ -1360,7 +1437,7 @@ app.get('/api/ad-funnel', async (req, res) => {
 
     const days = new Map();
     const day = (d) => {
-      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0 });
+      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, dealerContacted: 0 });
       return days.get(d);
     };
     for (const r of daily.data || []) {
@@ -1373,6 +1450,7 @@ app.get('/api/ad-funnel', async (req, res) => {
       const d = day(bkkDate(s.t0));
       d.visitors += 1;
       if (s.clicked) d.ctaClicked += 1;
+      if (contacts?.get(s.sessionId)?.dealer) d.dealerContacted += 1;
     }
     const data = { campaign, since, until, utmCampaigns, meta, site, daily: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
     adFunnelCache.set(cacheKey, { data, expires: Date.now() + AD_FUNNEL_TTL_MS });

@@ -72,6 +72,8 @@
           <button type="button" id="adDateClearBtn" class="ads-filter-clear" title="ล้างวันที่ที่เลือกทั้งหมด">✕ ล้าง</button>
         </div>
 
+        <div id="adBudgetBox" class="ads-budget-box" hidden></div>
+
         <div id="adFilteredEmpty" class="key-messages-hint" hidden>ไม่มีข้อมูลในช่วงที่เลือก ลองเปลี่ยนตัวกรองดูค่ะ</div>
 
         <div id="adInsightsContent">
@@ -84,7 +86,7 @@
               <h3>กรวยการตลาด (Marketing Funnel)</h3>
               <select id="adFunnelCampaign" class="ads-funnel-select" aria-label="เลือกแคมเปญ" hidden></select>
             </div>
-            <p class="key-messages-hint">ตั้งแต่เห็นโฆษณาจนถึงกดปุ่มหาตัวแทน ตามช่วงวันที่ที่เลือกไว้ด้านบน ช่วง "เห็น / จดจำ / สนใจ" มาจาก Facebook ส่วน "พิจารณา / ลงมือ" มาจากระบบของเว็บเอง ซึ่งนับได้ทุกคน (Facebook นับได้น้อยกว่าเพราะต้องรอกดยอมรับคุกกี้)</p>
+            <p class="key-messages-hint">ตั้งแต่เห็นโฆษณาจนถึงโทร/กดนำทางไปร้านตัวแทน ตามช่วงวันที่ที่เลือกไว้ด้านบน ช่วง "เห็น / จดจำ / สนใจ" มาจาก Facebook ส่วน "พิจารณา / ลงมือ / ติดต่อร้าน" มาจากระบบของเว็บเอง ซึ่งนับได้ทุกคน (Facebook นับได้น้อยกว่าเพราะต้องรอกดยอมรับคุกกี้) — ขั้น "ติดต่อร้าน" เริ่มนับตั้งแต่วันที่ deploy ระบบนับ ช่วงก่อนหน้านั้นไม่มีข้อมูล ไม่ได้แปลว่าไม่มีคนติดต่อ</p>
             <div id="adFunnel" class="ads-funnel"></div>
             <h3 class="ads-funnel-subtitle">แต่ละขั้นรายวัน</h3>
             <p class="key-messages-hint">แต่ละกราฟมีสเกลของตัวเอง เส้นประคือวันที่ปรับหน้าเว็บบนมือถือ (2 ต.ค.)</p>
