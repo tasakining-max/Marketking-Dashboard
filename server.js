@@ -1527,6 +1527,10 @@ app.get('/api/ad-funnel', async (req, res) => {
       read50: measured.filter((s) => s.scroll >= 50).length,
       ctaSeen: sessions.filter((s) => s.seen).length,
       ctaClicked: sessions.filter((s) => s.clicked).length,
+      // "Took action": pressed the dealer button OR tapped any contact button
+      // (floating LINE/Phone/Facebook don't go through the dealer button, so
+      // this union keeps the funnel step >= the Contact step below it).
+      acted: sessions.filter((s) => s.clicked || anyContact(s.sessionId)).length,
       multiPage: sessions.filter((s) => s.views > 1).length,
       contacted: contacts ? contacts.size : null,
       contactBreakdown: {
@@ -1554,7 +1558,7 @@ app.get('/api/ad-funnel', async (req, res) => {
 
     const days = new Map();
     const day = (d) => {
-      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, contacted: 0 });
+      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, acted: 0, contacted: 0 });
       return days.get(d);
     };
     for (const r of daily.data || []) {
@@ -1568,6 +1572,7 @@ app.get('/api/ad-funnel', async (req, res) => {
       d.visitors += 1;
       if (s.clicked) d.ctaClicked += 1;
       if (anyContact(s.sessionId)) d.contacted += 1;
+      if (s.clicked || anyContact(s.sessionId)) d.acted += 1;
     }
     const data = { campaign, since, until, utmCampaigns, meta, site, daily: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
     adFunnelCache.set(cacheKey, { data, expires: Date.now() + AD_FUNNEL_TTL_MS });

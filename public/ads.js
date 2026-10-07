@@ -681,10 +681,11 @@ async function renderAdFunnel(entries) {
       ],
     },
     {
-      key: 'purchase', en: 'Purchase', th: 'กดสั่งซื้อผ่านตัวแทน',
-      value: site.ctaClicked, unit: 'คน', conv: `${pct(site.ctaClicked, site.ctaSeen)} ของคนที่เห็นปุ่ม`,
+      key: 'purchase', en: 'Purchase', th: 'ลงมือ กดสั่งซื้อ / ติดต่อ',
+      value: site.acted, unit: 'คน', conv: `${pct(site.acted, site.visitors)} ของคนที่เข้าเว็บ`,
       lines: [
-        `฿${fmtNum(site.ctaClicked ? meta.spend / site.ctaClicked : 0)} ต่อคน`,
+        `กดปุ่มหาตัวแทน ${fmtNum(site.ctaClicked)} คน · กดติดต่อเรา ${site.contacted === null ? '–' : fmtNum(site.contacted)} คน (ทำทั้งสองอย่างนับเป็น 1 คน)`,
+        `฿${fmtNum(site.acted ? meta.spend / site.acted : 0)} ต่อคน`,
         `Facebook นับเป็น Lead ได้ ${fmtNum(meta.leads)}`,
         'ยอดขายจริงเกิดที่ร้านตัวแทน ยังวัดไม่ได้',
       ],
@@ -692,7 +693,7 @@ async function renderAdFunnel(entries) {
     {
       key: 'contact', en: 'Contact', th: 'ติดต่อเรา / ร้านตัวแทน',
       value: site.contacted, unit: 'คน',
-      conv: site.contacted === null ? '' : `${pct(site.contacted, site.visitors)} ของคนเข้าเว็บ`,
+      conv: site.contacted === null ? '' : `${pct(site.contacted, site.acted)} ของคนที่ลงมือ`,
       lines: site.contacted === null
         ? ['ยังไม่เริ่มเก็บข้อมูล (รอ deploy ระบบนับการโทร/นำทาง)']
         : [
@@ -769,7 +770,7 @@ async function renderAdFunnel(entries) {
   const byDate = new Map(data.daily.map((d) => [d.date, d]));
   const series = [];
   for (let d = since; d <= until; d = addDays(d, 1)) {
-    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, contacted: 0 });
+    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, acted: 0, contacted: 0 });
   }
   dailyEl.innerHTML = '';
   [
@@ -777,7 +778,7 @@ async function renderAdFunnel(entries) {
     { key: 'engagement', label: 'มีส่วนร่วม (ครั้ง)' },
     { key: 'linkClicks', label: 'คลิกเข้าเว็บ (ครั้ง)' },
     { key: 'visitors', label: 'เข้าถึงเว็บ (คน)' },
-    { key: 'ctaClicked', label: 'กดปุ่มหาตัวแทน (คน)' },
+    { key: 'acted', label: 'ลงมือ กดสั่งซื้อ/ติดต่อ (คน)' },
     ...(site.contacted === null ? [] : [{ key: 'contacted', label: 'ติดต่อเรา/ร้านตัวแทน (คน)' }]),
   ].forEach((m) => dailyEl.appendChild(renderFunnelMiniChart(series, m.key, m.label)));
 }
