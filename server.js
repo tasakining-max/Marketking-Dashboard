@@ -1499,10 +1499,11 @@ app.get('/api/ad-funnel', async (req, res) => {
             bool_or(label LIKE 'DealerContact:phone:%') AS phone,
             bool_or(label LIKE 'DealerContact:directions:%') AS directions,
             bool_or(label = 'FloatingContact:LINE') AS "floatingLine",
-            bool_or(label = 'FloatingContact:Phone') AS "floatingPhone"
+            bool_or(label = 'FloatingContact:Phone') AS "floatingPhone",
+            bool_or(label = 'FloatingContact:Facebook') AS "floatingFacebook"
           FROM "ClickEvent"
           WHERE "sessionId" = ANY($1)
-            AND (label LIKE 'DealerContact:%' OR label IN ('FloatingContact:LINE', 'FloatingContact:Phone'))
+            AND (label LIKE 'DealerContact:%' OR label IN ('FloatingContact:LINE', 'FloatingContact:Phone', 'FloatingContact:Facebook'))
           GROUP BY "sessionId"
         `, [sessionIds]) : { rows: [] },
         tasakiWebPool.query(`SELECT min("createdAt") AS t FROM "ClickEvent" WHERE "sessionId" <> ''`),
@@ -1513,6 +1514,9 @@ app.get('/api/ad-funnel', async (req, res) => {
       if (e.code !== '42703') throw e;
     }
     const contactCount = (key) => (contacts ? [...contacts.values()].filter((c) => c[key]).length : null);
+    // Every row in `contacts` tapped at least one contact button (dealer
+    // phone/directions or floating LINE/Phone/Facebook) — one person per session.
+    const anyContact = (sessionId) => !!contacts?.get(sessionId);
 
     const t = total.data?.[0] || {};
     // Scroll depth / dealer button only exist from 2026-09-29 16:17 on (0 = not measured).
@@ -1524,12 +1528,13 @@ app.get('/api/ad-funnel', async (req, res) => {
       ctaSeen: sessions.filter((s) => s.seen).length,
       ctaClicked: sessions.filter((s) => s.clicked).length,
       multiPage: sessions.filter((s) => s.views > 1).length,
-      dealerContacted: contactCount('dealer'),
+      contacted: contacts ? contacts.size : null,
       contactBreakdown: {
         phone: contactCount('phone'),
         directions: contactCount('directions'),
         floatingLine: contactCount('floatingLine'),
         floatingPhone: contactCount('floatingPhone'),
+        floatingFacebook: contactCount('floatingFacebook'),
       },
       contactTrackingSince,
     };
@@ -1549,7 +1554,7 @@ app.get('/api/ad-funnel', async (req, res) => {
 
     const days = new Map();
     const day = (d) => {
-      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, dealerContacted: 0 });
+      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, contacted: 0 });
       return days.get(d);
     };
     for (const r of daily.data || []) {
@@ -1562,7 +1567,7 @@ app.get('/api/ad-funnel', async (req, res) => {
       const d = day(bkkDate(s.t0));
       d.visitors += 1;
       if (s.clicked) d.ctaClicked += 1;
-      if (contacts?.get(s.sessionId)?.dealer) d.dealerContacted += 1;
+      if (anyContact(s.sessionId)) d.contacted += 1;
     }
     const data = { campaign, since, until, utmCampaigns, meta, site, daily: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
     adFunnelCache.set(cacheKey, { data, expires: Date.now() + AD_FUNNEL_TTL_MS });

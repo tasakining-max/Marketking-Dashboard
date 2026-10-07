@@ -690,17 +690,18 @@ async function renderAdFunnel(entries) {
       ],
     },
     {
-      key: 'contact', en: 'Contact', th: 'ติดต่อร้านตัวแทน (โทร/นำทาง)',
-      value: site.dealerContacted, unit: 'คน',
-      conv: site.dealerContacted === null ? '' : `${pct(site.dealerContacted, site.ctaClicked)} ของคนที่กดปุ่ม`,
-      lines: site.dealerContacted === null
+      key: 'contact', en: 'Contact', th: 'ติดต่อเรา / ร้านตัวแทน',
+      value: site.contacted, unit: 'คน',
+      conv: site.contacted === null ? '' : `${pct(site.contacted, site.visitors)} ของคนเข้าเว็บ`,
+      lines: site.contacted === null
         ? ['ยังไม่เริ่มเก็บข้อมูล (รอ deploy ระบบนับการโทร/นำทาง)']
         : [
-          `โทรหาร้าน ${fmtNum(site.contactBreakdown.phone)} คน · กดนำทาง ${fmtNum(site.contactBreakdown.directions)} คน`,
-          `ปุ่มลอย LINE ${fmtNum(site.contactBreakdown.floatingLine)} คน · โทร ${fmtNum(site.contactBreakdown.floatingPhone)} คน (ไม่นับรวม)`,
+          `฿${fmtNum(site.contacted ? meta.spend / site.contacted : 0)} ต่อคน · กดหลายปุ่มนับเป็น 1 คน`,
+          `ร้านตัวแทน: โทร ${fmtNum(site.contactBreakdown.phone)} · นำทาง ${fmtNum(site.contactBreakdown.directions)} คน`,
+          `ปุ่มลอย: LINE ${fmtNum(site.contactBreakdown.floatingLine)} · โทร ${fmtNum(site.contactBreakdown.floatingPhone)} · Facebook ${fmtNum(site.contactBreakdown.floatingFacebook)} คน`,
           site.contactTrackingSince
             ? (since < site.contactTrackingSince ? `เริ่มนับตั้งแต่ ${fmtDate(site.contactTrackingSince)} ช่วงก่อนหน้านั้นไม่มีข้อมูล (ไม่ใช่ 0)` : `เริ่มนับตั้งแต่ ${fmtDate(site.contactTrackingSince)}`)
-            : 'ระบบพร้อมนับแล้ว ยังไม่มีคนกดโทร/นำทาง',
+            : 'ระบบพร้อมนับแล้ว ยังไม่มีคนกดติดต่อ',
         ],
     },
     {
@@ -768,7 +769,7 @@ async function renderAdFunnel(entries) {
   const byDate = new Map(data.daily.map((d) => [d.date, d]));
   const series = [];
   for (let d = since; d <= until; d = addDays(d, 1)) {
-    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, dealerContacted: 0 });
+    series.push(byDate.get(d) || { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, contacted: 0 });
   }
   dailyEl.innerHTML = '';
   [
@@ -777,7 +778,7 @@ async function renderAdFunnel(entries) {
     { key: 'linkClicks', label: 'คลิกเข้าเว็บ (ครั้ง)' },
     { key: 'visitors', label: 'เข้าถึงเว็บ (คน)' },
     { key: 'ctaClicked', label: 'กดปุ่มหาตัวแทน (คน)' },
-    ...(site.dealerContacted === null ? [] : [{ key: 'dealerContacted', label: 'ติดต่อร้านตัวแทน (คน)' }]),
+    ...(site.contacted === null ? [] : [{ key: 'contacted', label: 'ติดต่อเรา/ร้านตัวแทน (คน)' }]),
   ].forEach((m) => dailyEl.appendChild(renderFunnelMiniChart(series, m.key, m.label)));
 }
 
