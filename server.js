@@ -1073,7 +1073,7 @@ app.get('/api/ad-insights', async (req, res) => {
         creativeName: r.creativeName,
         creativeImageUrl: r.creativeImageUrl,
       }));
-      const lastSyncedAt = rows.reduce((max, r) => (!max || r.createdAt > max ? r.createdAt : max), null);
+      const lastSyncedAt = rows.reduce((max, r) => (!max || r.updatedAt > max ? r.updatedAt : max), null);
       return { entries, lastSyncedAt };
     });
     res.json(data);

@@ -119,6 +119,7 @@ model AdInsight {
   creativeName     String   @default("")
   creativeImageUrl String?  @db.Text
   createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 
   @@unique([date, adId])
 }
