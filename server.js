@@ -32,6 +32,17 @@ const tasakiWebPool = new pg.Pool({
       : pg.types.getTypeParser(oid, format)),
   },
 });
+// Same problem on the way in: pg sends a Date param as local time with a
+// +07:00 offset, and Postgres drops the offset when comparing it to a
+// `timestamp without time zone` column — so "since 9 Oct 00:00 Thai" became
+// "since 9 Oct 00:00 UTC" and cut off each day's first 7 hours. Send Dates
+// as offset-less UTC wall time instead.
+const tasakiWebQuery = tasakiWebPool.query.bind(tasakiWebPool);
+tasakiWebPool.query = (text, values, ...rest) => tasakiWebQuery(
+  text,
+  Array.isArray(values) ? values.map((v) => (v instanceof Date ? v.toISOString().slice(0, -1) : v)) : values,
+  ...rest,
+);
 ///// END /////
 const COLUMNS = ['idea', 'clip', 'youtube', 'published'];
 const GRAPHIC_COLUMNS = ['todo', 'in_progress', 'done'];
