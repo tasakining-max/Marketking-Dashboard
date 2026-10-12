@@ -25,10 +25,18 @@ async function fetchInsights(since, until) {
   const fields = 'campaign_name,ad_id,ad_name,adset_name,spend,reach,impressions,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click';
   const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${AD_ACCOUNT_ID}/insights?level=ad&time_increment=1&time_range=${timeRange}&fields=${fields}&access_token=${ACCESS_TOKEN}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  if (json.error) throw new Error(`Graph API error: ${json.error.message}`);
-  return json.data || [];
+  // Graph pages insights 25 rows at a time — a multi-day range with several
+  // ads easily goes past that, so follow paging.next or the tail days vanish.
+  const rows = [];
+  let next = url;
+  while (next) {
+    const res = await fetch(next);
+    const json = await res.json();
+    if (json.error) throw new Error(`Graph API error: ${json.error.message}`);
+    rows.push(...(json.data || []));
+    next = json.paging?.next;
+  }
+  return rows;
 }
 
 async function fetchCreativeThumbnails() {
