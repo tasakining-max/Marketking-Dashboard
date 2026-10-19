@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ทีม AI — Marketing Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+<script>
+  (function () {
+    var stored = localStorage.getItem('theme');
+    var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+</head>
+<body>
+  <header>
+    <h1>ทีม AI</h1>
+    <nav class="top-nav">
+      <a href="/index.html" class="nav-link">🎥 VDO</a>
+      <a href="/auto-post.html" class="nav-link">🤖 Auto Post</a>
+      <a href="/graphic-design.html" class="nav-link">🎨 Graphic Design</a>
+      <a href="/report.html" class="nav-link">📅 Reports</a>
+      <a href="/ads.html" class="nav-link">📈 Ads</a>
+      <a href="/insights.html" class="nav-link">📹 Insights</a>
+      <a href="/website.html" class="nav-link">🌐 เว็บไซต์</a>
+      <a href="/competitors.html" class="nav-link">🕵️ ส่องคู่แข่ง</a>
+      <a href="/agents.html" class="nav-link active">🧑‍💼 ทีม AI</a>
+    </nav>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
+  </header>
+
+  <div class="team-layout">
+  <main class="report-main team-main">
+    <div id="teamStatus" class="team-status"></div>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>👥 สมาชิกในทีม</h2>
+        <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎของทั้งทีม</button>
+      </div>
+      <div id="teamRoster" class="team-roster"></div>
+    </section>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>✅ รออนุมัติ <span id="teamReviewCount" class="team-count"></span></h2>
+      </div>
+      <div id="teamReview" class="team-review"></div>
+    </section>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>🧠 ทีมเรียนรู้อะไรแล้ว</h2>
+      </div>
+      <div id="teamLearnings"></div>
+    </section>
+
+    <section class="report-section">
+      <div class="report-section-header">
+        <h2>📋 งานทั้งหมด</h2>
+      </div>
+      <div id="teamTasks" class="team-tasks"></div>
+    </section>
+
+  </main>
+  <div id="teamLogResizer" class="team-log-resizer" role="separator" aria-orientation="vertical" aria-label="ลากเพื่อปรับความกว้าง Log" tabindex="0"></div>
+  <aside class="team-log" aria-label="Log ของทีม AI">
+    <div class="team-log-head">
+      <h2>📟 Log ทีม AI</h2>
+      <span class="team-muted">ล่าสุดอยู่ล่าง</span>
+    </div>
+    <div class="team-live-bar">
+      <span id="teamVectorLiveStatus" class="team-muted" role="status"></span>
+      <button type="button" id="teamVectorLiveStop" class="team-btn team-btn-small" hidden>หยุดการแสดงสด</button>
+    </div>
+    <div id="teamLog" class="team-log-list"></div>
+    <section class="team-chat" id="teamCommandSection" aria-label="แชทสั่งงานทีม AI">
+      <form id="teamCommandForm" class="team-chat-form" autocomplete="off">
+        <div class="team-chat-to" id="teamChatTo">พิมพ์ <b>@</b> เพื่อเรียก Agent</div>
+        <div id="teamFollowUp" class="team-followup" hidden></div>
+        <div class="team-chat-input">
+          <textarea id="teamPrompt" rows="2" placeholder="เช่น @ปิ๊ง ขอไอเดียแอดเรื่องประหยัดไฟ   ·   @ผัง ต่อไปให้คนยืนข้างโซฟา" aria-describedby="teamChatTo"></textarea>
+          <ul id="teamMentionMenu" class="team-mention-menu" role="listbox" hidden></ul>
+          <div class="team-chat-buttons">
+            <button type="button" id="teamAttachBtn" class="team-btn team-chat-attach" title="แนบภาพ (หรือวาง ⌘V / ลากภาพมาวาง)" aria-label="แนบภาพ">📎</button>
+            <button type="submit" class="team-btn team-btn-primary team-chat-send">ส่ง</button>
+          </div>
+          <input id="teamAttachInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+        </div>
+        <div id="teamAttachList" class="team-attach-list" hidden></div>
+        <div id="teamCardRow" class="team-extra" hidden>
+          <label for="teamCardSelect">การ์ดที่จะเขียนแคปชัน</label>
+          <select id="teamCardSelect"></select>
+        </div>
+        <div id="teamChatVectorRow" class="team-extra" hidden>
+          <div class="team-vector-pick" data-pick></div>
+          <select id="teamChatVectorSource" hidden><option value=""></option></select>
+          <input id="teamChatVectorLive" type="checkbox" checked hidden />
+          <span class="team-muted">ประกอบจะเปิด VectorCraft และแก้ให้ดูสดทุกครั้ง</span>
+        </div>
+        <div id="teamDateRow" class="team-extra" hidden>
+          <label for="teamDateInput">วันที่</label>
+          <input id="teamDateInput" type="date" />
+        </div>
+        <div id="teamProductRow" class="team-extra" hidden>
+          <label for="teamProductSelect">สินค้าจริงที่จะวางในภาพ</label>
+          <select id="teamProductSelect"><option value="">ไม่ใช้สินค้า (ภาพประกอบอิสระ)</option></select>
+          <input id="teamHeadlineInput" type="text" placeholder="พาดหัว (ไม่บังคับ) เช่น เย็นล้ำ สั่งได้" />
+          <input id="teamSubheadInput" type="text" placeholder="บรรทัดรอง (ไม่บังคับ)" />
+        </div>
+        <div id="teamDaysRow" class="team-extra" hidden>
+          <label for="teamDaysInput">ย้อนหลังกี่วัน</label>
+          <input id="teamDaysInput" type="number" min="1" max="60" value="7" />
+        </div>
+        <p id="teamCommandMsg" class="team-muted team-chat-msg" role="status"></p>
+      </form>
+    </section>
+  </aside>
+  </div>
+
+  <dialog id="teamSettings" class="team-dialog" aria-labelledby="teamSettingsTitle">
+    <div class="team-dialog-head">
+      <img id="teamSettingsAvatar" alt="" class="team-avatar" />
+      <div>
+        <h2 id="teamSettingsTitle"></h2>
+        <div id="teamSettingsMeta" class="team-muted"></div>
+      </div>
+      <button type="button" class="team-btn" id="teamSettingsClose" aria-label="ปิด">✕</button>
+    </div>
+    <div class="team-dialog-body">
+      <section id="teamNameSection" hidden>
+        <h3>ชื่อ</h3>
+        <div class="team-name-row">
+          <input id="teamNameInput" type="text" maxlength="20" autocomplete="off" aria-label="ชื่อ Agent" />
+          <button type="button" id="teamNameSave" class="team-btn team-btn-primary">บันทึกชื่อ</button>
+        </div>
+        <p id="teamNameMsg" class="team-muted"></p>
+      </section>
+      <section>
+        <h3>ทำอะไรเบื้องหลัง</h3>
+        <p id="teamSettingsAbout"></p>
+      </section>
+      <section id="teamEngineSection" hidden>
+        <h3>เครื่องมือ AI</h3>
+        <p id="teamEngineHelp" class="team-muted"></p>
+        <div class="team-actions">
+          <label for="teamEngine">เลือกเครื่องมือ</label>
+          <select id="teamEngine" class="team-edit">
+            <option value="default">ตามค่าเริ่มต้นของทีม</option>
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+          </select>
+          <button type="button" id="teamEngineSave" class="team-btn team-btn-primary">บันทึกเครื่องมือ</button>
+        </div>
+        <p id="teamEngineMsg" class="team-muted" role="status"></p>
+      </section>
+      <section id="teamRulesSection">
+        <h3>กฎของคุณ <span id="teamRulesState" class="team-muted"></span></h3>
+        <p class="team-muted">ทุกข้อในนี้จะถูกส่งให้ AI ทุกครั้งที่ทำงาน และสำคัญกว่าคำแนะนำอื่น แก้ตรงๆ ได้เลย หรือพิมพ์บอกด้านล่างให้ช่วยแก้</p>
+        <textarea id="teamRules" class="team-edit" rows="8"></textarea>
+        <div class="team-adjust">
+          <input id="teamAdjust" type="text" class="team-edit" placeholder="บอกให้ปรับ เช่น พาดหัวสั้นกว่านี้ ไม่เกิน 3 คำ" />
+          <button type="button" class="team-btn" id="teamAdjustBtn">ให้ AI ช่วยแก้กฎ</button>
+        </div>
+        <div class="team-actions">
+          <span id="teamSettingsMsg" class="team-muted"></span>
+          <button type="button" class="team-btn" id="teamRulesReset">คืนค่าเริ่มต้น</button>
+          <button type="button" class="team-btn team-btn-primary" id="teamRulesSave">บันทึกกฎ</button>
+        </div>
+      </section>
+      <section>
+        <h3>สิ่งที่เรียนรู้จากคุณ</h3>
+        <ul id="teamSettingsLearned" class="team-learn-list"></ul>
+      </section>
+      <section id="teamPromptSection">
+        <details>
+          <summary>ดูคำสั่งเต็มที่ส่งให้ AI (ตัวอย่าง)</summary>
+          <pre id="teamSettingsPrompt" class="team-prompt"></pre>
+        </details>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="agents.js"></script>
+  <script src="tab-tracker.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import pg from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import { registerAgentTeam } from './lib/agentTeam.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1998,6 +1999,8 @@ app.get('/api/tab-views', async (req, res) => {
     res.json({ entries: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+registerAgentTeam(app, { prisma, invalidateCache, tasakiWebPool });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5050;

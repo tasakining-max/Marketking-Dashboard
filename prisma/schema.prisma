@@ -214,3 +214,51 @@ model PageVideoInsight {
   shares        Int      @default(0)
   fetchedAt     DateTime @default(now())
 }
+
+// ─── AI Team ("ทีม AI") ──────────────────────────────────────────────────────
+// Tasks handed to the AI team page. Agents only ever draft; anything that
+// changes the board/changelog happens on the dashboard server when the user
+// approves (see lib/agentTeam.js). status: queued | running | review | done |
+// rejected | failed
+model AgentTask {
+  id         String    @id @default(uuid())
+  agent      String
+  prompt     String    @db.Text
+  input      Json      @default("{}")
+  status     String    @default("queued")
+  result     Json?
+  feedback   String    @default("") @db.Text
+  error      String    @default("") @db.Text
+  sessionId  String?
+  rounds     Int       @default(0)
+  durationMs Int       @default(0)
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+  decidedAt  DateTime?
+  updatedAt  DateTime  @updatedAt
+}
+
+// kind: log | think (what an agent was thinking) | handoff (agent → toAgent,
+// "you" = her). detail holds the full message; image an optional picture.
+model AgentEvent {
+  id        String   @id @default(uuid())
+  taskId    String?
+  agent     String
+  text      String   @db.Text
+  kind      String   @default("log")
+  toAgent   String?
+  detail    String?  @db.Text
+  image     String?
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+}
+
+// Her standing instructions for one AI-team agent, edited from the agent's
+// settings panel and appended to every prompt that agent gets.
+model AgentSetting {
+  agent     String   @id
+  rules     String   @default("") @db.Text
+  updatedAt DateTime @default(now()) @updatedAt
+}
