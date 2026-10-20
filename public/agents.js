@@ -93,6 +93,7 @@ function renderStatus() {
       ? h('span', { class: `team-pill ${working && !state.paused ? 'team-pill-on' : 'team-pill-off'}` }, state.paused ? '⏸ ทีมหยุดอยู่ ไม่มีงานเริ่มจนกว่าจะกดให้ทำงานต่อ' : working ? '● ทีมกำลังเข้างาน' : '○ นอกเวลางาน งานใหม่จะรอคิวถึงเช้าวันทำงาน')
       : h('span', { class: 'team-pill team-pill-off' }, 'ดูได้อย่างเดียว ทีม AI สั่งงานได้เฉพาะบนเครื่อง Mac ของฝ่ายการตลาด'),
     h('span', { class: 'team-muted' }, `เวลางาน ${hoursText}`),
+    state.tasks?.some((t) => t.status === 'review') ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => { if (!reviewDialog.open) reviewDialog.showModal(); } }, `✅ รอตัดสิน ${state.tasks.filter((t) => t.status === 'review').length}`) : null,
     runner ? h('button', { type: 'button', class: `team-btn team-btn-small${state.paused ? ' team-btn-primary' : ''}`, onclick: toggleTeamPause }, state.paused ? '▶ ให้ทีมทำงานต่อ' : '⏸ หยุดทีม') : null,
     runner ? h('span', { class: 'team-muted' }, usage.limit ? `วันนี้ใช้ไป ${usage.today}/${usage.limit} งาน` : `วันนี้ทำไป ${usage.today} งาน`) : null,
   );
@@ -421,19 +422,19 @@ const SKIP_REASONS = ['ขายของไม่ชัด', 'ไม่ตร�
 
 // One proposed idea. In review she marks each ✓/✕; a ✕ asks why, and that
 // reason is what the agent learns from next round.
-function ideaCard(task, idea, i, editable) {
+function ideaCard(task, idea, i, editable, single = false) {
   const decision = task.result?.decisions?.[i];
   const details = task.agent === 'adideas'
     ? [
       h('div', { class: 'team-tags' }, h('span', { class: 'team-tag-plain' }, idea.campaign), h('span', { class: 'team-tag-plain' }, idea.productModel)),
       idea.heroRole ? h('p', {}, h('b', {}, 'พระเอก: '), `รูปจริง${ROLE_TH[idea.heroRole] || idea.heroRole}${(idea.supportRoles || []).length ? ` · ตัวรอง: ${idea.supportRoles.map((r) => ROLE_TH[r] || r).join(', ')}` : ''}`) : null,
-      idea.mustShow ? h('p', {}, h('b', {}, 'ต้องเห็นในภาพ: '), idea.mustShow) : null,
+      (idea.proof || idea.mustShow) ? h('p', {}, h('b', {}, 'จุดขายที่ภาพต้องพิสูจน์: '), idea.proof || idea.mustShow) : null,
       (idea.warnings || []).length ? h('p', { class: 'team-waiting' }, `⚠️ ${idea.warnings.join(' · ')}`) : null,
       idea.askHer ? h('p', { class: 'team-waiting' }, `❓ ต้องให้คุณยืนยัน: ${idea.askHer}`) : null,
       h('p', {}, h('b', {}, 'พาดหัว: '), idea.headline),
       idea.subhead ? h('p', {}, h('b', {}, 'บรรทัดรอง: '), idea.subhead) : null,
       h('p', { class: 'team-pre' }, h('b', {}, 'ข้อความโฆษณา: '), idea.primaryText),
-      h('p', {}, h('b', {}, 'ภาพ: '), idea.visual),
+      idea.visual ? h('p', { class: 'team-muted' }, h('b', {}, 'ภาพ (ไอเดียเดิม): '), idea.visual) : null,
       h('p', { class: 'team-muted' }, idea.why),
     ]
     : [
@@ -446,6 +447,12 @@ function ideaCard(task, idea, i, editable) {
       h('strong', {}, `${decision ? (decision.picked ? '✓ ' : '✕ ') : ''}${idea.title}`),
       ...details,
       decision && !decision.picked && decision.reason ? h('p', { class: 'team-reason' }, `เหตุผลที่ไม่เลือก: ${decision.reason}`) : null);
+  }
+  if (single) {
+    // The only idea on the card: ✓ เอา / ✕ ไม่เอา below decide it.
+    const only = h('div', { class: 'team-idea' }, h('div', { class: 'team-idea-head' }, h('strong', {}, idea.title)), ...details);
+    only.dataset.choice = 'pick';
+    return only;
   }
   const reason = h('input', { type: 'text', class: 'team-edit', placeholder: 'ทำไมไม่เลือก (ช่วยให้ทีมเรียนรู้)', 'data-reason': '' });
   const reasonBox = h('div', { class: 'team-reason-box', hidden: true },
@@ -508,7 +515,7 @@ function resultView(task, editable) {
       return h('div', { class: 'team-result' },
         r.summary ? foldText(r.summary, 140, '') : null,
         r.review ? h('p', { class: 'team-muted' }, `🔎 ตรวจทานแล้ว: ${r.review}`) : null,
-        ...(r.ideas || []).map((idea, i) => ideaCard(task, idea, i, editable)));
+        ...(r.ideas || []).map((idea, i) => ideaCard(task, idea, i, editable, editable && (r.ideas || []).length === 1)));
     case 'caption':
       return h('div', { class: 'team-result' },
         task.cardTitle ? h('p', { class: 'team-muted' }, `การ์ด: ${task.cardTitle}`) : null,
@@ -855,7 +862,7 @@ function approveBody(task, card) {
   };
   if (task.agent === 'adideas' || task.agent === 'productvideo') {
     const ideas = [...card.querySelectorAll('.team-idea')];
-    const decisions = ideas.map((el) => ({ picked: el.dataset.choice === 'pick', reason: el.querySelector('[data-reason]').value }));
+    const decisions = ideas.map((el) => ({ picked: el.dataset.choice === 'pick', reason: el.querySelector('[data-reason]')?.value || '' }));
     if (ideas.some((el) => !el.dataset.choice)) throw new Error('เลือก ✓ หรือ ✕ ให้ครบทุกไอเดียก่อน');
     return { decisions };
   }
@@ -876,9 +883,14 @@ function approveBody(task, card) {
   return {};
 }
 
+const reviewDialog = document.getElementById('teamReviewDialog');
+document.getElementById('teamReviewClose').addEventListener('click', () => reviewDialog.close());
+reviewDialog.addEventListener('click', (e) => { if (e.target === reviewDialog) reviewDialog.close(); });
+
 function showReviewFor(taskIds) {
   const cards = [...document.querySelectorAll('#teamReview .team-review-card')].filter((c) => taskIds.includes(c.dataset.task));
   if (!cards.length) return;
+  if (!reviewDialog.open) reviewDialog.showModal();
   cards[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
   for (const c of cards) {
     c.classList.remove('team-review-flash');
@@ -896,6 +908,7 @@ function renderReview() {
   reviewKey = key;
   if (!tasks.length) {
     box.replaceChildren(h('p', { class: 'team-muted' }, 'ไม่มีงานรอตรวจ'));
+    if (reviewDialog.open) reviewDialog.close();
     return;
   }
   box.replaceChildren(...tasks.map((task) => {
@@ -907,7 +920,7 @@ function renderReview() {
           h('strong', {}, `${a.name} · ${a.role}`),
           h('div', { class: 'team-muted', title: task.prompt || '' }, `${clip(task.prompt || a.role, 110)}${task.rounds > 1 ? ` · แก้รอบที่ ${task.rounds - 1}` : ''}`))),
       resultView(task, state.runner));
-    if (state.runner && task.result?.stage !== 'teaching') card.append(decisionBar(task, a, card));
+    if (state.runner && task.result?.stage !== 'teaching') card.append(decisionControls(task, { body: () => approveBody(task, card) }));
     return card;
   }));
 }
@@ -916,7 +929,6 @@ function renderReview() {
 // Each review card gets three clearly separated choices. Picking one only
 // opens its panel; nothing is sent until the coloured confirm button, and
 // even then there are a few seconds to undo (she often mis-clicked before).
-const UNDO_SECONDS = 5;
 
 const PASS_EFFECT = {
   adideas: 'ไอเดียที่ติ๊ก ✓ จะกลายเป็นการ์ดใน Graphic Design และส่งให้พิมพ์ทำภาพ ส่วนที่ ✕ จะเก็บเหตุผลไว้ให้ปิ๊งเรียนรู้',
@@ -928,118 +940,51 @@ const PASS_EFFECT = {
   assemble: 'เก็บไฟล์ที่แก้และจำเฉพาะบทเรียนที่คุณตรวจแล้ว ประกอบจะอ่านบทเรียนเมื่อรับงานแก้ครั้งถัดไป',
 };
 
-function decisionBar(task, a, card) {
-  const panels = {};
-  const tabs = {};
+// One comment box and three buttons that act on the first click: no panels,
+// no second confirm, no countdown. ✎ and ✕ use the comment (✕'s is the
+// reason the team learns from); ✓ may carry one too.
+function decisionControls(task, { body, compact = false, onDone } = {}) {
+  const a = agentById(ownerOf(task));
+  const comment = h('textarea', { class: 'team-edit decide-comment', rows: compact ? 2 : 3, placeholder: `คอมเมนต์ถึง${a.name} (ไม่บังคับ — ✎ แก้ ต้องพิมพ์ว่าให้แก้อะไร)` });
   const msg = h('p', { class: 'team-decision-msg', role: 'status' });
-  const choose = (key) => {
-    Object.entries(panels).forEach(([k, p]) => { p.hidden = k !== key; });
-    Object.entries(tabs).forEach(([k, t]) => { t.classList.toggle('selected', k === key); t.setAttribute('aria-pressed', String(k === key)); });
-    msg.textContent = '';
-    panels[key]?.querySelector('textarea, input[type=text]')?.focus();
-  };
-  const closeBtn = () => h('button', { type: 'button', class: 'team-link', onclick: () => choose(null) }, 'ยกเลิก');
-
-  // ✓ ผ่าน
-  const nextBox = task.agent === 'adideas' ? h('input', { type: 'checkbox', checked: true }) : null;
-  panels.pass = h('div', { class: 'team-panel team-panel-pass', hidden: true },
-    h('p', {}, h('b', {}, 'เมื่อยืนยัน: '), PASS_EFFECT[task.agent] || 'งานนี้จะถูกบันทึกว่าผ่าน'),
-    nextBox ? h('label', { class: 'team-check' }, nextBox, ' ขอไอเดียถัดไปจากปิ๊งต่อเลย') : null,
-    h('div', { class: 'team-panel-actions' }, closeBtn(), h('button', {
-      type: 'button',
-      class: 'team-btn team-confirm-pass',
-      onclick: () => {
-        let body;
-        try { body = approveBody(task, card); } catch (err) { msg.textContent = err.message; return; }
-        if (nextBox?.checked) body.next = true;
-        scheduleAction(card, `✓ ผ่าน — ${a.approveLabel || 'อนุมัติ'}`, () => api(`/api/agents/tasks/${task.id}/approve`, body));
-      },
-    }, `✓ ยืนยัน ผ่าน`)));
-
-  // ↻ ให้แก้
-  const fix = h('textarea', { class: 'team-edit', rows: 3, placeholder: `บอก${a.name}ว่าต้องแก้อะไร เช่น พาดหัวสั้นกว่านี้ / คนตัวเล็กไป` });
-  panels.revise = h('div', { class: 'team-panel team-panel-revise', hidden: true },
-    h('p', {}, `${a.name}จะทำงานนี้ใหม่ตามที่คุณบอก แล้วส่งกลับมาให้ตรวจอีกรอบ`),
-    quickChips(task, fix),
-    fix,
-    h('div', { class: 'team-panel-actions' }, closeBtn(), h('button', {
-      type: 'button',
-      class: 'team-btn team-confirm-revise',
-      onclick: () => {
-        if (!fix.value.trim()) { msg.textContent = 'พิมพ์ก่อนว่าต้องแก้อะไร'; fix.focus(); return; }
-        scheduleAction(card, `↻ ส่งกลับให้${a.name}แก้`, () => api(`/api/agents/tasks/${task.id}/revise`, { feedback: fix.value }));
-      },
-    }, '↻ ยืนยัน ส่งกลับให้แก้')));
-
-  // ✕ ไม่ผ่าน
-  const why = h('input', { type: 'text', class: 'team-edit', placeholder: 'ทำไมไม่ผ่าน (ทีมจะจำไว้ใช้รอบหน้า)' });
-  panels.reject = h('div', { class: 'team-panel team-panel-reject', hidden: true },
-    h('p', {}, 'งานนี้จะถูกทิ้ง ไม่ทำต่อ และเหตุผลจะถูกเก็บไว้ให้ทีมเรียนรู้'),
-    quickChips(task, why),
-    why,
-    h('div', { class: 'team-panel-actions' }, closeBtn(), h('button', {
-      type: 'button',
-      class: 'team-btn team-confirm-reject',
-      onclick: () => scheduleAction(card, '✕ ไม่ผ่าน', () => api(`/api/agents/tasks/${task.id}/reject`, { reason: why.value })),
-    }, '✕ ยืนยัน ไม่ผ่าน')));
-
-  const tab = (key, label, cls) => {
-    tabs[key] = h('button', { type: 'button', class: `team-choice-tab ${cls}`, 'aria-pressed': 'false', onclick: () => choose(key) }, label);
-    return tabs[key];
-  };
-  return h('div', { class: 'team-decision' },
-    h('div', { class: 'team-decision-label' }, 'ตัดสินงานนี้'),
-    h('div', { class: 'team-choice-tabs' },
-      // A plan is approved with "ส่งต่อให้ GEN", not ✓ (✓ would end the job).
-      task.result?.stage === 'planned' ? h('button', {
-        type: 'button', class: 'team-decision-tab is-pass',
-        onclick: (e) => { e.currentTarget.disabled = true; scheduleAction(card, '▶ ส่งต่อให้ GEN ตามแผนนี้', () => api(`/api/agents/tasks/${task.id}/proceed`, {})); },
-      }, '▶ ส่งต่อให้ GEN ตามแผนนี้') : tab('pass', '✓ ผ่าน', 'is-pass'),
-      tab('revise', '↻ ให้แก้', 'is-revise'),
-      tab('reject', '✕ ไม่ผ่าน', 'is-reject')),
-    panels.pass, panels.revise, panels.reject, msg);
-}
-
-function quickChips(task, input) {
-  return h('div', { class: 'team-tags' }, ...(DISCARD_REASONS[task.agent] || DISCARD_REASONS.default).map((r) => h('button', {
-    type: 'button',
-    class: 'team-reason-chip',
-    onclick: () => { input.value = input.value ? `${input.value}, ${r}` : r; input.focus(); },
-  }, r)));
-}
-
-// Sends after a countdown with a big ย้อนกลับ button; the card is locked
-// meanwhile so a second stray click can't fire anything.
-function scheduleAction(el, label, run) {
-  if (el.classList.contains('team-pending')) return;
-  el.classList.add('team-pending');
-  let left = UNDO_SECONDS;
-  const count = h('span', {}, String(left));
-  const undo = h('button', { type: 'button', class: 'team-btn team-undo' }, 'ย้อนกลับ');
-  const bar = h('div', { class: 'team-pending-bar', role: 'status' }, h('span', {}, `${label} · ส่งใน `, count, ' วินาที'), undo);
-  el.append(bar);
-  const timer = setInterval(async () => {
-    left -= 1;
-    count.textContent = String(left);
-    if (left > 0) return;
-    clearInterval(timer);
-    undo.disabled = true;
-    bar.firstChild.textContent = `${label} · กำลังส่ง…`;
+  const buttons = [];
+  const act = async (btn, run) => {
+    buttons.forEach((b) => { b.disabled = true; });
+    msg.textContent = '…';
     try {
       const res = await run();
-      bar.firstChild.textContent = `${label} · เรียบร้อย${res?.note ? ` — ${res.note}` : ''}`;
-      setTimeout(() => { reviewKey = ''; refresh(); }, 1200);
+      msg.textContent = res?.note || 'เรียบร้อย';
+      reviewKey = '';
+      await Promise.all([refresh(), refreshLog()]);
+      onDone?.();
     } catch (err) {
-      bar.firstChild.textContent = `ส่งไม่สำเร็จ: ${err.message}`;
-      el.classList.remove('team-pending');
-      setTimeout(() => bar.remove(), 4000);
+      msg.textContent = err.message;
+      buttons.forEach((b) => { b.disabled = false; });
     }
-  }, 1000);
-  undo.addEventListener('click', () => {
-    clearInterval(timer);
-    el.classList.remove('team-pending');
-    bar.remove();
+  };
+  const planned = task.result?.stage === 'planned';
+  const mk = (label, cls, run, needText) => {
+    const b = h('button', { type: 'button', class: `team-btn ${cls}`, onclick: () => {
+      if (needText && !comment.value.trim()) { msg.textContent = 'พิมพ์ก่อนว่าให้แก้อะไร'; comment.focus(); return; }
+      act(b, run);
+    } }, label);
+    buttons.push(b);
+    return b;
+  };
+  const okBtn = body === null ? null : mk(planned ? '▶ ส่งต่อให้ GEN' : '✓ เอา', 'team-pick', async () => {
+    const note = comment.value.trim();
+    if (planned) return api(`/api/agents/tasks/${task.id}/proceed`, {});
+    return api(`/api/agents/tasks/${task.id}/approve`, { ...(typeof body === 'function' ? body() : body || {}), ...(note ? { comment: note } : {}) });
   });
+  return h('div', { class: 'team-decision decide-box' },
+    comment,
+    h('div', { class: 'chat-actions-row' },
+      okBtn,
+      mk('✎ ส่งแก้', 'team-fix', () => api(`/api/agents/tasks/${task.id}/revise`, { feedback: comment.value.trim() }), true),
+      mk('✕ ไม่เอา', 'team-skip', () => ((task.agent === 'adideas' || task.agent === 'productvideo') && (task.result?.ideas || []).length
+        ? api(`/api/agents/tasks/${task.id}/approve`, { decisions: task.result.ideas.map(() => ({ picked: false, reason: comment.value.trim() })) })
+        : api(`/api/agents/tasks/${task.id}/reject`, { reason: comment.value.trim() })))),
+    msg);
 }
 
 async function act(url, body, msgEl) {
@@ -1096,7 +1041,7 @@ function renderTasks() {
         state.runner && ['failed', 'queued', 'waiting'].includes(task.status) ? h('div', { class: 'team-actions' },
           msg,
           ['failed', 'waiting'].includes(task.status) ? h('button', { type: 'button', class: 'team-btn', onclick: () => act(`/api/agents/tasks/${task.id}/retry`, {}, msg) }, 'ลองใหม่') : null,
-          h('button', { type: 'button', class: 'team-btn', onclick: (e) => scheduleAction(e.currentTarget.closest('.team-task'), task.status === 'queued' ? 'ยกเลิกงาน' : 'ทิ้งงาน', () => api(`/api/agents/tasks/${task.id}/reject`, {})) }, task.status === 'queued' ? 'ยกเลิก' : 'ทิ้ง'),
+          h('button', { type: 'button', class: 'team-btn', onclick: async (e) => { e.currentTarget.disabled = true; try { await api(`/api/agents/tasks/${task.id}/reject`, {}); } catch (err) { e.currentTarget.title = err.message; } reviewKey = ''; refresh(); } }, task.status === 'queued' ? 'ยกเลิก' : 'ทิ้ง'),
         ) : null));
   }));
 }
@@ -1261,7 +1206,47 @@ function chatBubble(e) {
     from.avatar ? h('img', { src: from.avatar, alt: '', class: 'chat-avatar' }) : null,
     h('div', { class: 'chat-bubble' },
       h('div', { class: 'chat-who' }, from.name), body, picture,
+      e.taskId && e.toAgent === 'you' ? h('div', { class: 'chat-actions', 'data-actions': e.taskId, 'data-event': e.id }) : null,
       h('div', { class: 'chat-time' }, time)));
+}
+
+// ─── Decisions inside the chat ──────────────────────────────────────────
+// The newest report on a job that's waiting for her carries ✓ / ✎ / ✕.
+// Anything that needs more than a yes/no (several ideas to pick from, a
+// lesson to edit) opens the full card in a dialog instead.
+function quickBody(task) {
+  const r = task.result || {};
+  if (task.agent === 'adideas' || task.agent === 'productvideo') return (r.ideas || []).length === 1 ? { decisions: [{ picked: true, reason: '' }] } : null;
+  if (task.agent === 'image') return { image: 0 };
+  if (task.agent === 'caption') return { caption: r.caption || '' };
+  if (task.agent === 'website') return { entries: (r.entries || []).map((en) => ({ date: en.date, section: en.section || 'website', method: en.method || '', text: en.text })) };
+  if (task.agent === 'assemble') return r.stage === 'teaching' ? null : { rule: r.lesson?.rule, condition: r.lesson?.condition };
+  return {};
+}
+
+function renderChatActions() {
+  const slots = [...document.querySelectorAll('[data-actions]')];
+  // Only the newest report of each job gets buttons.
+  const newest = new Map();
+  for (const e of logEvents) if (e.taskId && e.agent !== 'you' && e.toAgent === 'you' && !newest.has(e.taskId)) newest.set(e.taskId, e.id);
+  for (const slot of slots) {
+    const task = (state.tasks || []).find((x) => x.id === slot.dataset.actions);
+    if (!task || newest.get(task.id) !== slot.dataset.event) { slot.replaceChildren(); continue; }
+    const sig = `${task.status}:${task.rounds}:${task.result?.stage || ''}:${state.runner}`;
+    if (slot.dataset.sig === sig) continue;
+    slot.dataset.sig = sig;
+    if (task.status !== 'review') {
+      const label = { done: '✓ เอาแล้ว', rejected: '✕ ไม่เอา', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
+      slot.replaceChildren(label ? h('span', { class: 'chat-decided' }, label) : null);
+      continue;
+    }
+    if (!state.runner || task.result?.stage === 'teaching') { slot.replaceChildren(); continue; }
+    const quick = quickBody(task) !== null;
+    slot.replaceChildren(
+      decisionControls(task, { body: quick ? () => quickBody(task) : null, compact: true }),
+      quick ? null : h('button', { type: 'button', class: 'team-link', onclick: () => showReviewFor([task.id]) }, 'ดูและเลือกไอเดีย ›'),
+      quick ? h('button', { type: 'button', class: 'team-link', onclick: () => showReviewFor([task.id]) }, 'ดูเต็ม ›') : null);
+  }
 }
 
 // One stream, oldest at the top: what she and the agents say as chat
@@ -1368,6 +1353,7 @@ function renderStream() {
   want.forEach((el, i) => { if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null); });
   logFollow = atBottom || !logScrolled;
   if (logFollow) { box.scrollTop = box.scrollHeight; logScrolled = true; }
+  renderChatActions();
 }
 
 // ─── Resizable log column (drag the divider; remembered per browser) ────
@@ -1416,6 +1402,7 @@ async function refresh() {
   renderReview();
   renderFollowUp();
   renderStream();
+  renderChatActions();
   renderTasks();
   renderLearnings();
   fillVectorSources();

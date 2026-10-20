@@ -4232,3 +4232,22 @@ body.team-resizing { cursor: col-resize; user-select: none; }
 .plan-photos img { height: 90px; display: block; }
 .plan-photos figcaption { font-size: 12px; text-align: center; color: #fff; margin-top: 4px; }
 .team-waiting { color: #e67700; font-size: 14px; margin: 4px 0; }
+
+.team-review-dialog { width: min(1000px, 96vw); }
+.chat-actions { margin-top: 8px; }
+.chat-actions-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chat-actions .team-btn { padding: 5px 12px; font-size: 13px; }
+.chat-actions .team-link { color: #9fc5ee; font-size: 13px; }
+.chat-decided { font-size: 12px; color: #8c9bab; }
+.chat-reason { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.chat-reason input { width: 100%; box-sizing: border-box; background: #15181c; color: #e9eef3; border: 1px solid #3c4450; border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
+.chat-reason .team-reason-chip { font-size: 12px; }
+
+.decide-box { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.decide-comment { width: 100%; box-sizing: border-box; resize: vertical; }
+.chat-actions .decide-comment { background: #15181c; color: #e9eef3; border: 1px solid #3c4450; border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
+.team-fix { border-color: #e67700; color: #e67700; }
+.chat-actions .team-fix { color: #ffa94d; border-color: #e67700; background: transparent; }
+
+.decide-box .team-decision-msg { margin: 0; font-size: 14px; font-weight: 600; color: #e67700; min-height: 0; }
+.decide-box .team-decision-msg:empty { display: none; }

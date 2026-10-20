@@ -42,12 +42,6 @@
       <div id="teamRoster" class="team-roster"></div>
     </section>
 
-    <section class="report-section">
-      <div class="report-section-header">
-        <h2>✅ รออนุมัติ <span id="teamReviewCount" class="team-count"></span></h2>
-      </div>
-      <div id="teamReview" class="team-review"></div>
-    </section>
 
     <section class="report-section">
       <div class="report-section-header">
@@ -118,6 +112,16 @@
     </section>
   </aside>
   </div>
+
+  <dialog id="teamReviewDialog" class="team-dialog team-review-dialog" aria-labelledby="teamReviewTitle">
+    <div class="team-dialog-head">
+      <h2 id="teamReviewTitle">งานที่รอคุณตัดสิน <span id="teamReviewCount" class="team-count"></span></h2>
+      <button type="button" class="team-btn" id="teamReviewClose" aria-label="ปิด">✕</button>
+    </div>
+    <div class="team-dialog-body">
+      <div id="teamReview" class="team-review"></div>
+    </div>
+  </dialog>
 
   <dialog id="teamSettings" class="team-dialog" aria-labelledby="teamSettingsTitle">
     <div class="team-dialog-head">
