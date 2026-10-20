@@ -67,14 +67,14 @@
   <div id="teamLogResizer" class="team-log-resizer" role="separator" aria-orientation="vertical" aria-label="ลากเพื่อปรับความกว้าง Log" tabindex="0"></div>
   <aside class="team-log" aria-label="Log ของทีม AI">
     <div class="team-log-head">
-      <h2>📟 Log ทีม AI</h2>
+      <h2>💬 แชทและ Log ทีม AI</h2>
       <span class="team-muted">ล่าสุดอยู่ล่าง</span>
     </div>
     <div class="team-live-bar">
       <span id="teamVectorLiveStatus" class="team-muted" role="status"></span>
       <button type="button" id="teamVectorLiveStop" class="team-btn team-btn-small" hidden>หยุดการแสดงสด</button>
     </div>
-    <div id="teamLog" class="team-log-list"></div>
+    <div id="teamLog" class="team-log-list" aria-live="polite"></div>
     <section class="team-chat" id="teamCommandSection" aria-label="แชทสั่งงานทีม AI">
       <form id="teamCommandForm" class="team-chat-form" autocomplete="off">
         <div class="team-chat-to" id="teamChatTo">พิมพ์ <b>@</b> เพื่อเรียก Agent</div>
@@ -168,6 +168,11 @@
           <button type="button" class="team-btn" id="teamRulesReset">คืนค่าเริ่มต้น</button>
           <button type="button" class="team-btn team-btn-primary" id="teamRulesSave">บันทึกกฎ</button>
         </div>
+      </section>
+      <section id="teamTaughtSection" hidden>
+        <h3>🧠 สิ่งที่คุณสั่งแก้ ทีมจำไว้ให้เอง</h3>
+        <p class="team-muted">คำสั่งและคำแก้ของคุณถูกส่งให้ Agent ทุกงานถัดไปโดยอัตโนมัติ กด ✕ เพื่อให้ลืมข้อที่ไม่ใช่ความต้องการถาวร</p>
+        <ul id="teamSettingsTaught" class="team-learn-list"></ul>
       </section>
       <section>
         <h3>สิ่งที่เรียนรู้จากคุณ</h3>

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/check-pending-website-updates.mjs",
+            "command": "node scripts/review-web-runs.mjs",
             "timeout": 10
           }
         ]

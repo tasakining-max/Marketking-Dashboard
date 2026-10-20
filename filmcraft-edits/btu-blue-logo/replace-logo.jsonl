@@ -1,0 +1,5 @@
+{"id": "media.replaceFootage", "params": {"item": 584, "path": "/Users/marketingengineer/marketing-dashboard/filmcraft-edits/btu-blue-logo/tasaki-blue.png"}}
+{"id": "effects.setParam", "params": {"clip": 606, "effect": "motion", "param": "anchor", "value": [595, 245]}}
+{"id": "effects.setKeyframe", "params": {"clip": 606, "effect": "motion", "param": "scale", "mediaTime": 0, "value": 70.44025157232704}}
+{"id": "effects.setKeyframe", "params": {"clip": 606, "effect": "motion", "param": "scale", "mediaTime": 16934400000, "value": 47.79874213836478}}
+{"id": "effects.setKeyframe", "params": {"clip": 606, "effect": "motion", "param": "scale", "mediaTime": 33868800000, "value": 50.31446540880503}}

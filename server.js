@@ -880,11 +880,13 @@ app.get('/api/ad-action-log', async (req, res) => {
 });
 
 app.post('/api/ad-action-log', async (req, res) => {
-  const { text, method } = req.body;
+  const { text, method, date } = req.body;
   if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  // Optional date, so work logged later keeps the time it actually happened.
+  const when = date ? new Date(date) : null;
   try {
     const row = await prisma.adActionLog.create({
-      data: { id: crypto.randomUUID(), text: text.trim(), method: typeof method === 'string' ? method.trim() : '' },
+      data: { id: crypto.randomUUID(), text: text.trim(), method: typeof method === 'string' ? method.trim() : '', ...(when && !Number.isNaN(when.getTime()) ? { createdAt: when } : {}) },
     });
     invalidateCache('ad-action-log');
     res.status(201).json(row);

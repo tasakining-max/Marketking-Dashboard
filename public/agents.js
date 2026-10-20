@@ -21,7 +21,7 @@ const STEPS = [
   { key: 'review', label: 'รอตรวจ' },
   { key: 'done', label: 'เสร็จ' },
 ];
-const STATUS_LABELS = { queued: 'รอคิว', running: 'กำลังทำ', review: 'รอตรวจ', done: 'เสร็จแล้ว', rejected: 'ทิ้งแล้ว', failed: 'ไม่สำเร็จ' };
+const STATUS_LABELS = { queued: 'รอคิว', running: 'กำลังทำ', review: 'รอตรวจ', done: 'เสร็จแล้ว', rejected: 'ทิ้งแล้ว', failed: 'ไม่สำเร็จ', waiting: 'รอไฟล์สินค้า' };
 const DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 const MODEL_LABELS = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' };
 function modelLabel(a) {
@@ -74,6 +74,15 @@ async function api(url, body) {
 }
 
 // ─── Status + roster ────────────────────────────────────────────────────
+async function toggleTeamPause(e) {
+  e.currentTarget.disabled = true;
+  try {
+    const res = await fetch('/api/agents/pause', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: !state.paused }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'สลับไม่สำเร็จ');
+    await refresh();
+  } catch (err) { e.currentTarget.textContent = err.message; }
+}
+
 function renderStatus() {
   const box = document.getElementById('teamStatus');
   const { hours, usage, working, runner } = state;
@@ -81,29 +90,38 @@ function renderStatus() {
   const hoursText = `${days} ${String(hours.start).padStart(2, '0')}:00–${hours.end}:00`;
   box.replaceChildren(
     runner
-      ? h('span', { class: `team-pill ${working ? 'team-pill-on' : 'team-pill-off'}` }, working ? '● ทีมกำลังเข้างาน' : '○ นอกเวลางาน งานใหม่จะรอคิวถึงเช้าวันทำงาน')
+      ? h('span', { class: `team-pill ${working && !state.paused ? 'team-pill-on' : 'team-pill-off'}` }, state.paused ? '⏸ ทีมหยุดอยู่ ไม่มีงานเริ่มจนกว่าจะกดให้ทำงานต่อ' : working ? '● ทีมกำลังเข้างาน' : '○ นอกเวลางาน งานใหม่จะรอคิวถึงเช้าวันทำงาน')
       : h('span', { class: 'team-pill team-pill-off' }, 'ดูได้อย่างเดียว ทีม AI สั่งงานได้เฉพาะบนเครื่อง Mac ของฝ่ายการตลาด'),
     h('span', { class: 'team-muted' }, `เวลางาน ${hoursText}`),
+    runner ? h('button', { type: 'button', class: `team-btn team-btn-small${state.paused ? ' team-btn-primary' : ''}`, onclick: toggleTeamPause }, state.paused ? '▶ ให้ทีมทำงานต่อ' : '⏸ หยุดทีม') : null,
     runner ? h('span', { class: 'team-muted' }, usage.limit ? `วันนี้ใช้ไป ${usage.today}/${usage.limit} งาน` : `วันนี้ทำไป ${usage.today} งาน`) : null,
   );
   document.getElementById('teamCommandSection').hidden = !runner;
 }
+
+// Image jobs pass PLAN → GEN → VEC → PLAN; show whoever has it now.
+const STAGE_OWNER = { plan: 'layout', review: 'layout', generate: 'image', assemble: 'assemble', motion: 'motion' };
+function stageOwner(t) { return STAGE_OWNER[t.result?.stage || 'plan'] || t.agent; }
+// The card in รออนุมัติ: a plan waiting for review is PLAN's; a finished
+// picture stays under GEN.
+function ownerOf(t) { return t.agent === 'image' && t.result?.stage === 'planned' ? 'layout' : t.agent; }
 
 function renderRoster() {
   const roster = document.getElementById('teamRoster');
   roster.replaceChildren(...state.agents.map((a) => {
     // ผัง/พิมพ์/ประกอบ share one image task; each is busy during its own stage.
     const mine = a.pipelineStage ? state.tasks.filter((t) => t.agent === 'image' || (a.vectorEditor && t.agent === a.id)) : state.tasks.filter((t) => t.agent === a.id);
-    const running = mine.find((t) => t.status === 'running' && (t.agent === a.id || !a.pipelineStage || (t.result?.stage || 'plan') === a.pipelineStage));
+    // An image job is "running" only for the agent doing its current step.
+    const running = mine.find((t) => t.status === 'running' && (t.agent === 'image' ? stageOwner(t) === a.id : (t.agent === a.id || !a.pipelineStage)));
     const queued = mine.filter((t) => t.status === 'queued').length;
     // Work waiting for her is counted once, on the agent it's filed under.
-    const reviewIds = mine.filter((t) => t.status === 'review' && t.agent === a.id).map((t) => t.id);
+    const reviewIds = mine.filter((t) => t.status === 'review' && ownerOf(t) === a.id).map((t) => t.id);
     const reviewing = reviewIds.length;
     const doneToday = mine.filter((t) => t.status === 'done' && t.decidedAt && new Date(t.decidedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) === bangkokToday()).length;
     let status = 'ว่าง';
     let cls = 'idle';
     if (running) { status = 'กำลังทำงาน…'; cls = 'busy'; }
-    else if (a.pipelineStage && a.id !== 'image' && !a.vectorEditor) { status = 'ทำงานต่อจากงานภาพ'; }
+    else if (a.pipelineStage && a.id !== 'image' && !a.vectorEditor && !reviewing) { status = 'ทำงานต่อจากงานภาพ'; }
     else if (queued) { status = `รอคิว ${queued} งาน`; cls = 'queued'; }
     else if (reviewing) { status = `รอคุณตรวจ ${reviewing} งาน`; cls = 'review'; }
     const said = state.bubbles?.[a.id] || {};
@@ -216,7 +234,7 @@ function selectAgent(id) {
     }, label);
     to.replaceChildren(h('img', { src: a.avatar, alt: '' }), ' ส่งถึง ', h('b', {}, a.name), ` · ${a.role}`,
       dual
-        ? h('span', { class: 'team-modes' }, modeBtn('do', '▶ ทำตอนนี้'), modeBtn('rule', '📌 จำเป็นกฎ'))
+        ? h('span', { class: 'team-modes' }, modeBtn('do', '▶ ทำตอนนี้'), a.vectorEditor ? modeBtn('study', '📖 เรียนรู้ไฟล์ที่เปิดอยู่') : null, modeBtn('rule', '📌 จำเป็นกฎ'))
         : h('span', {}, ` · ${a.orderable ? 'สั่งงานใหม่' : 'บอกให้จำเป็นกฎ'}`));
   }
   document.getElementById('teamCardRow').hidden = !a?.needsCard;
@@ -364,8 +382,10 @@ document.getElementById('teamCommandForm').addEventListener('submit', async (e) 
     input.subhead = document.getElementById('teamSubheadInput').value.trim();
   }
   try {
-    const doNow = target.commandable ? chatMode === 'do' : target.orderable;
-    const follow = doNow ? followUpTask(target.id) : null;
+    const studying = target.vectorEditor && chatMode === 'study';
+    const doNow = target.commandable ? chatMode === 'do' || studying : target.orderable;
+    if (studying) input.mode = 'study';
+    const follow = doNow && !studying ? followUpTask(target.id) : null;
     if (follow) {
       if (!text) { msg.textContent = `พิมพ์ด้วยว่าจะให้${target.name}แก้อะไรต่อ`; return; }
       await api(`/api/agents/tasks/${follow.id}/revise`, { feedback: text, attachments });
@@ -406,6 +426,10 @@ function ideaCard(task, idea, i, editable) {
   const details = task.agent === 'adideas'
     ? [
       h('div', { class: 'team-tags' }, h('span', { class: 'team-tag-plain' }, idea.campaign), h('span', { class: 'team-tag-plain' }, idea.productModel)),
+      idea.heroRole ? h('p', {}, h('b', {}, 'พระเอก: '), `รูปจริง${ROLE_TH[idea.heroRole] || idea.heroRole}${(idea.supportRoles || []).length ? ` · ตัวรอง: ${idea.supportRoles.map((r) => ROLE_TH[r] || r).join(', ')}` : ''}`) : null,
+      idea.mustShow ? h('p', {}, h('b', {}, 'ต้องเห็นในภาพ: '), idea.mustShow) : null,
+      (idea.warnings || []).length ? h('p', { class: 'team-waiting' }, `⚠️ ${idea.warnings.join(' · ')}`) : null,
+      idea.askHer ? h('p', { class: 'team-waiting' }, `❓ ต้องให้คุณยืนยัน: ${idea.askHer}`) : null,
       h('p', {}, h('b', {}, 'พาดหัว: '), idea.headline),
       idea.subhead ? h('p', {}, h('b', {}, 'บรรทัดรอง: '), idea.subhead) : null,
       h('p', { class: 'team-pre' }, h('b', {}, 'ข้อความโฆษณา: '), idea.primaryText),
@@ -466,6 +490,14 @@ function renderLearnings() {
 }
 
 // editable=true renders the inputs the approve step reads back.
+// Long text: first lines now, the rest one click away. The agent already
+// said it in the chat, so the card only needs to remind her.
+function foldText(text, max = 160, cls = 'team-pre') {
+  const t = String(text || '').trim();
+  if (t.length <= max) return h('p', { class: cls }, t);
+  return h('details', { class: 'team-fold' }, h('summary', {}, `${t.slice(0, max)}…`), h('p', { class: cls }, t));
+}
+
 function resultView(task, editable) {
   const r = task.result || {};
   switch (task.agent) {
@@ -474,7 +506,8 @@ function resultView(task, editable) {
     case 'adideas':
     case 'productvideo':
       return h('div', { class: 'team-result' },
-        r.summary ? h('p', {}, r.summary) : null,
+        r.summary ? foldText(r.summary, 140, '') : null,
+        r.review ? h('p', { class: 'team-muted' }, `🔎 ตรวจทานแล้ว: ${r.review}`) : null,
         ...(r.ideas || []).map((idea, i) => ideaCard(task, idea, i, editable)));
     case 'caption':
       return h('div', { class: 'team-result' },
@@ -483,18 +516,22 @@ function resultView(task, editable) {
         r.note ? h('p', { class: 'team-muted' }, r.note) : null);
     case 'ads':
       return h('div', { class: 'team-result' },
-        h('p', {}, r.summary || ''),
-        r.highlights?.length ? h('div', {}, h('strong', {}, 'ที่น่าสนใจ'), h('ul', {}, ...r.highlights.map((x) => h('li', {}, x)))) : null,
-        r.suggestions?.length ? h('div', {}, h('strong', {}, 'ข้อเสนอ'), h('ul', {}, ...r.suggestions.map((x) => h('li', {}, x)))) : null);
+        foldText(r.summary, 160, ''),
+        r.highlights?.length || r.suggestions?.length ? h('details', { class: 'tv-more' }, h('summary', {}, 'ดูรายละเอียด'),
+          r.highlights?.length ? h('div', {}, h('strong', {}, 'ที่น่าสนใจ'), h('ul', {}, ...r.highlights.map((x) => h('li', {}, x)))) : null,
+          r.suggestions?.length ? h('div', {}, h('strong', {}, 'ข้อเสนอ'), h('ul', {}, ...r.suggestions.map((x) => h('li', {}, x)))) : null) : null);
     case 'website':
-      return h('div', { class: 'team-result' }, ...(r.entries || []).map((en, i) => h('div', { class: 'team-entry' },
-        h('div', { class: 'team-muted' }, timeText(en.date)),
+      const checked = r.review ? h('p', { class: 'team-muted' }, `🔎 ตรวจทานแล้ว: ${r.review}`) : null;
+      if (!(r.entries || []).length) return h('div', { class: 'team-result' }, h('p', { class: 'team-muted' }, 'ไม่มีอะไรใหม่ที่ต้องลงบันทึกในช่วงนี้'), checked);
+      return h('div', { class: 'team-result' }, checked, ...(r.entries || []).map((en, i) => h('div', { class: 'team-entry' },
+        h('div', { class: 'team-muted' }, `${{ website: '🌐 Website Updates', system: '🛠 Marketing System', ads: '📈 Ads' }[en.section || 'website']} · ${timeText(en.date)}${en.method ? ` · ${en.method}` : ''}`),
         editable
           ? h('label', { class: 'team-entry-edit' },
             h('input', { type: 'checkbox', checked: true, 'data-entry-keep': String(i) }),
             h('textarea', { class: 'team-edit', rows: 3, 'data-entry': String(i), value: en.text }))
           : h('p', {}, en.text))));
     case 'image': {
+      if (r.stage === 'planned') return planView(r);
       // Picture on the left, ผัง's verdict and the tools on the right, so the
       // card uses its full width instead of one narrow column.
       const first = r.images?.[0];
@@ -524,7 +561,7 @@ function resultView(task, editable) {
           r.video ? h('a', { href: r.video, download: '', class: 'team-btn team-btn-small' }, 'ดาวน์โหลด') : null) : null,
         r.video ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (e) => fullscreenVideo(e.currentTarget) }, '⛶ ดูเต็มจอ') : null);
     default:
-      return h('div', { class: 'team-result' }, h('p', { class: 'team-pre' }, r.answer || ''));
+      return h('div', { class: 'team-result' }, foldText(r.answer, 240));
   }
 }
 
@@ -547,6 +584,32 @@ function clip(text, max = 42) {
 // hers to decide; older reports still have them, so they're hidden here.
 const RULED_RE = /ฟอนต์|Frutiger|สี|#[0-9a-f]{6}|โลโก้/i;
 
+// PLAN's plan before anything is generated, laid out for review.
+const ROLE_TH = { fcu: 'ตัวเครื่องหลัก/คอยล์เย็น', cu: 'คอยล์ร้อน', remote: 'รีโมต', none: 'ไม่มีรูปที่ตรง' };
+const LIGHT_TH = { left: 'มาจากซ้าย', right: 'มาจากขวา', front: 'มาจากด้านหน้า' };
+const SURE_TH = { high: 'มั่นใจสูง', medium: 'มั่นใจปานกลาง', low: 'มั่นใจต่ำ' };
+const LIGHT_SOURCE_TH = { measured: 'วัดจากผิวตัวเครื่อง (มั่นใจสูง)', plan: 'ผังประเมินจากรูปพระเอก', conflict: 'การวัดกับผังไม่ตรงกัน จึงใช้แสงหน้าแบบนุ่ม' };
+function planView(r) {
+  const p = r.plan || {};
+  const row = (label, value) => h('div', { class: 'plan-row' }, h('div', { class: 'tv-label' }, label), value);
+  const heroRole = p.hero?.role || 'none';
+  return h('div', { class: 'team-result plan-view' },
+    row('พระเอกของโฆษณา', h('p', {}, `${p.hero?.what || '-'} `, h('span', { class: `team-pill ${p.hero?.matchesAttached ? 'team-pill-on' : 'team-pill-off'}` }, p.hero?.matchesAttached ? `✓ ใช้รูป${ROLE_TH[heroRole]}` : '✗ ไม่มีรูปที่ตรง'))),
+    p.hero?.why ? row('เหตุผล', h('p', {}, p.hero.why)) : null,
+    (r.photos || []).length ? row(`รูปจริงของ ${r.product?.model || ''} จากฐานข้อมูลเว็บ`, h('div', { class: 'plan-photos' }, ...r.photos.map((ph) => h('figure', { class: ph.role === heroRole ? 'chosen' : '' },
+      h('img', { src: `/tasaki-web${ph.url}`, alt: ROLE_TH[ph.role] || ph.role, onerror: (e) => { e.currentTarget.style.display = 'none'; } }),
+      h('figcaption', {}, `${ROLE_TH[ph.role] || ph.role}${ph.role === heroRole ? ' · เลือก' : ''}`))))) : null,
+    row('รูปจริงตัวรอง', (p.supports || []).length ? h('ul', {}, ...p.supports.map((x) => h('li', {}, h('b', {}, ROLE_TH[x.role] || x.role), ` — ${x.why}`))) : h('p', { class: 'team-muted' }, 'ไม่ใช้')),
+    row('ทิศแสงที่ใช้', h('p', {}, `แสง${LIGHT_TH[p.light] || p.light || '-'} · ${LIGHT_SOURCE_TH[p.lightSource] || 'ผังประเมินจากรูปพระเอก'} · กล้อง ${p.camera || '-'}`)),
+    (p.measured || []).length ? row('ข้อมูลประกอบ', h('p', { class: 'team-muted' }, [
+      `ผังประเมิน: แสง${LIGHT_TH[p.planLight || p.light] || '-'} (${SURE_TH[p.lightConfidence] || '-'})`,
+      ...p.measured.map((m) => `วัดผิวขาวของ${ROLE_TH[m.role] || m.role}: ${m.confidence === 'none' ? `วัดไม่ได้ (${m.reason || 'ไม่ใช่ตัวเครื่องสีขาว'})` : `แสง${LIGHT_TH[m.side] || m.side} ${SURE_TH[m.confidence] || ''}`}`),
+    ].join(' · '))) : null,
+    row('แนวคิด', h('p', { class: 'team-pre' }, p.concept || '')),
+    p.background?.prompt ? row(`พรอมต์ฉากที่จะส่งให้ GEN (${r.promptWords || 0} คำ)`, h('pre', { class: 'team-prompt' }, p.background.prompt)) : null,
+    (p.elements || []).length ? row('ชิ้นที่จะเจนแยก', h('ul', {}, ...p.elements.map((e) => h('li', {}, h('b', {}, `${e.name} (${e.key})`), ` — ${e.prompt}`)))) : null);
+}
+
 function verdictCard(r) {
   const last = r.checks?.[r.checks.length - 1];
   if (!last) return r.reviewNote ? h('p', { class: 'team-muted' }, `🔎 ${clip(r.reviewNote, 80)}`) : null;
@@ -557,23 +620,31 @@ function verdictCard(r) {
   const sorted = [...list.filter((c) => !c.pass), ...list.filter((c) => c.pass)];
   const asks = (r.needsYou || []).filter((x) => !RULED_RE.test(x));
   const rounds = r.checks.length - 1;
+  const failed = sorted.filter((c) => !c.pass);
+  const passed = sorted.filter((c) => c.pass);
   return h('div', { class: `team-verdict ${last.pass ? 'ok' : 'warn'}` },
     h('div', { class: 'tv-head' },
       h('span', { class: 'tv-score' }, String(last.score), h('small', {}, '/10')),
       h('div', {},
         h('b', {}, last.pass ? 'ผ่านแล้ว' : 'ยังไม่ผ่าน'),
-        h('div', { class: 'team-muted' }, `ผังตรวจ ${list.length} ข้อ · ผ่าน ${list.length - sorted.filter((c) => !c.pass).length}${rounds ? ` · แก้เองไป ${rounds} รอบ` : ''}`))),
-    h('ul', { class: 'tv-checks' }, ...sorted.map((c) => h('li', { class: c.pass ? 'pass' : 'fail' },
-      h('span', { class: 'tv-mark', 'aria-label': c.pass ? 'ผ่าน' : 'ไม่ผ่าน' }, c.pass ? '✓' : '✗'),
-      h('span', {}, c.item ? h('b', {}, c.item) : null, c.item && c.note ? ' — ' : null, clip(c.note, 110))))),
+        h('div', { class: 'team-muted' }, `ผ่าน ${passed.length}/${list.length} ข้อ${rounds ? ` · แก้เองไป ${rounds} รอบ` : ''}`))),
+    // Only what's still wrong, as short chips; the sentences are on hover.
+    failed.length ? h('ul', { class: 'tv-checks' }, ...failed.map((c) => h('li', { class: 'fail', title: [c.item, c.note].filter(Boolean).join(' — ') },
+      h('span', { class: 'tv-mark', 'aria-label': 'ไม่ผ่าน' }, '✗'),
+      h('span', {}, clip(c.item || c.note, 60))))) : null,
     asks.length ? h('div', { class: 'tv-ask' },
-      h('div', { class: 'tv-label' }, '❓ ทีมขาดข้อมูล — ตอบได้ในช่อง ↻ ให้แก้ ด้านล่าง'),
-      h('ul', { class: 'tv-list' }, ...asks.map((x) => h('li', { title: x }, clip(x, 110))))) : null,
-    rounds ? h('details', { class: 'tv-more' },
-      h('summary', {}, `ดูรอบก่อนหน้า (${rounds})`),
-      h('div', { class: 'tv-rounds' },
+      h('div', { class: 'tv-label' }, '❓ ทีมขาดข้อมูล — ตอบในช่อง ↻ ให้แก้'),
+      h('ul', { class: 'tv-list' }, ...asks.map((x) => h('li', { title: x }, clip(x, 90))))) : null,
+    passed.length || rounds ? h('details', { class: 'tv-more' },
+      h('summary', {}, 'ดูเพิ่ม'),
+      passed.length ? h('ul', { class: 'tv-checks' }, ...passed.map((c) => h('li', { class: 'pass' },
+        h('span', { class: 'tv-mark', 'aria-label': 'ผ่าน' }, '✓'),
+        h('span', {}, c.item ? h('b', {}, c.item) : null, c.item && c.note ? ' — ' : null, clip(c.note, 90))))) : null,
+      failed.length ? h('ul', { class: 'tv-checks' }, ...failed.map((c) => h('li', { class: 'fail' },
+        h('span', { class: 'tv-mark' }, '✗'), h('span', {}, c.item ? h('b', {}, c.item) : null, c.item && c.note ? ' — ' : null, clip(c.note, 140))))) : null,
+      rounds ? h('div', { class: 'tv-rounds' },
         ...r.checks.map((c, i) => h('a', { href: c.image, target: '_blank', rel: 'noopener' },
-          h('img', { src: c.image, alt: '' }), h('span', {}, `${i === rounds ? 'ล่าสุด' : `รอบ ${i + 1}`} · ${c.score}/10`))))) : null);
+          h('img', { src: c.image, alt: '' }), h('span', {}, `${i === rounds ? 'ล่าสุด' : `รอบ ${i + 1}`} · ${c.score}/10`)))) : null) : null);
 }
 
 const DISCARD_REASONS = {
@@ -581,7 +652,14 @@ const DISCARD_REASONS = {
   default: ['ไม่ตรงโจทย์', 'ข้อมูลไม่ถูก', 'ภาษาแข็ง/ไม่เป็นธรรมชาติ', 'ยาวไป', 'ไม่ตรงแบรนด์'],
 };
 
-const STAGE_LABELS = { review: 'ผังกำลังตรวจภาพก่อนส่งให้คุณ', plan: 'ผังกำลังวางผัง', generate: 'พิมพ์กำลังเจนภาพ/ไดคัท', assemble: 'กำลังประกอบใน VectorCraft', motion: 'มูฟกำลังทำแอนิเมชัน' };
+// What a running job is doing, said by the agent doing that step, by the
+// name she gave it (no names written into the text).
+const STAGE_LABELS = { review: 'กำลังตรวจภาพก่อนส่งให้คุณ', plan: 'กำลังวางผัง', generate: 'กำลังเจนภาพ/ไดคัท', assemble: 'กำลังประกอบใน VectorCraft', motion: 'กำลังทำแอนิเมชัน' };
+function workingText(t) {
+  const who = agentById(t.agent === 'image' ? stageOwner(t) : t.agent);
+  const doing = STAGE_LABELS[t.result?.stage];
+  return `${who?.name || t.agent} ${doing || 'กำลังทำงาน'}`;
+}
 
 function fillProducts() {
   const select = document.getElementById('teamProductSelect');
@@ -697,23 +775,32 @@ function vectorResultView(task, editable) {
         } }, 'ยกเลิกการสอน')),
       msg);
   }
-  return h('div', { class: 'team-result' },
-    h('div', { class: 'team-vector-comparison' },
-      ...[['ก่อนแก้', r.beforeImage], ['หลังแก้', r.images?.[0]]].filter(([, src]) => src).map(([label, src]) => h('figure', {}, h('figcaption', {}, label), h('a', { href: src, target: '_blank', rel: 'noopener' }, h('img', { src, alt: label, loading: 'lazy' }))))),
-    h('p', {}, r.summary || ''),
-    r.document ? h('div', { class: 'team-actions' },
-      h('a', { href: r.document, download: '', class: 'team-btn' }, 'ดาวน์โหลดไฟล์ที่แก้'),
-      state.runner ? h('button', { type: 'button', class: 'team-btn', onclick: (e) => openInApp(r.document, e.currentTarget, 'vectorcraft') }, 'เปิดตรวจใน VectorCraft') : null,
-      state.runner && r.commands?.length ? h('button', { type: 'button', class: 'team-btn', onclick: (e) => replayVectorLive(task, e.currentTarget, msg) }, '▶ ดูการแก้สดใน VectorCraft') : null,
-      state.runner ? h('button', { type: 'button', class: 'team-btn', onclick: () => chooseVectorSource(task.id) }, 'ให้ประกอบแก้ต่อจากไฟล์นี้') : null) : null,
-    msg,
-    r.lesson ? h('div', {},
-      h('h4', {}, editable ? 'บทเรียนที่เสนอ — ตรวจหรือแก้ก่อนกดผ่าน' : 'บทเรียนที่บันทึก'),
-      h('strong', {}, r.lesson.title || ''),
-      h('label', {}, 'ใช้เมื่อ', editable ? h('textarea', { class: 'team-edit', rows: 2, 'data-vector-condition': '', value: r.lesson.condition || '' }) : h('p', {}, r.lesson.condition || '')),
-      h('label', {}, 'วิธีทำที่ให้จำ', editable ? h('textarea', { class: 'team-edit', rows: 4, 'data-vector-rule': '', value: r.lesson.rule || '' }) : h('p', { class: 'team-pre' }, r.lesson.rule || '')),
-      editable ? h('p', { class: 'team-muted' }, 'ยังไม่ใช้เป็นบทเรียนจนคุณกด “ถูกต้อง และจำวิธีนี้”') : null) : null,
-    r.diff?.length ? h('details', {}, h('summary', {}, `ตรวจพบการเปลี่ยนแปลงจริง ${r.diff.length} รายการ`), h('ul', {}, ...r.diff.map((d) => h('li', {}, d.name || `วัตถุ ${d.id}`)))) : null);
+  // Same shape as the image cards: picture(s) left; VEC's reply, the lesson
+  // and the tools right.
+  const pictures = r.mode === 'study'
+    ? [[`ไฟล์ที่เรียนรู้: ${r.studied || ''}`, r.images?.[0]]]
+    : [['ก่อนแก้', r.beforeImage], ['หลังแก้', r.images?.[0]]];
+  const tools = r.document && r.mode !== 'study' ? [
+    state.runner ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (e) => openInApp(r.document, e.currentTarget, 'vectorcraft') }, 'เปิดตรวจใน VectorCraft') : null,
+    state.runner && r.commands?.length ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (e) => replayVectorLive(task, e.currentTarget, msg) }, '▶ ดูการแก้สดใน VectorCraft') : null,
+    state.runner ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => chooseVectorSource(task.id) }, 'ให้แก้ต่อจากไฟล์นี้') : null,
+    h('a', { href: r.document, download: '', class: 'team-btn team-btn-small' }, 'ดาวน์โหลดไฟล์ที่แก้'),
+  ].filter(Boolean) : [];
+  return h('div', { class: 'team-result team-image-layout' },
+    h('div', { class: `team-images${pictures.filter(([, src]) => src).length > 1 ? ' multi' : ''}` },
+      ...pictures.filter(([, src]) => src).map(([label, src]) => h('figure', { class: 'team-image' },
+        h('a', { href: src, target: '_blank', rel: 'noopener' }, h('img', { src, alt: label, loading: 'lazy' })),
+        h('figcaption', { class: 'team-muted' }, label)))),
+    h('div', { class: 'team-image-side' },
+      r.summary ? h('div', { class: 'team-vec-reply' }, foldText(r.summary, 150)) : null,
+      r.lesson ? h('details', { class: 'team-vec-lesson tv-more' },
+        h('summary', {}, editable ? `📘 บทเรียนที่เสนอ${r.lesson.title ? `: ${clip(r.lesson.title, 50)}` : ''} (ดู/แก้ก่อนกดผ่าน)` : '📘 บทเรียนที่บันทึก'),
+        r.lesson.title ? h('strong', {}, r.lesson.title) : null,
+        h('label', {}, 'ใช้เมื่อ', editable ? h('textarea', { class: 'team-edit', rows: 2, 'data-vector-condition': '', value: r.lesson.condition || '' }) : h('p', {}, r.lesson.condition || '')),
+        h('label', {}, 'วิธีทำที่ให้จำ', editable ? h('textarea', { class: 'team-edit', rows: 4, 'data-vector-rule': '', value: r.lesson.rule || '' }) : h('p', { class: 'team-pre' }, r.lesson.rule || ''))) : null,
+      tools.length ? h('div', { class: 'team-image-tools' }, ...tools) : null,
+      msg,
+      r.diff?.length ? h('details', { class: 'tv-more' }, h('summary', {}, `ดูสิ่งที่เปลี่ยน (${r.diff.length})`), h('ul', {}, ...r.diff.map((d) => h('li', {}, d.name || `วัตถุ ${d.id}`)))) : null));
 }
 
 async function makeMotion(task, btn) {
@@ -781,9 +868,9 @@ function approveBody(task, card) {
     const entries = task.result?.entries || [];
     return {
       entries: entries
-        .map((en, i) => ({ date: en.date, text: card.querySelector(`[data-entry="${i}"]`).value, keep: card.querySelector(`[data-entry-keep="${i}"]`).checked }))
+        .map((en, i) => ({ date: en.date, section: en.section || 'website', method: en.method || '', text: card.querySelector(`[data-entry="${i}"]`).value, keep: card.querySelector(`[data-entry-keep="${i}"]`).checked }))
         .filter((en) => en.keep)
-        .map(({ date, text }) => ({ date, text })),
+        .map(({ keep, ...en }) => en),
     };
   }
   return {};
@@ -812,13 +899,13 @@ function renderReview() {
     return;
   }
   box.replaceChildren(...tasks.map((task) => {
-    const a = agentById(task.agent);
+    const a = agentById(ownerOf(task));
     const card = h('article', { class: 'team-review-card', 'data-task': task.id },
       h('div', { class: 'team-review-head' },
         h('img', { src: a.avatar, alt: '', class: 'team-avatar-sm' }),
         h('div', {},
           h('strong', {}, `${a.name} · ${a.role}`),
-          h('div', { class: 'team-muted' }, `${task.prompt || a.role}${task.rounds > 1 ? ` · แก้รอบที่ ${task.rounds - 1}` : ''}`))),
+          h('div', { class: 'team-muted', title: task.prompt || '' }, `${clip(task.prompt || a.role, 110)}${task.rounds > 1 ? ` · แก้รอบที่ ${task.rounds - 1}` : ''}`))),
       resultView(task, state.runner));
     if (state.runner && task.result?.stage !== 'teaching') card.append(decisionBar(task, a, card));
     return card;
@@ -903,7 +990,11 @@ function decisionBar(task, a, card) {
   return h('div', { class: 'team-decision' },
     h('div', { class: 'team-decision-label' }, 'ตัดสินงานนี้'),
     h('div', { class: 'team-choice-tabs' },
-      tab('pass', '✓ ผ่าน', 'is-pass'),
+      // A plan is approved with "ส่งต่อให้ GEN", not ✓ (✓ would end the job).
+      task.result?.stage === 'planned' ? h('button', {
+        type: 'button', class: 'team-decision-tab is-pass',
+        onclick: (e) => { e.currentTarget.disabled = true; scheduleAction(card, '▶ ส่งต่อให้ GEN ตามแผนนี้', () => api(`/api/agents/tasks/${task.id}/proceed`, {})); },
+      }, '▶ ส่งต่อให้ GEN ตามแผนนี้') : tab('pass', '✓ ผ่าน', 'is-pass'),
       tab('revise', '↻ ให้แก้', 'is-revise'),
       tab('reject', '✕ ไม่ผ่าน', 'is-reject')),
     panels.pass, panels.revise, panels.reject, msg);
@@ -996,14 +1087,15 @@ function renderTasks() {
           h('span', { class: 'team-muted' }, timeText(task.createdAt)),
           task.durationMs && finished ? h('span', { class: 'team-muted' }, `ใช้เวลา ${Math.max(1, Math.round(task.durationMs / 60000))} นาที`) : null),
         h('div', {}, task.prompt || task.cardTitle || a.role),
-        task.status === 'running' && STAGE_LABELS[task.result?.stage] ? h('div', { class: 'team-stage' }, `⏳ ${STAGE_LABELS[task.result.stage]}…`) : null,
+        task.status === 'running' ? h('div', { class: 'team-stage' }, `⏳ ${workingText(task)}…`) : null,
         task.agent === 'motion' && task.status === 'done' && task.result?.video ? resultView(task, false) : null,
         ['queued', 'running', 'done'].includes(task.status) ? stepper(task.status) : null,
         task.status === 'failed' ? h('p', { class: 'team-error' }, task.error) : null,
+        task.status === 'waiting' ? h('p', { class: 'team-waiting' }, `⏳ รอไฟล์สินค้า: ${task.error}`) : null,
         task.status === 'done' && task.result ? h('details', { 'data-id': task.id, open: open.has(task.id) }, h('summary', {}, 'ดูผลงาน'), resultView(task, false)) : null,
-        state.runner && (task.status === 'failed' || task.status === 'queued') ? h('div', { class: 'team-actions' },
+        state.runner && ['failed', 'queued', 'waiting'].includes(task.status) ? h('div', { class: 'team-actions' },
           msg,
-          task.status === 'failed' ? h('button', { type: 'button', class: 'team-btn', onclick: () => act(`/api/agents/tasks/${task.id}/retry`, {}, msg) }, 'ลองใหม่') : null,
+          ['failed', 'waiting'].includes(task.status) ? h('button', { type: 'button', class: 'team-btn', onclick: () => act(`/api/agents/tasks/${task.id}/retry`, {}, msg) }, 'ลองใหม่') : null,
           h('button', { type: 'button', class: 'team-btn', onclick: (e) => scheduleAction(e.currentTarget.closest('.team-task'), task.status === 'queued' ? 'ยกเลิกงาน' : 'ทิ้งงาน', () => api(`/api/agents/tasks/${task.id}/reject`, {})) }, task.status === 'queued' ? 'ยกเลิก' : 'ทิ้ง'),
         ) : null));
   }));
@@ -1077,8 +1169,16 @@ async function openSettings(id) {
     document.getElementById('teamSettingsLearned').replaceChildren(...(st.learned.length ? st.learned : [{ none: true }]).map((l) => (l.none
       ? h('li', { class: 'team-muted' }, 'ยังไม่มี')
       : h('li', { class: l.picked ? 'picked' : 'skipped' }, h('span', {}, l.picked ? '✓ ' : '✕ '), h('b', {}, l.title.length > 80 ? `${l.title.slice(0, 80)}…` : l.title), l.reason ? h('span', { class: 'team-muted' }, ` — ${l.reason}`) : null))));
+    const taughtBox = document.getElementById('teamSettingsTaught');
+    document.getElementById('teamTaughtSection').hidden = !st.taught?.length;
+    taughtBox.replaceChildren(...(st.taught || []).slice().reverse().map((n) => h('li', {},
+      h('span', {}, n.text),
+      state.runner ? h('button', { type: 'button', class: 'team-btn team-btn-small', title: 'ให้ลืมข้อนี้', 'aria-label': 'ให้ลืมข้อนี้', onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await api('/api/agents/taught/forget', { key: n.key }); e.currentTarget.closest('li').remove(); } catch { e.currentTarget.disabled = false; }
+      } }, '✕') : null)));
     document.getElementById('teamPromptSection').hidden = !st.prompt;
-    document.getElementById('teamSettingsPrompt').textContent = `${st.prompt}${st.rules.trim() ? `\n\nกฎจากผู้ดูแล:\n${st.rules}` : ''}`;
+    document.getElementById('teamSettingsPrompt').textContent = withNames(`${st.prompt}${st.rules.trim() ? `\n\nกฎจากผู้ดูแล:\n${st.rules}` : ''}`);
   } catch (err) {
     document.getElementById('teamSettingsAbout').textContent = err.message;
   }
@@ -1138,6 +1238,39 @@ document.getElementById('teamAdjustBtn').addEventListener('click', async (e) => 
   btn.disabled = false;
 });
 
+// ─── Chat: her messages and the agents' replies, as bubbles ─────────────
+// The default view of the side panel. Behind-the-scenes events (thinking,
+// agent-to-agent handoffs) stay in the 📟 Log tab.
+function chatBubble(e) {
+  const time = new Date(e.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  const text = withNames(e.text || '');
+  const body = text.length > 520
+    ? h('details', {}, h('summary', {}, `${text.slice(0, 520)}…`), h('div', { class: 'team-pre' }, text))
+    : h('div', { class: 'team-pre' }, text);
+  const picture = e.image ? h('a', { href: e.image, target: '_blank', rel: 'noopener' }, h('img', { src: e.image, alt: '', class: 'team-chat-pic', onload: followLogBottom })) : null;
+  if (e.agent === 'you') {
+    const to = e.toAgent ? speaker(e.toAgent) : null;
+    return h('div', { class: 'chat-row chat-me' },
+      h('div', { class: 'chat-bubble' },
+        to ? h('div', { class: 'chat-who' }, `→ ${to.name}`) : null, body, picture,
+        h('div', { class: 'chat-time' }, time)));
+  }
+  const from = speaker(e.agent);
+  const failed = /ไม่สำเร็จ|failed/i.test(e.text);
+  return h('div', { class: `chat-row chat-agent${failed ? ' chat-error' : ''}` },
+    from.avatar ? h('img', { src: from.avatar, alt: '', class: 'chat-avatar' }) : null,
+    h('div', { class: 'chat-bubble' },
+      h('div', { class: 'chat-who' }, from.name), body, picture,
+      h('div', { class: 'chat-time' }, time)));
+}
+
+// One stream, oldest at the top: what she and the agents say as chat
+// bubbles; everything else (thinking, agent-to-agent handoffs, system lines)
+// as the smaller log blocks in between.
+const isTalk = (e) => (e.agent === 'you' && e.kind === 'handoff' && e.toAgent)
+  || (e.agent !== 'you' && e.toAgent === 'you')
+  || (e.agent !== 'you' && e.kind === 'log' && /ไม่สำเร็จ/.test(e.text));
+
 // ─── Side log (every agent, newest first, like a terminal) ──────────────
 const logEvents = [];
 let logSince = null;
@@ -1150,6 +1283,23 @@ function followLogBottom() {
   box.scrollTop = box.scrollHeight;
 }
 
+// Agents' instructions mention each other by internal id ("assemble",
+// "layout" …). Show the names she gave them instead. Quoted ids are always
+// agents; bare ones only when the id isn't also an everyday word.
+const BARE_IDS = new Set(['assemble', 'adideas', 'productvideo', 'chief']);
+function withNames(text) {
+  if (!text) return text;
+  return state.agents.reduce((t, a) => {
+    t = t.split(`"${a.id}"`).join(`"${a.name}"`);
+    return BARE_IDS.has(a.id) ? t.replace(new RegExp(`\\b${a.id}\\b`, 'g'), a.name) : t;
+  }, text);
+}
+// The input data attached to her own commands (task ids, modes) is for the
+// system, not for reading.
+function isDataBlob(text) {
+  try { const v = JSON.parse(text); return v && typeof v === 'object'; } catch { return false; }
+}
+
 function logBlock(e) {
   const from = speaker(e.agent);
   const to = e.toAgent ? speaker(e.toAgent) : null;
@@ -1159,7 +1309,7 @@ function logBlock(e) {
   const time = new Date(e.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   if (e.kind === 'log' && !e.detail) {
     return h('div', { class: `team-log-item team-log-${kind}` },
-      h('div', { class: 'team-log-title' }, h('span', { class: 'team-log-dot' }), h('b', {}, from.name), ` ${e.text}`, h('span', { class: 'team-log-time' }, time)));
+      h('div', { class: 'team-log-title' }, h('span', { class: 'team-log-dot' }), h('b', {}, from.name), ` ${withNames(e.text)}`, h('span', { class: 'team-log-time' }, time)));
   }
   const io = (tag, text, cut) => h('div', { class: 'team-log-io' },
     h('span', { class: 'team-log-tag' }, tag),
@@ -1169,26 +1319,55 @@ function logBlock(e) {
   return h('div', { class: `team-log-item team-log-${kind}` },
     h('div', { class: 'team-log-title' }, h('span', { class: 'team-log-dot' }), h('b', {}, from.name), ` ${label}`, h('span', { class: 'team-log-time' }, time)),
     h('div', { class: 'team-log-box' },
-      e.detail ? io('IN', e.detail, 220) : null,
-      io('OUT', e.text, 360),
+      e.detail && !isDataBlob(e.detail) ? io('IN', withNames(e.detail), 220) : null,
+      io('OUT', withNames(e.text), 360),
       e.image ? h('a', { href: e.image, target: '_blank', rel: 'noopener' }, h('img', { src: e.image, alt: '', class: 'team-log-img', onload: followLogBottom })) : null));
 }
 
 async function refreshLog() {
   try {
     const { events } = await api(`/api/agents/log${logSince ? `?since=${encodeURIComponent(logSince)}` : ''}`);
-    if (!events.length && logEvents.length) return;
-    logEvents.unshift(...events);
+    const known = new Set(logEvents.map((e) => e.id));
+    const fresh = events.filter((e) => !known.has(e.id));
+    if (!fresh.length && logEvents.length) return;
+    logEvents.unshift(...fresh);
     logEvents.splice(300);
     if (logEvents.length) logSince = logEvents[0].createdAt;
     // Oldest at the top, newest at the bottom next to the chat box. Follow
     // new lines only if she's already at the bottom (not while reading back).
-    const box = document.getElementById('teamLog');
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-    box.replaceChildren(...(logEvents.length ? [...logEvents].reverse().map(logBlock) : [h('p', { class: 'team-muted' }, 'ยังไม่มีความเคลื่อนไหว')]));
-    logFollow = atBottom || !logScrolled;
-    if (logFollow) { box.scrollTop = box.scrollHeight; logScrolled = true; }
+    renderStream();
   } catch { /* next poll */ }
+}
+
+// Elements are built once per event and kept; each poll only adds what's new,
+// so pictures don't reload and opened text stays open (no flicker).
+const streamEls = new Map();
+let streamKey = '';
+function renderStream() {
+  const box = document.getElementById('teamLog');
+  const running = (state.tasks || []).filter((t) => t.status === 'running');
+  const ordered = [...logEvents].reverse();
+  const key = `${ordered.map((e) => e.id).join(',')}|${running.map((t) => `${t.id}:${t.result?.stage || ''}`).join(',')}`;
+  if (key === streamKey) return;
+  streamKey = key;
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const els = ordered.map((e) => {
+    let el = streamEls.get(e.id);
+    if (!el) { el = isTalk(e) ? chatBubble(e) : logBlock(e); streamEls.set(e.id, el); }
+    return el;
+  });
+  const live = new Set(ordered.map((e) => e.id));
+  for (const id of streamEls.keys()) if (!live.has(id)) streamEls.delete(id);
+  const typing = running.map((t) => h('div', { class: 'chat-typing' }, `⏳ ${workingText(t)}…`));
+  const empty = els.length ? [] : [h('p', { class: 'team-muted' }, 'ยังไม่มีความเคลื่อนไหว พิมพ์ @ เรียก Agent ด้านล่างได้เลย')];
+  const want = [...els, ...empty, ...typing];
+  // Drop what's no longer wanted, then place nodes in order without touching
+  // the ones already in the right spot.
+  const keep = new Set(want);
+  for (const child of [...box.children]) if (!keep.has(child)) child.remove();
+  want.forEach((el, i) => { if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null); });
+  logFollow = atBottom || !logScrolled;
+  if (logFollow) { box.scrollTop = box.scrollHeight; logScrolled = true; }
 }
 
 // ─── Resizable log column (drag the divider; remembered per browser) ────
@@ -1236,6 +1415,7 @@ async function refresh() {
   renderRoster();
   renderReview();
   renderFollowUp();
+  renderStream();
   renderTasks();
   renderLearnings();
   fillVectorSources();
