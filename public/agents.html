@@ -34,6 +34,14 @@
   <main class="report-main team-main">
     <div id="teamStatus" class="team-status"></div>
 
+    <section class="report-section" id="teamOfficeSection">
+      <div class="report-section-header">
+        <h2>🏢 ห้องทำงานทีม AI</h2>
+        <button type="button" class="team-btn team-btn-small" id="teamOfficeToggle" aria-expanded="true">ซ่อนห้อง</button>
+      </div>
+      <div id="teamOffice" class="team-office" aria-live="polite"></div>
+    </section>
+
     <section class="report-section">
       <div class="report-section-header">
         <h2>👥 สมาชิกในทีม</h2>
@@ -62,7 +70,7 @@
   <aside class="team-log" aria-label="Log ของทีม AI">
     <div class="team-log-head">
       <h2>💬 แชทและ Log ทีม AI</h2>
-      <span class="team-muted">ล่าสุดอยู่ล่าง</span>
+      <span class="team-muted">ย้อนหลัง 48 ชั่วโมง · ล่าสุดอยู่ล่าง</span>
     </div>
     <div class="team-live-bar">
       <span id="teamVectorLiveStatus" class="team-muted" role="status"></span>
@@ -191,7 +199,9 @@
     </div>
   </dialog>
 
-  <script src="agents.js"></script>
+  <script src="office.js?v=20261021-department-blues"></script>
+  <script src="officeMotion.js?v=20261021-agent-walk"></script>
+  <script src="agents.js?v=20261021-digital-clock"></script>
   <script src="tab-tracker.js"></script>
 </body>
 </html>

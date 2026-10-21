@@ -10,6 +10,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
 import { registerAgentTeam } from './lib/agentTeam.js';
+import { latestGraphicAgentImages } from './lib/graphicAgentImages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -535,16 +536,52 @@ app.get('/api/graphic-cards', async (req, res) => {
   try {
     const cacheKey = `graphic-cards:${req.query.column || ''}`;
     const cards = await cached(cacheKey, async () => {
-      const where = req.query.column ? { column: req.query.column } : {};
-      const [rows, hasImageIds] = await Promise.all([
-        prisma.graphicDesignCard.findMany({ where, orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
+      const [rows, hasImageIds, tasks] = await Promise.all([
+        prisma.graphicDesignCard.findMany({ orderBy: { order: 'asc' }, omit: { imageUrl: true } }),
         graphicCardIdsWithImage(),
+        prisma.agentTask.findMany({
+          where: { agent: { in: ['image', 'assemble'] } },
+          select: { id: true, input: true, result: true, finishedAt: true, updatedAt: true },
+        }),
       ]);
+      const events = tasks.length ? await prisma.agentEvent.findMany({
+        where: { taskId: { in: tasks.map((t) => t.id) }, image: { not: null }, agent: { not: 'you' } },
+        select: { taskId: true, agent: true, image: true, createdAt: true },
+      }) : [];
+      const previews = latestGraphicAgentImages(tasks, events, {
+        cards: rows,
+        resolveImage: (url) => {
+          const image = url.split('?')[0];
+          const file = path.resolve(__dirname, 'public', `.${image}`);
+          if (!file.startsWith(path.join(__dirname, 'public', 'uploads', 'agent-images') + path.sep)) return null;
+          try { return `${image}?v=${fs.statSync(file).mtimeMs}`; }
+          catch { return null; }
+        },
+      });
+      const startedIds = rows.filter((c) => c.column === 'todo' && previews.has(c.id)).map((c) => c.id);
+      if (startedIds.length) {
+        await prisma.graphicDesignCard.updateMany({
+          where: { id: { in: startedIds }, column: 'todo' }, data: { column: 'in_progress' },
+        });
+        invalidateCache('graphic-cards');
+        const current = await prisma.graphicDesignCard.findMany({
+          where: { id: { in: startedIds } }, select: { id: true, column: true, updatedAt: true },
+        });
+        for (const card of rows) Object.assign(card, current.find((c) => c.id === card.id) || {});
+      }
       return rows.map((c) => {
         const card = serializeGraphicCard(c);
         card.imageUrl = hasImageIds.has(c.id) ? `/api/graphic-cards/${c.id}/image?t=${new Date(c.updatedAt).getTime()}` : null;
+        if (card.column !== 'done' && previews.has(c.id)) card.imageUrl = previews.get(c.id).image;
+        const document = previews.get(c.id)?.document;
+        card.vectorDocument = null;
+        if (card.column === 'in_progress' && process.env.AGENT_RUNNER === '1' && document?.startsWith('/uploads/agent-images/')) {
+          const file = path.resolve(__dirname, 'public', `.${document}`);
+          if (file.startsWith(path.join(__dirname, 'public', 'uploads', 'agent-images') + path.sep)
+            && file.endsWith('.vectorcraft') && fs.existsSync(file)) card.vectorDocument = document;
+        }
         return card;
-      });
+      }).filter((c) => !req.query.column || c.column === req.query.column);
     });
     res.json({ cards });
   } catch (e) { res.status(500).json({ error: e.message }); }

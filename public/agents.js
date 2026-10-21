@@ -74,6 +74,17 @@ async function api(url, body) {
 }
 
 // ─── Status + roster ────────────────────────────────────────────────────
+async function clearPending(e) {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/agents/clear-pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) throw new Error((await res.json()).error || 'ล้างไม่สำเร็จ');
+    reviewKey = '';
+    await Promise.all([refresh(), refreshLog()]);
+  } catch (err) { btn.textContent = err.message; btn.disabled = false; }
+}
+
 async function toggleTeamPause(e) {
   e.currentTarget.disabled = true;
   try {
@@ -94,6 +105,10 @@ function renderStatus() {
       : h('span', { class: 'team-pill team-pill-off' }, 'ดูได้อย่างเดียว ทีม AI สั่งงานได้เฉพาะบนเครื่อง Mac ของฝ่ายการตลาด'),
     h('span', { class: 'team-muted' }, `เวลางาน ${hoursText}`),
     state.tasks?.some((t) => t.status === 'review') ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => { if (!reviewDialog.open) reviewDialog.showModal(); } }, `✅ รอตัดสิน ${state.tasks.filter((t) => t.status === 'review').length}`) : null,
+    runner ? (() => {
+      const n = (state.tasks || []).filter((t) => ['queued', 'waiting'].includes(t.status)).length;
+      return h('button', { type: 'button', class: 'team-btn team-btn-small', disabled: !n, title: n ? 'ยกเลิกงานที่รอคิวทั้งหมด (งานที่กำลังทำไม่ถูกแตะ)' : 'ไม่มีงานค้าง', onclick: clearPending }, n ? `🧹 ล้างงานค้าง ${n}` : '🧹 ล้างงานค้าง');
+    })() : null,
     runner ? h('button', { type: 'button', class: `team-btn team-btn-small${state.paused ? ' team-btn-primary' : ''}`, onclick: toggleTeamPause }, state.paused ? '▶ ให้ทีมทำงานต่อ' : '⏸ หยุดทีม') : null,
     runner ? h('span', { class: 'team-muted' }, usage.limit ? `วันนี้ใช้ไป ${usage.today}/${usage.limit} งาน` : `วันนี้ทำไป ${usage.today} งาน`) : null,
   );
@@ -106,6 +121,75 @@ function stageOwner(t) { return STAGE_OWNER[t.result?.stage || 'plan'] || t.agen
 // The card in รออนุมัติ: a plan waiting for review is PLAN's; a finished
 // picture stays under GEN.
 function ownerOf(t) { return t.agent === 'image' && t.result?.stage === 'planned' ? 'layout' : t.agent; }
+
+// ─── The office (isometric room) ────────────────────────────────────────
+let officeSig = '';
+const officeWalker = typeof createOfficeWalker === 'function' ? createOfficeWalker() : null;
+function officeData() {
+  const tasks = state.tasks || [];
+  const agents = state.agents.map((a) => {
+    const mine = a.pipelineStage ? tasks.filter((t) => t.agent === 'image' || (a.vectorEditor && t.agent === a.id)) : tasks.filter((t) => t.agent === a.id);
+    const running = mine.find((t) => t.status === 'running' && (t.agent === 'image' ? stageOwner(t) === a.id : (t.agent === a.id || !a.pipelineStage)));
+    const queued = mine.filter((t) => t.status === 'queued').length;
+    const review = mine.filter((t) => t.status === 'review' && ownerOf(t) === a.id).length;
+    const said = state.bubbles?.[a.id] || {};
+    const say = running ? (said.doing?.text || said.think?.text || '') : review ? (said.handoff?.text || said.think?.text || '') : '';
+    return {
+      id: a.id, name: a.name, avatar: a.avatar,
+      status: running ? 'working' : review ? 'review' : queued ? 'queued' : 'idle',
+      queued, review, say,
+      doing: running ? (STAGE_LABELS[running.result?.stage] || 'กำลังทำงาน…') : '',
+    };
+  });
+  return {
+    agents,
+    meta: {
+      today: state.usage?.today ?? 0,
+      running: tasks.filter((t) => t.status === 'running').length,
+      queued: tasks.filter((t) => t.status === 'queued').length,
+      review: tasks.filter((t) => t.status === 'review').length,
+      working: Boolean(state.working), paused: Boolean(state.paused),
+    },
+    flowActive: tasks.some((t) => t.status === 'running' && t.agent === 'image'),
+  };
+}
+
+function renderOffice() {
+  const box = document.getElementById('teamOffice');
+  if (!box || typeof buildOfficeSVG !== 'function' || !state.agents?.length || box.hidden) return;
+  const data = officeData();
+  officeWalker?.observe(state.events, data.agents);
+  const sig = JSON.stringify(data);
+  if (sig === officeSig) return;
+  officeSig = sig;
+  box.innerHTML = buildOfficeSVG({ ...data, avatarUrl: (a) => a.avatar });
+  officeWalker?.mount(box.querySelector('svg'));
+}
+
+(() => {
+  const box = document.getElementById('teamOffice');
+  const btn = document.getElementById('teamOfficeToggle');
+  const set = (hidden) => {
+    box.hidden = hidden;
+    btn.textContent = hidden ? 'แสดงห้อง' : 'ซ่อนห้อง';
+    btn.setAttribute('aria-expanded', String(!hidden));
+    try { localStorage.setItem('teamOfficeHidden', hidden ? '1' : '0'); } catch {}
+    if (!hidden) { officeSig = ''; renderOffice(); }
+  };
+  let hidden = false;
+  try { hidden = localStorage.getItem('teamOfficeHidden') === '1'; } catch {}
+  box.hidden = hidden;
+  btn.textContent = hidden ? 'แสดงห้อง' : 'ซ่อนห้อง';
+  btn.addEventListener('click', () => set(!box.hidden));
+  const act = (e) => {
+    const gear = e.target.closest('[data-gear]');
+    if (gear) { openSettings(gear.dataset.gear); return; }
+    const rv = e.target.closest('[data-review]');
+    if (rv) showReviewFor((state.tasks || []).filter((x) => x.status === 'review' && ownerOf(x) === rv.dataset.review).map((x) => x.id));
+  };
+  box.addEventListener('click', act);
+  box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(e); } });
+})();
 
 function renderRoster() {
   const roster = document.getElementById('teamRoster');
@@ -551,7 +635,7 @@ function resultView(task, editable) {
       ].filter(Boolean) : [];
       return h('div', { class: 'team-result team-image-layout' },
         h('div', { class: `team-images${(r.images || []).length > 1 ? ' multi' : ''}` }, ...(r.images || []).map((src, i) => h('figure', { class: 'team-image' },
-          h('a', { href: src, target: '_blank', rel: 'noopener' }, h('img', { src, alt: 'ภาพที่สร้าง' })),
+          pictureLink(src, r.document || docFor(src), { alt: 'ภาพที่สร้าง' }),
           editable && r.images.length > 1 ? h('label', {}, h('input', { type: 'radio', name: `img-${task.id}`, value: String(i), checked: i === 0, 'data-image': String(i) }), ' ใช้ภาพนี้') : null))),
         h('div', { class: 'team-image-side' },
           task.input?.productModel ? h('p', { class: 'team-muted' }, `สินค้า: ${task.input.productModel}${task.input.headline ? ` · พาดหัว: ${task.input.headline}` : ''}`) : null,
@@ -592,6 +676,7 @@ function clip(text, max = 42) {
 const RULED_RE = /ฟอนต์|Frutiger|สี|#[0-9a-f]{6}|โลโก้/i;
 
 // PLAN's plan before anything is generated, laid out for review.
+const DEVICE_TH = { 'giant-scale': 'สเกลเกินจริง', floating: 'ลอยตัวไร้น้ำหนัก', 'iso-rooms': 'ห้องตัดขวางไอโซเมตริก', 'persona-panels': 'แผงสีแยกบุคลิก', 'dark-drama': 'พื้นเข้มไฟสด', 'light-beams': 'ลำแสงเต็มภาพ', 'group-studio': 'กลุ่มคนในสตูดิโอ', 'tiles-3d': 'ไอคอน 3 มิติลอย', 'proof-sheet': 'แผ่นพิสูจน์จุดขาย', 'macro-story': 'ซูมใกล้เล่าเรื่อง', 'worker-story': 'ช่างกับตัวเครื่อง' };
 const ROLE_TH = { fcu: 'ตัวเครื่องหลัก/คอยล์เย็น', cu: 'คอยล์ร้อน', remote: 'รีโมต', none: 'ไม่มีรูปที่ตรง' };
 const LIGHT_TH = { left: 'มาจากซ้าย', right: 'มาจากขวา', front: 'มาจากด้านหน้า' };
 const SURE_TH = { high: 'มั่นใจสูง', medium: 'มั่นใจปานกลาง', low: 'มั่นใจต่ำ' };
@@ -607,6 +692,11 @@ function planView(r) {
       h('img', { src: `/tasaki-web${ph.url}`, alt: ROLE_TH[ph.role] || ph.role, onerror: (e) => { e.currentTarget.style.display = 'none'; } }),
       h('figcaption', {}, `${ROLE_TH[ph.role] || ph.role}${ph.role === heroRole ? ' · เลือก' : ''}`))))) : null,
     row('รูปจริงตัวรอง', (p.supports || []).length ? h('ul', {}, ...p.supports.map((x) => h('li', {}, h('b', {}, ROLE_TH[x.role] || x.role), ` — ${x.why}`))) : h('p', { class: 'team-muted' }, 'ไม่ใช้')),
+    p.hook ? row('แนวทางสร้างสรรค์', h('div', {}, h('p', {}, h('b', {}, `${DEVICE_TH[p.device] || p.device}`), ` — ${p.hook}`),
+      (p.alternatives || []).length ? h('p', { class: 'team-muted' }, 'ทางเลือกอีก 2 แบบ (พิมพ์ในช่องคอมเมนต์แล้วกด ✎ ส่งแก้ ได้ เช่น “เอาแบบลอยตัว”): ', (p.alternatives || []).map((x) => `${DEVICE_TH[x.device] || x.device}: ${x.hook}`).join(' · ')) : null)) : null,
+    p.proof?.items?.length ? row(`แถบพิสูจน์ด้านล่าง${p.proof.title ? `: ${p.proof.title}` : ''}`, h('div', {},
+      h('ol', {}, ...p.proof.items.map((x) => h('li', { title: `ต้นทาง: ${x.source}` }, h('b', {}, x.label), ` — ${x.detail}`))),
+      h('p', { class: 'team-muted' }, `ทุกช่องมีข้อความต้นทางในข้อมูลสินค้าจริง (ชี้เมาส์ที่ช่องเพื่อดู)${p.proof.dropped ? ` · สคริปต์ตัด ${p.proof.dropped} ช่องที่หาต้นทางไม่เจอ` : ''}`))) : null,
     row('ทิศแสงที่ใช้', h('p', {}, `แสง${LIGHT_TH[p.light] || p.light || '-'} · ${LIGHT_SOURCE_TH[p.lightSource] || 'ผังประเมินจากรูปพระเอก'} · กล้อง ${p.camera || '-'}`)),
     (p.measured || []).length ? row('ข้อมูลประกอบ', h('p', { class: 'team-muted' }, [
       `ผังประเมิน: แสง${LIGHT_TH[p.planLight || p.light] || '-'} (${SURE_TH[p.lightConfidence] || '-'})`,
@@ -796,7 +886,7 @@ function vectorResultView(task, editable) {
   return h('div', { class: 'team-result team-image-layout' },
     h('div', { class: `team-images${pictures.filter(([, src]) => src).length > 1 ? ' multi' : ''}` },
       ...pictures.filter(([, src]) => src).map(([label, src]) => h('figure', { class: 'team-image' },
-        h('a', { href: src, target: '_blank', rel: 'noopener' }, h('img', { src, alt: label, loading: 'lazy' })),
+        pictureLink(src, label === 'ก่อนแก้' ? r.beforeDocument : (r.mode === 'study' ? null : r.document), { alt: label, loading: 'lazy' }),
         h('figcaption', { class: 'team-muted' }, label)))),
     h('div', { class: 'team-image-side' },
       r.summary ? h('div', { class: 'team-vec-reply' }, foldText(r.summary, 150)) : null,
@@ -841,6 +931,30 @@ function fullscreenVideo(btn) {
   video.muted = false;
   video.play().catch(() => {});
   (video.requestFullscreen || video.webkitRequestFullscreen || video.webkitEnterFullscreen)?.call(video);
+}
+
+// Clicking a picture opens its layered file in VectorCraft (the picture
+// itself if it has none). View-only visitors still get the picture in a tab.
+const docFor = (src) => String(src || '').split('?')[0].replace(/\/(r\d+[a-z]?)-1\.png$/, '/$1.vectorcraft');
+
+async function openPicture(el, src, doc) {
+  const say = (m) => { el.dataset.msg = m; clearTimeout(el._t); el._t = setTimeout(() => { delete el.dataset.msg; }, 2600); };
+  const clean = (u) => String(u || '').split('?')[0];
+  say('กำลังเปิดใน VectorCraft…');
+  try {
+    try { await api('/api/agents/open-in-app', { src: clean(doc || src), app: 'vectorcraft' }); }
+    catch (err) { if (!doc) throw err; await api('/api/agents/open-in-app', { src: clean(src), app: 'vectorcraft' }); }
+    say('เปิดใน VectorCraft แล้ว ✓');
+  } catch (err) { say(err.message); }
+}
+
+function pictureLink(src, doc, imgAttrs = {}) {
+  const a = h('a', {
+    href: src, target: '_blank', rel: 'noopener', class: 'team-pic',
+    title: state.runner ? 'คลิกเพื่อเปิดใน VectorCraft' : 'เปิดภาพ',
+    onclick: (e) => { if (!state.runner) return; e.preventDefault(); openPicture(e.currentTarget, src, doc); },
+  }, h('img', { src, alt: '', ...imgAttrs }));
+  return a;
 }
 
 async function openInApp(src, btn, app) {
@@ -971,7 +1085,8 @@ function decisionControls(task, { body, compact = false, onDone } = {}) {
     buttons.push(b);
     return b;
   };
-  const okBtn = body === null ? null : mk(planned ? '▶ ส่งต่อให้ GEN' : '✓ เอา', 'team-pick', async () => {
+  const finalArtwork = task.agent === 'image' || (task.agent === 'assemble' && task.input?.mode === 'edit');
+  const okBtn = body === null ? null : mk(planned ? '▶ ส่งต่อให้ GEN' : finalArtwork ? '✓ อนุมัติงานสมบูรณ์' : '✓ เอา', 'team-pick', async () => {
     const note = comment.value.trim();
     if (planned) return api(`/api/agents/tasks/${task.id}/proceed`, {});
     return api(`/api/agents/tasks/${task.id}/approve`, { ...(typeof body === 'function' ? body() : body || {}), ...(note ? { comment: note } : {}) });
@@ -1187,12 +1302,12 @@ document.getElementById('teamAdjustBtn').addEventListener('click', async (e) => 
 // The default view of the side panel. Behind-the-scenes events (thinking,
 // agent-to-agent handoffs) stay in the 📟 Log tab.
 function chatBubble(e) {
-  const time = new Date(e.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  const time = timeText(e.createdAt);
   const text = withNames(e.text || '');
   const body = text.length > 520
     ? h('details', {}, h('summary', {}, `${text.slice(0, 520)}…`), h('div', { class: 'team-pre' }, text))
     : h('div', { class: 'team-pre' }, text);
-  const picture = e.image ? h('a', { href: e.image, target: '_blank', rel: 'noopener' }, h('img', { src: e.image, alt: '', class: 'team-chat-pic', onload: followLogBottom })) : null;
+  const picture = e.image ? pictureLink(e.image, docFor(e.image), { class: 'team-chat-pic', onload: followLogBottom }) : null;
   if (e.agent === 'you') {
     const to = e.toAgent ? speaker(e.toAgent) : null;
     return h('div', { class: 'chat-row chat-me' },
@@ -1291,7 +1406,7 @@ function logBlock(e) {
   const failed = /ไม่สำเร็จ|failed/i.test(e.text);
   const kind = failed ? 'error' : e.kind;
   const label = e.kind === 'think' ? '🧠 คิด' : e.kind === 'handoff' ? `📤 → ${to?.name || ''}` : '🛠️';
-  const time = new Date(e.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = timeText(e.createdAt);
   if (e.kind === 'log' && !e.detail) {
     return h('div', { class: `team-log-item team-log-${kind}` },
       h('div', { class: 'team-log-title' }, h('span', { class: 'team-log-dot' }), h('b', {}, from.name), ` ${withNames(e.text)}`, h('span', { class: 'team-log-time' }, time)));
@@ -1306,7 +1421,7 @@ function logBlock(e) {
     h('div', { class: 'team-log-box' },
       e.detail && !isDataBlob(e.detail) ? io('IN', withNames(e.detail), 220) : null,
       io('OUT', withNames(e.text), 360),
-      e.image ? h('a', { href: e.image, target: '_blank', rel: 'noopener' }, h('img', { src: e.image, alt: '', class: 'team-log-img', onload: followLogBottom })) : null));
+      e.image ? pictureLink(e.image, docFor(e.image), { class: 'team-log-img', onload: followLogBottom }) : null));
 }
 
 async function refreshLog() {
@@ -1314,9 +1429,12 @@ async function refreshLog() {
     const { events } = await api(`/api/agents/log${logSince ? `?since=${encodeURIComponent(logSince)}` : ''}`);
     const known = new Set(logEvents.map((e) => e.id));
     const fresh = events.filter((e) => !known.has(e.id));
-    if (!fresh.length && logEvents.length) return;
     logEvents.unshift(...fresh);
-    logEvents.splice(300);
+    // Retain the full 48-hour conversation, including busy days with many logs.
+    const cutoff = Date.now() - 48 * 3600e3;
+    const expired = logEvents.findIndex((e) => new Date(e.createdAt).getTime() < cutoff);
+    if (expired !== -1) logEvents.splice(expired);
+    if (!fresh.length && expired === -1 && logEvents.length) return;
     if (logEvents.length) logSince = logEvents[0].createdAt;
     // Oldest at the top, newest at the bottom next to the chat box. Follow
     // new lines only if she's already at the bottom (not while reading back).
@@ -1389,6 +1507,19 @@ function renderStream() {
 
 // ─── Poll ───────────────────────────────────────────────────────────────
 let first = true;
+// A picture re-rendered after she saved its file in VectorCraft: every <img>
+// showing it (chat, cards, log) gets a new ?v= so the browser fetches it again.
+function applyPictureVersions() {
+  const pics = state.pictures || {};
+  for (const img of document.querySelectorAll('img[src^="/uploads/agent-images/"]')) {
+    const src = img.getAttribute('src');
+    const [base, query] = src.split('?');
+    const v = pics[base];
+    const have = Number((/v=(\d+)/.exec(query || '') || [])[1] || 0);
+    if (v && v > have) img.setAttribute('src', `${base}?v=${v}`);
+  }
+}
+
 async function refresh() {
   try {
     state = await api('/api/agents');
@@ -1399,11 +1530,13 @@ async function refresh() {
   renderStatus();
   if (first) { first = false; selectAgent(null); }
   renderRoster();
+  renderOffice();
   renderReview();
   renderFollowUp();
   renderStream();
   renderChatActions();
   renderTasks();
+  applyPictureVersions();
   renderLearnings();
   fillVectorSources();
   renderVectorLive();
@@ -1411,4 +1544,11 @@ async function refresh() {
 
 refresh();
 refreshLog();
+function updateOfficeClock() {
+  if (document.hidden || typeof officeClockText !== 'function') return;
+  const time = officeClockText();
+  for (const clock of document.querySelectorAll('[data-office-clock]')) clock.textContent = time;
+}
+setInterval(updateOfficeClock, 1000);
+document.addEventListener('visibilitychange', updateOfficeClock);
 setInterval(() => { if (!document.hidden) { refresh(); refreshLog(); } }, POLL_MS);

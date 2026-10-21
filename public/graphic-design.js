@@ -312,6 +312,31 @@ function renderCard(card) {
   title.textContent = card.title;
   el.appendChild(title);
 
+  if (card.column === 'in_progress' && card.vectorDocument) {
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'team-btn team-btn-small';
+    openBtn.textContent = 'เปิดใน VectorCraft';
+    openBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      openBtn.disabled = true;
+      openBtn.textContent = 'กำลังเปิด…';
+      try {
+        await fetchOrThrow('/api/agents/open-in-app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ src: card.vectorDocument, app: 'vectorcraft' }),
+        });
+      } catch (err) {
+        alert(err.message || 'เปิด VectorCraft ไม่สำเร็จ');
+      } finally {
+        openBtn.disabled = false;
+        openBtn.textContent = 'เปิดใน VectorCraft';
+      }
+    });
+    el.appendChild(openBtn);
+  }
+
   if (card.description) {
     const desc = document.createElement('p');
     desc.className = 'desc';
@@ -415,7 +440,7 @@ async function fetchCards() {
     return;
   }
   const cards = data.cards || [];
-  const signature = JSON.stringify(cards.map((c) => [c.id, c.column, c.updatedAt]));
+  const signature = JSON.stringify(cards.map((c) => [c.id, c.column, c.updatedAt, c.imageUrl, c.vectorDocument]));
   if (signature === lastSignature) return;
   lastSignature = signature;
 

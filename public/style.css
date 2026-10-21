@@ -4251,3 +4251,31 @@ body.team-resizing { cursor: col-resize; user-select: none; }
 
 .decide-box .team-decision-msg { margin: 0; font-size: 14px; font-weight: 600; color: #e67700; min-height: 0; }
 .decide-box .team-decision-msg:empty { display: none; }
+
+/* The office */
+.team-office { width: 100%; max-width: 1100px; margin: 0 auto 8px; }
+.team-office svg { width: 100%; height: auto; display: block; }
+.office-hit { cursor: pointer; }
+.office-gear { opacity: .0; transition: opacity .15s; }
+.office-seat:hover ~ .office-gear, .office-gear:hover, .office-gear:focus { opacity: 1; }
+.team-office:hover .office-gear { opacity: .85; }
+.office-avatar.idle { opacity: .6; }
+.office-seat.office-away .office-avatar, .office-seat.office-away .office-aura { visibility: hidden; }
+.office-aura.working { animation: office-aura-pulse 1.8s ease-in-out infinite; }
+.office-hud-signal { animation: office-hud-pulse 2.4s ease-in-out infinite; }
+@keyframes office-hud-pulse { 50% { opacity: .4; } }
+@keyframes office-aura-pulse { 50% { opacity: .45; } }
+.office-avatar.working { animation: office-bob .9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.office-screen.on { animation: office-flicker 1.4s ease-in-out infinite; }
+.office-flow.on { stroke-dasharray: 10 10; animation: office-dash 1s linear infinite; }
+.office-cloud.live { animation: office-pop .5s ease-out; }
+@keyframes office-bob { 50% { transform: translateY(-6px); } }
+@keyframes office-flicker { 50% { opacity: .65; } }
+@keyframes office-dash { to { stroke-dashoffset: -20; } }
+@keyframes office-pop { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .office-avatar.working, .office-aura.working, .office-hud-signal, .office-screen.on, .office-flow.on, .office-cloud.live { animation: none; } }
+
+/* pictures open in VectorCraft */
+.team-pic { position: relative; display: block; cursor: pointer; }
+.team-pic[data-msg]::after { content: attr(data-msg); position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(15, 25, 38, .88); color: #fff; font-size: 13px; text-align: center; pointer-events: none; }
+.team-pic:hover img { outline: 2px solid var(--accent, #2f80ed); outline-offset: 2px; }
