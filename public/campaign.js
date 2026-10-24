@@ -226,7 +226,9 @@
     ];
     body.replaceChildren(
       powerBar(parts),
-      section('🚀 แผนตั้งแคมเปญ (กดคัดลอกไปวางใน Ads Manager)', data.audience.who && data.audience.done ? 'ตั้งแล้ว' : 'ยังไม่ได้ตั้ง', data.audience.who && data.audience.done, planBlock(data) || h('p', { class: 'key-messages-hint' }, 'แคมเปญนี้ยังไม่มีแผน')),
+      h('details', { class: 'campaign-section campaign-plan-fold' },
+        h('summary', { class: 'campaign-section-head' }, h('h3', {}, '🚀 แผนตั้งแคมเปญ (กดคัดลอกไปวางใน Ads Manager)'), h('span', { class: `campaign-count ${data.audience.who && data.audience.done ? 'ok' : ''}` }, data.audience.who && data.audience.done ? 'ตั้งแล้ว' : 'ยังไม่ได้ตั้ง'), h('span', { class: 'campaign-muted' }, '(กดเพื่อขยาย)')),
+        planBlock(data) || h('p', { class: 'key-messages-hint' }, 'แคมเปญนี้ยังไม่มีแผน')),
       section('🖼️ ภาพแอด (9:16 พร้อมเส้นครอป)', `พร้อม ${data.adImages.ready} · ต้องการ ${data.adImages.min}–${data.adImages.max}`, data.adImages.done,
         ads.length ? h('div', { class: 'campaign-feed-grid' }, ads.map((it, i) => feedAd(it, i + 1))) : null,
         adsPending ? h('p', { class: 'campaign-pending' }, `ยังไม่มีภาพอีก ${adsPending} ภาพ`) : null),

@@ -132,7 +132,7 @@ function officeData() {
     const running = mine.find((t) => t.status === 'running' && (t.agent === 'image' ? stageOwner(t) === a.id : (t.agent === a.id || !a.pipelineStage)));
     const queued = mine.filter((t) => t.status === 'queued').length;
     const review = mine.filter((t) => t.status === 'review' && ownerOf(t) === a.id).length;
-    const said = state.bubbles?.[a.id] || {};
+        const said = state.bubbles?.[a.id] || {};
     const say = running ? (said.doing?.text || said.think?.text || '') : review ? (said.handoff?.text || said.think?.text || '') : '';
     return {
       id: a.id, name: a.name, avatar: a.avatar,
@@ -212,7 +212,6 @@ function renderRoutines() {
   if (!box) return;
   const days = (d, sat) => (d.length > 2 && d.every((x, i) => i === 0 || x === d[i - 1] + 1) ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(', ')) + (sat ? ' + เสาร์ทำงาน' : '');
   const who = (id) => state.agents.find((a) => a.id === id) || { name: id, avatar: '' };
-  renderWorkSaturdays();
   box.replaceChildren(...(state.routines || []).map((r) => {
     const a = who(r.agent);
     const lastDay = r.lastRun ? String(r.lastRun).slice(0, 10) : null;
@@ -228,9 +227,17 @@ function renderRoutines() {
 
 function renderRoster() {
   const roster = document.getElementById('teamRoster');
-  roster.replaceChildren(...state.agents.map((a) => {
-    // ผัง/พิมพ์/ประกอบ share one image task; each is busy during its own stage.
-    const mine = a.pipelineStage ? state.tasks.filter((t) => t.agent === 'image' || (a.vectorEditor && t.agent === a.id)) : state.tasks.filter((t) => t.agent === a.id);
+  // ผัง/พิมพ์/ประกอบ share one image task; each is busy during its own stage.
+  const tasksOf = (a) => (a.pipelineStage ? state.tasks.filter((t) => t.agent === 'image' || (a.vectorEditor && t.agent === a.id)) : state.tasks.filter((t) => t.agent === a.id));
+  // Passed = she signed this agent off herself (the button on its card).
+  // Agents she is training right now (PLAN / GEN / VEC); the rest have not started.
+const TRAINING_NOW = new Set(['layout', 'image', 'assemble']);
+  const isProven = (a) => (state.passedAgents || []).includes(a.id);
+  const rank = (a) => (isProven(a) ? 0 : TRAINING_NOW.has(a.id) ? 1 : 2);
+  const ordered = state.agents.map((a, i) => ({ a, i, r: rank(a) })).sort((x, y) => (x.r - y.r) || (x.i - y.i)).map((x) => x.a);
+  roster.replaceChildren(...ordered.map((a, idx) => {
+    const chained = !isProven(a) && TRAINING_NOW.has(a.id) && ordered[idx + 1] && !isProven(ordered[idx + 1]) && TRAINING_NOW.has(ordered[idx + 1].id);
+    const mine = tasksOf(a);
     // An image job is "running" only for the agent doing its current step.
     const running = mine.find((t) => t.status === 'running' && (t.agent === 'image' ? stageOwner(t) === a.id : (t.agent === a.id || !a.pipelineStage)));
     const queued = mine.filter((t) => t.status === 'queued').length;
@@ -244,6 +251,7 @@ function renderRoster() {
     else if (a.pipelineStage && a.id !== 'image' && !a.vectorEditor && !reviewing) { status = 'ทำงานต่อจากงานภาพ'; }
     else if (queued) { status = `รอคิว ${queued} งาน`; cls = 'queued'; }
     else if (reviewing) { status = `รอคุณตรวจ ${reviewing} งาน`; cls = 'review'; }
+    const proven = isProven(a);
     const said = state.bubbles?.[a.id] || {};
     const short = (t) => (t.length > 90 ? `${t.slice(0, 90)}…` : t);
     const rows = [
@@ -254,7 +262,7 @@ function renderRoster() {
     const cloud = rows.length ? h('div', { class: `team-cloud${said.doing ? ' live' : ''}` }, ...rows) : null;
     // Click the card to jump to this agent's work waiting in รออนุมัติ.
     const viewable = reviewing > 0;
-    return h('div', { class: 'team-member-wrap' }, cloud, h('div', {
+    return h('div', { class: `team-member-wrap${chained ? ' team-chain' : ''}`, 'data-agent': a.id }, cloud, h('div', {
       class: `team-member team-member-${cls}${a.id === selectedAgent ? ' selected' : ''}${viewable ? ' team-member-link' : ''}`,
       ...(viewable ? {
         role: 'button', tabindex: '0', title: 'คลิกเพื่อดูงานที่รอคุณตรวจ',
@@ -270,14 +278,30 @@ function renderRoster() {
       title: `ตั้งค่า${a.name}`,
       'aria-label': `ตั้งค่า${a.name}`,
     }, '⚙️'),
-    h('img', { src: a.avatar, alt: '', class: 'team-avatar' }),
-    h('div', { class: 'team-member-body' },
+    h('img', { src: a.avatar, alt: '', class: `team-avatar${proven ? ' team-avatar-proven' : TRAINING_NOW.has(a.id) ? ' team-avatar-training' : ''}`, title: proven ? 'ผ่านแล้ว · หนิงเป็นคนอนุมัติ' : TRAINING_NOW.has(a.id) ? 'กำลังฝึก' : 'ยังไม่ได้เทรน' }),
+    h('div', { class: 'team-member-body', title: a.role },
       h('div', { class: 'team-member-name' }, a.name, h('span', { class: `team-engine team-engine-${a.engine}${a.model ? ` team-model-${a.model}` : ''}`, title: 'โมเดล AI ที่ใช้' }, modelLabel(a))),
-      h('div', { class: 'team-muted' }, a.role),
-      h('div', { class: 'team-member-status' }, viewable ? `${status} ›` : status),
+      h('div', { class: 'team-member-status' }, proven || !TRAINING_NOW.has(a.id) ? null : h('span', { class: 'team-training', title: 'หนิงกำลังสอน/ฝึกเอเจนต์ตัวนี้อยู่ ยังไม่ผ่านการอนุมัติผลงาน' }, '🎓 กำลังฝึก (Training)'), proven || !TRAINING_NOW.has(a.id) ? null : ' ', viewable ? `${status} ›` : status),
       doneToday ? h('div', { class: 'team-muted' }, `วันนี้เสร็จ ${doneToday} งาน`) : null,
+      h('button', {
+        type: 'button', class: 'team-pass-btn',
+        title: proven ? 'ยกเลิกสถานะผ่าน กลับไปเป็นกำลังฝึก' : 'หนิงอนุมัติว่าเอเจนต์ตัวนี้ผ่านแล้ว',
+        onclick: async (ev) => { ev.stopPropagation(); try { await api('/api/agents/passed', { agent: a.id, on: !proven }); await refresh(); } catch (err) { alert(err.message); } },
+        onkeydown: (ev) => ev.stopPropagation(),
+      }, proven ? 'ยกเลิกผ่าน' : '✔ ให้ผ่าน'),
     )));
   }));
+  // Orange links between the training circles, measured from ring to ring.
+  roster.querySelectorAll('.team-chain-line').forEach((n) => n.remove());
+  const rr = roster.getBoundingClientRect();
+  roster.querySelectorAll('.team-chain').forEach((wrap) => {
+    const next = wrap.nextElementSibling;
+    const from = wrap.querySelector('.team-avatar')?.getBoundingClientRect();
+    const to = next?.querySelector('.team-avatar')?.getBoundingClientRect();
+    if (!from || !to) return;
+    const top = from.bottom - rr.top + roster.scrollTop + 2;
+    roster.append(h('div', { class: 'team-chain-line', 'aria-hidden': 'true', style: `left:${from.left - rr.left + from.width / 2 - 1.5}px;top:${top}px;height:${Math.max(to.top - from.bottom - 4, 0)}px` }));
+  });
 }
 
 // ─── Command form ───────────────────────────────────────────────────────

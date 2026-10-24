@@ -4328,6 +4328,9 @@ body.team-resizing { cursor: col-resize; user-select: none; }
 .campaign-pill.ok { border-color: #16a34a; }
 .campaign-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .campaign-section-head h3 { margin: 0; font-size: 18px; }
+.campaign-plan-fold > summary { cursor: pointer; list-style: none; margin-bottom: 0; }
+.campaign-plan-fold > summary::-webkit-details-marker { display: none; }
+.campaign-plan-fold[open] > summary { margin-bottom: 10px; }
 .campaign-count { font-size: 14px; color: #dc2626; font-weight: 600; }
 .campaign-count.ok { color: #16a34a; }
 .campaign-badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--column-bg); color: var(--muted); margin-right: 6px; }
@@ -4469,3 +4472,16 @@ div.campaign-ad-media.campaign-empty { aspect-ratio: 9 / 16; cursor: default; di
 .team-sat-chip button { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 4px; }
 .team-sat-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .team-sat-input { font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); }
+
+/* Compact member cards: show who already works for real */
+.team-members-section .team-avatar { width: 32px; height: 32px; }
+.team-members-section .team-member { padding: 6px 8px; gap: 8px; }
+.team-members-section .team-member-body { padding-right: 24px; }
+.team-members-section .team-member-status { font-size: 12px; margin-top: 0; }
+.team-members-section .team-avatar-proven { border-radius: 50%; box-shadow: 0 0 0 2px #39ff14, 0 0 8px 2px #39ff14, 0 0 16px 4px rgba(57,255,20,.45); }
+.team-training { font-weight: 600; font-size: 11px; padding: 1px 6px; border-radius: 4px; color: #b45309; background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.4); white-space: nowrap; }
+.team-pass-btn { margin-top: 4px; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+.team-pass-btn:hover { border-color: #39ff14; color: var(--text); }
+.team-members-section .team-avatar-training { border-radius: 50%; box-shadow: 0 0 0 2px #f59e0b, 0 0 8px 2px rgba(245,158,11,.6); }
+.team-members-section .team-roster { position: relative; }
+.team-chain-line { position: absolute; width: 3px; border-radius: 2px; background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,.7); pointer-events: none; z-index: 2; }

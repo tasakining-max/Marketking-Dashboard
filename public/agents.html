@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ทีม AI — Marketing Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20261022-roster-sidebar" />
+<link rel="stylesheet" href="style.css?v=20261024-proven-badge" />
 <script>
   (function () {
     var stored = localStorage.getItem('theme');
@@ -40,11 +40,6 @@
           <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎของทั้งทีม</button>
         </div>
         <div id="teamRoster" class="team-roster"></div>
-        <div class="team-routines" aria-labelledby="teamRoutinesTitle">
-          <h3 id="teamRoutinesTitle">⏰ งานรูทีนที่ตั้งเวลาไว้</h3>
-          <div id="teamRoutines" class="team-routine-list"></div>
-          <div id="teamSaturdays" class="team-saturdays"></div>
-        </div>
       </section>
 
       <section class="report-section" id="teamOfficeSection">
@@ -55,6 +50,14 @@
         <div id="teamOffice" class="team-office" aria-live="polite"></div>
       </section>
     </div>
+
+    <section class="report-section" aria-labelledby="teamRoutinesTitle">
+      <div class="report-section-header">
+        <h2 id="teamRoutinesTitle">⏰ งานรูทีนที่ตั้งเวลาไว้</h2>
+      </div>
+      <div id="teamRoutines" class="team-routine-list"></div>
+      <div id="teamSaturdays" class="team-saturdays"></div>
+    </section>
 
     <section class="report-section">
       <div class="report-section-header">
@@ -206,7 +209,7 @@
 
   <script src="office.js?v=20261022-arrival-thoughts"></script>
   <script src="officeMotion.js?v=20261022-arrival-thoughts"></script>
-  <script src="agents.js?v=20261021-digital-clock"></script>
+  <script src="agents.js?v=20261024-proven-badge"></script>
   <script src="tab-tracker.js"></script>
 </body>
 </html>
