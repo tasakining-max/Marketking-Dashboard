@@ -191,11 +191,28 @@ function renderOffice() {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(e); } });
 })();
 
+function renderWorkSaturdays() {
+  const box = document.getElementById('teamSaturdays');
+  if (!box) return;
+  const dates = state.workSaturdays || [];
+  const fmt = (d) => new Date(`${d}T12:00:00+07:00`).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' });
+  const save = async (date, on) => {
+    try { await api('/api/agents/work-saturdays', { date, on }); await refresh(); }
+    catch (err) { alert(err.message); }
+  };
+  const input = h('input', { type: 'date', class: 'team-sat-input', 'aria-label': 'เลือกวันเสาร์ที่ทำงาน' });
+  box.replaceChildren(
+    h('div', { class: 'team-muted' }, 'เสาร์ที่ทำงานตามปฏิทินบริษัท (นอกนั้นทีมหยุดวันเสาร์)'),
+    h('div', { class: 'team-sat-chips' }, dates.length ? dates.map((d) => h('span', { class: 'team-sat-chip' }, fmt(d), h('button', { type: 'button', title: 'เอาออก', 'aria-label': `เอา ${fmt(d)} ออก`, onclick: () => save(d, false) }, '×'))) : h('span', { class: 'team-muted' }, 'ยังไม่มี')),
+    h('div', { class: 'team-sat-add' }, input, h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => { if (input.value) { save(input.value, true); input.value = ''; } } }, '＋ เพิ่มเสาร์ทำงาน')));
+}
+
 function renderRoutines() {
   const box = document.getElementById('teamRoutines');
   if (!box) return;
-  const days = (d) => (d.length === 5 && d.join() === '1,2,3,4,5' ? 'จ–ศ' : d.map((x) => DAY_NAMES[x]).join(', '));
+  const days = (d, sat) => (d.length > 2 && d.every((x, i) => i === 0 || x === d[i - 1] + 1) ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(', ')) + (sat ? ' + เสาร์ทำงาน' : '');
   const who = (id) => state.agents.find((a) => a.id === id) || { name: id, avatar: '' };
+  renderWorkSaturdays();
   box.replaceChildren(...(state.routines || []).map((r) => {
     const a = who(r.agent);
     const lastDay = r.lastRun ? String(r.lastRun).slice(0, 10) : null;
@@ -203,7 +220,7 @@ function renderRoutines() {
     return h('div', { class: 'team-routine' },
       a.avatar ? h('img', { src: a.avatar, alt: '', class: 'team-routine-avatar' }) : null,
       h('div', { class: 'team-routine-body' },
-        h('div', { class: 'team-routine-head' }, h('b', {}, a.name), h('span', { class: 'team-routine-when' }, `${days(r.days)} · ${r.times.join(' · ')}`)),
+        h('div', { class: 'team-routine-head' }, h('b', {}, a.name), h('span', { class: 'team-routine-when' }, `${days(r.days, r.satToo)} · ${r.times.join(' · ')}`)),
         h('div', { class: 'team-muted' }, r.text),
         h('div', { class: lastDay ? 'team-routine-last' : 'team-muted' }, last)));
   }));
@@ -232,7 +249,7 @@ function renderRoster() {
     const rows = [
       said.think ? h('div', { class: 'team-cloud-row think', title: said.think.text }, h('b', {}, '🧠 คิด: '), short(said.think.text)) : null,
       said.doing ? h('div', { class: 'team-cloud-row doing', title: said.doing.text }, h('b', {}, '🛠️ ทำ: '), short(said.doing.text)) : null,
-      said.handoff ? h('div', { class: 'team-cloud-row handoff', title: said.handoff.text }, h('b', {}, `📤 สั่ง${speaker(said.handoff.toAgent || 'you').name}: `), short(said.handoff.text)) : null,
+      said.handoff ? h('div', { class: 'team-cloud-row handoff', title: said.handoff.text }, h('b', {}, (said.handoff.toAgent || 'you') === 'you' ? '📤 รอหนิงอนุมัติ: ' : `📤 สั่ง${speaker(said.handoff.toAgent).name}: `), short(said.handoff.text)) : null,
     ].filter(Boolean);
     const cloud = rows.length ? h('div', { class: `team-cloud${said.doing ? ' live' : ''}` }, ...rows) : null;
     // Click the card to jump to this agent's work waiting in รออนุมัติ.
@@ -551,7 +568,7 @@ function ideaCard(task, idea, i, editable, single = false) {
       decision && !decision.picked && decision.reason ? h('p', { class: 'team-reason' }, `เหตุผลที่ไม่เลือก: ${decision.reason}`) : null);
   }
   if (single) {
-    // The only idea on the card: ✓ เอา / ✕ ไม่เอา below decide it.
+    // The only idea on the card: ✓ อนุมัติ / ✕ ไม่อนุมัติ below decide it.
     const only = h('div', { class: 'team-idea' }, h('div', { class: 'team-idea-head' }, h('strong', {}, idea.title)), ...details);
     only.dataset.choice = 'pick';
     return only;
@@ -1160,7 +1177,7 @@ function decisionControls(task, { body, compact = false, onDone } = {}) {
     return b;
   };
   const finalArtwork = task.agent === 'image' || (task.agent === 'assemble' && task.input?.mode === 'edit');
-  const okBtn = body === null ? null : mk(planned ? '▶ ส่งต่อให้ GEN' : finalArtwork ? '✓ อนุมัติงานสมบูรณ์' : '✓ เอา', 'team-pick', async () => {
+  const okBtn = body === null ? null : mk(planned ? '▶ ส่งต่อให้ GEN' : finalArtwork ? '✓ อนุมัติงานสมบูรณ์' : '✓ อนุมัติ', 'team-pick', async () => {
     const note = comment.value.trim();
     if (planned) return api(`/api/agents/tasks/${task.id}/proceed`, {});
     return api(`/api/agents/tasks/${task.id}/approve`, { ...(typeof body === 'function' ? body() : body || {}), ...(note ? { comment: note } : {}) });
@@ -1170,7 +1187,7 @@ function decisionControls(task, { body, compact = false, onDone } = {}) {
     h('div', { class: 'chat-actions-row' },
       okBtn,
       mk('✎ ส่งแก้', 'team-fix', () => api(`/api/agents/tasks/${task.id}/revise`, { feedback: comment.value.trim() }), true),
-      mk('✕ ไม่เอา', 'team-skip', () => ((task.agent === 'adideas' || task.agent === 'productvideo') && (task.result?.ideas || []).length
+      mk('✕ ไม่อนุมัติ', 'team-skip', () => ((task.agent === 'adideas' || task.agent === 'productvideo') && (task.result?.ideas || []).length
         ? api(`/api/agents/tasks/${task.id}/approve`, { decisions: task.result.ideas.map(() => ({ picked: false, reason: comment.value.trim() })) })
         : api(`/api/agents/tasks/${task.id}/reject`, { reason: comment.value.trim() })))),
     msg);
@@ -1436,7 +1453,7 @@ function renderChatActions() {
     if (slot.dataset.sig === sig) continue;
     slot.dataset.sig = sig;
     if (task.status !== 'review') {
-      const label = task.result?.superseded ? '🔁 ปิดแล้ว มีงานตรวจใหม่แทน' : { done: '✓ เอาแล้ว', rejected: '✕ ไม่เอา', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
+      const label = task.result?.superseded ? '🔁 ปิดแล้ว มีงานตรวจใหม่แทน' : { done: '✓ อนุมัติแล้ว', rejected: '✕ ไม่อนุมัติ', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
       slot.replaceChildren(...(label ? [h('span', { class: 'chat-decided' }, label)] : []));
       continue;
     }
