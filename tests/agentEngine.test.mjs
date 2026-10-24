@@ -73,7 +73,7 @@ process.stdin.on('end', () => {
     agentTask: { findMany: async () => [] }, agentEvent: { create: async () => {} },
   };
   const agent = { model: 'sonnet', exactEdit: true, tools: [], images: ['/tmp/example.png'], schema: { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'] }, buildPrompt: async () => 'Original brief' };
-  const task = { id: 'test', agent: 'chief', result: { answer: 'previous draft' }, feedback: 'make it shorter', sessionId: 'claude:old-session' };
+  const task = { id: 'test', agent: 'catalog', result: { summary: 'previous draft' }, feedback: 'make it shorter', sessionId: 'claude:old-session' };
   try {
     await t.test('switching to Codex rebuilds context and sends image attachments read-only', async () => {
       const out = await runLanguageAgent(agent, task, prisma, {});

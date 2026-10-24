@@ -19,6 +19,14 @@
       seat?.classList.toggle('office-away', hidden);
       for (const el of svg.querySelectorAll(`[data-office-label="${id}"], [data-gear="${id}"], [data-review="${id}"]`)) el.style.visibility = hidden ? 'hidden' : '';
     }
+    function syncThoughts() {
+      if (!svg) return;
+      const waiting = new Set(reduced() ? [] : queue.map((item) => item.to.id));
+      if (active && !active.arrived && !reduced()) waiting.add(active.to.id);
+      for (const thought of svg.querySelectorAll('[data-office-thought]')) {
+        thought.style.visibility = waiting.has(thought.getAttribute('data-office-thought')) ? 'hidden' : '';
+      }
+    }
     function start() {
       if (active || !svg || !queue.length || document.hidden) return;
       const item = queue.shift();
@@ -35,8 +43,9 @@
       group.append(node('rect', { x: -100, y: -124, width: 200, height: 25, rx: 9, fill: '#fff', stroke: '#94bde9' }));
       const label = node('text', { y: -107, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#24527e' }, `${item.from.name} → ${item.to.name}`);
       group.append(label);
-      active = { ...item, group, sprite, label, legs, length, duration, start: performance.now() };
+      active = { ...item, group, sprite, label, legs, length, duration, start: performance.now(), arrived: false };
       hideSeat(item.from.id, true);
+      syncThoughts();
       svg.append(group);
       frame = requestAnimationFrame(tick);
     }
@@ -53,6 +62,10 @@
     function tick(now) {
       if (!active) return;
       const elapsed = now - active.start;
+      if (!active.arrived && elapsed >= active.duration) {
+        active.arrived = true;
+        syncThoughts();
+      }
       const returning = elapsed > active.duration + 1300;
       const progress = returning ? Math.max(0, 1 - (elapsed - active.duration - 1300) / active.duration) : Math.min(1, elapsed / active.duration);
       const [x, y] = position(progress * active.length);
@@ -62,7 +75,7 @@
       active.label.textContent = waiting ? `ส่งงานให้ ${active.to.name}` : returning ? `${active.from.name} กลับโต๊ะ` : `${active.from.name} → ${active.to.name}`;
       if (elapsed >= active.duration * 2 + 1300 || reduced()) {
         hideSeat(active.from.id, false);
-        active.group.remove(); active = null; frame = null; start(); return;
+        active.group.remove(); active = null; frame = null; start(); syncThoughts(); return;
       }
       frame = requestAnimationFrame(tick);
     }
@@ -82,11 +95,13 @@
         while (seen.size > 1000) seen.delete(seen.values().next().value);
         if (queue.length > 20) queue.splice(0, queue.length - 20);
         start();
+        syncThoughts();
       },
       mount(next) {
         svg = next;
         if (active) { hideSeat(active.from.id, true); svg.append(active.group); }
         else start();
+        syncThoughts();
       },
     };
   };

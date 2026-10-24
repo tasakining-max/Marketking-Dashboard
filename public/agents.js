@@ -191,6 +191,24 @@ function renderOffice() {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(e); } });
 })();
 
+function renderRoutines() {
+  const box = document.getElementById('teamRoutines');
+  if (!box) return;
+  const days = (d) => (d.length === 5 && d.join() === '1,2,3,4,5' ? 'จ–ศ' : d.map((x) => DAY_NAMES[x]).join(', '));
+  const who = (id) => state.agents.find((a) => a.id === id) || { name: id, avatar: '' };
+  box.replaceChildren(...(state.routines || []).map((r) => {
+    const a = who(r.agent);
+    const lastDay = r.lastRun ? String(r.lastRun).slice(0, 10) : null;
+    const last = !lastDay ? 'ยังไม่เคยรัน' : lastDay === bangkokToday() ? `วันนี้${r.lastRun.length > 10 ? ` (${r.lastRun.slice(11)})` : ''}` : `ล่าสุด ${lastDay}`;
+    return h('div', { class: 'team-routine' },
+      a.avatar ? h('img', { src: a.avatar, alt: '', class: 'team-routine-avatar' }) : null,
+      h('div', { class: 'team-routine-body' },
+        h('div', { class: 'team-routine-head' }, h('b', {}, a.name), h('span', { class: 'team-routine-when' }, `${days(r.days)} · ${r.times.join(' · ')}`)),
+        h('div', { class: 'team-muted' }, r.text),
+        h('div', { class: lastDay ? 'team-routine-last' : 'team-muted' }, last)));
+  }));
+}
+
 function renderRoster() {
   const roster = document.getElementById('teamRoster');
   roster.replaceChildren(...state.agents.map((a) => {
@@ -611,6 +629,60 @@ function resultView(task, editable) {
         r.highlights?.length || r.suggestions?.length ? h('details', { class: 'tv-more' }, h('summary', {}, 'ดูรายละเอียด'),
           r.highlights?.length ? h('div', {}, h('strong', {}, 'ที่น่าสนใจ'), h('ul', {}, ...r.highlights.map((x) => h('li', {}, x)))) : null,
           r.suggestions?.length ? h('div', {}, h('strong', {}, 'ข้อเสนอ'), h('ul', {}, ...r.suggestions.map((x) => h('li', {}, x)))) : null) : null);
+    case 'catalog':
+      return h('div', { class: 'team-result' },
+        h('p', { class: 'team-muted' }, `${(r.products || []).map((p) => p.model).join(', ')} · ${r.reason || ''} · เทียบ ${r.rowsCompared || 0} แถว`),
+        r.summary ? h('p', {}, r.summary) : null,
+        r.review ? h('p', { class: 'team-muted' }, `🔎 ตรวจทานแล้ว: ${r.review}`) : null,
+        (r.structural || []).length ? h('div', {}, h('strong', {}, '⚠️ ต้องจัดการเอง (แคทแก้ให้ไม่ได้)'), h('ul', {}, ...r.structural.map((x) => h('li', {}, x)))) : null,
+        (r.brand?.text || []).length || (r.brand?.visual || []).length
+          ? h('div', {}, h('strong', {}, '🏷 พบโลโก้/ชื่อแบรนด์อื่นใน Catalog'), h('ul', {},
+            ...(r.brand.text || []).map((x) => h('li', {}, `${x.kind === 'web' ? 'เว็บ' : x.kind === 'placeholder' ? 'ข้อความตัวอย่าง' : 'ชื่อ'} “${x.term}” ×${x.count} (หน้า ${x.pages.join(', ')})`)),
+            ...(r.brand.visual || []).map((x) => h('li', {}, `หน้า ${x.page}: ${x.what} (แคทดูจากภาพ ตรวจตาอีกที)`))))
+          : h('p', { class: 'team-muted' }, '🏷 ไม่พบโลโก้/ชื่อแบรนด์อื่นใน Catalog'),
+        r.fix?.error ? h('p', { class: 'team-muted' }, `⚠️ แก้ไฟล์ PDF ไม่สำเร็จ: ${r.fix.error}`) : null,
+        r.fix && !r.fix.error && !r.fix.nothing ? h('div', { class: 'team-entry' },
+          h('strong', {}, '🛠 แคทแก้ Catalog ให้แล้ว (ยังไม่ได้อัปโหลดขึ้นเว็บ)'),
+          h('p', {}, r.uploaded ? h('strong', {}, `✅ อัปโหลดขึ้นเว็บแล้ว (${r.uploaded.models.join(', ')})`) : !r.uploadError ? h('span', { class: 'team-muted' }, '⬆️ เมื่อกดผ่าน ระบบจะอัปโหลดไฟล์นี้ขึ้นเว็บแทนที่ Catalog เดิมให้เลย') : h('button', { type: 'button', class: 'team-btn team-pick team-btn-small', onclick: async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true; btn.textContent = 'กำลังอัปโหลด…';
+            try { const res = await api(`/api/agents/tasks/${task.id}/upload-catalog`, {}); btn.textContent = res.brandLeft ? '⚠️ อัปโหลดแล้ว แต่ตรวจกลับยังเจอแบรนด์อื่น' : '✅ อัปโหลดแล้ว ตรวจกลับสะอาด'; await refresh(); }
+            catch (err) { btn.textContent = `⚠️ ${err.message}`; btn.disabled = false; }
+          } }, '⬆️ ลองอัปโหลดใหม่'), ' ',
+          h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (ev) => openInApp(r.fix.file, ev.currentTarget, 'pdfcraft') }, '📄 เปิดใน PDFCraft'), ' ', h('a', { href: r.fix.file, target: '_blank', rel: 'noopener' }, '⬇️ ดาวน์โหลด PDF ที่แก้แล้ว'), ' — ตรวจแล้วอัปโหลดทับในหน้า admin เว็บเอง'),
+          h('ul', {},
+            r.fix.metaCleaned?.replaced ? h('li', {}, `ลบชื่อแบรนด์เดิมที่ซ่อนในข้อมูลไฟล์ (metadata/พาธไฟล์เก่า/ชื่อสี) ${r.fix.metaCleaned.replaced} จุด ภาพไม่เปลี่ยน`) : null,
+            r.fix.placeholders?.length ? h('li', {}, `ลบข้อความตัวอย่าง (Lorem) ออกแล้ว ${r.fix.placeholders.length} จุด (หน้า ${[...new Set(r.fix.placeholders.map((x) => x.page))].join(', ')})`) : null,
+            r.fix.textKept?.length ? h('li', {}, `แก้ข้อความในไฟล์ ${r.fix.textKept.length} บรรทัด (ชื่อแบรนด์→Tasaki, เว็บ→www.tasaki.co.th) ภาพที่เห็นไม่เปลี่ยน`) : null,
+            r.fix.covered?.length ? h('li', {}, `ลบชื่อแบรนด์เดิมที่ซ่อนอยู่ใต้ป้าย Tasaki ออกจากข้อความในไฟล์แล้ว ${r.fix.covered.reduce((n, x) => n + x.count, 0)} จุด (หน้า ${r.fix.covered.map((x) => x.page).join(', ')}) ภาพที่เห็นไม่เปลี่ยน (ตรวจเทียบทุกหน้าแล้ว)`) : null,
+            r.fix.coveredFailed ? h('li', {}, `⚠️ ต้องแก้เอง: ชื่อแบรนด์เดิมที่ซ่อนใต้ป้ายหน้า ${r.fix.coveredFailed.pages.join(', ')} — ${r.fix.coveredFailed.why}`) : null,
+            ...(r.fix.addresses || []).map((x) => h('li', {}, `เปลี่ยนที่อยู่หน้า ${x.page}: ${x.from} → ${x.to}`)),
+            ...(r.fix.manual || []).map((m) => h('li', {}, `⚠️ ต้องแก้เอง หน้า ${m.page}: ${m.text}`)),
+            ...(r.fix.logoSkipped || []).map((m) => h('li', {}, `⚠️ ต้องแก้เอง หน้า ${m.page}: ${m.what} (${m.why})`)),
+            r.fix.remaining?.length ? h('li', {}, `ยังเหลือในข้อความ: ${r.fix.remaining.map((x) => `${x.term} ×${x.count}`).join(', ')}`) : null),
+          ...(r.fix.coveredShots || []).slice(0, 3).map((c) => h('div', {},
+            h('div', { class: 'team-muted' }, `หน้า ${c.page}: ${c.from}`),
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+              h('img', { src: c.before, alt: 'ก่อน', style: 'max-width:48%;border:1px solid #ccc' }),
+              h('img', { src: c.after, alt: 'หลัง', style: 'max-width:48%;border:1px solid #ccc' })))),
+          ...(r.fix.logos || []).map((l) => h('div', {},
+            h('div', { class: 'team-muted' }, `โลโก้หน้า ${l.page}: ${l.what} → ทับด้วยโลโก้ Tasaki สี${({ white: 'ขาว', blue: 'น้ำเงิน', gray: 'เทา' })[l.color] || ''} (พื้นหลัง ${l.bg}) ตรวจตาก่อนใช้`),
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+              h('img', { src: l.before, alt: 'ก่อน', style: 'max-width:48%;border:1px solid #ccc' }),
+              h('img', { src: l.after, alt: 'หลัง', style: 'max-width:48%;border:1px solid #ccc' }))))) : null,
+        !(r.changes || []).length ? h('p', { class: 'team-muted' }, 'ไม่มีค่าที่ต่างจากเว็บ') : null,
+        ...(r.changes || []).map((c, i) => h('div', { class: 'team-entry' },
+          h('label', { class: 'team-entry-edit' },
+            editable ? h('input', { type: 'checkbox', checked: true, 'data-catalog-keep': String(i) }) : null,
+            h('span', {}, `${c.unitModel || c.productModel} · ${c.field}: ${c.oldValue || '(ว่าง)'} → ${c.newValue}`)),
+          c.quote ? h('div', { class: 'team-muted' }, `ใน PDF: “${c.quote}”`) : null)));
+    case 'rival':
+      return h('div', { class: 'team-entry' },
+        h('p', {}, r.summary || ''),
+        (r.aiSearch || []).length ? h('div', {}, h('strong', {}, '🤖 AI Search (robots.txt จริง)'), h('ul', {}, ...r.aiSearch.map((a) => h('li', {}, `${a.brand} (${a.host}): ${a.from} → ${a.to}${a.changed ? ' ⚠️ เปลี่ยน' : ''}${a.scoreTo !== a.scoreFrom ? ` · คะแนน ${a.scoreFrom ?? '—'} → ${a.scoreTo}` : ''} — ${a.detail}${a.content ? ` · ${a.content}` : ''}`)))) : null,
+        (r.keywords || []).length ? h('div', {}, h('strong', {}, '🎯 คีย์เวิร์ดที่เช็ค'), h('ul', {}, ...r.keywords.map((k) => h('li', {}, `${k.keyword}: ${k.to ? '🌱 ติด' : 'ยังไม่ติด'}${k.url ? ` ${k.url}` : ''}`)))) : null,
+        (r.news || []).length ? h('div', {}, h('strong', {}, '📰 ข่าวคู่แข่ง'), h('ul', {}, ...r.news.map((n) => h('li', {}, `${n.text} `, h('a', { href: n.url, target: '_blank', rel: 'noopener' }, 'ที่มา'))))) : null,
+        r.review ? h('p', { class: 'team-muted' }, `🔎 ${r.review}`) : null);
     case 'website':
       const checked = r.review ? h('p', { class: 'team-muted' }, `🔎 ตรวจทานแล้ว: ${r.review}`) : null;
       if (!(r.entries || []).length) return h('div', { class: 'team-result' }, h('p', { class: 'team-muted' }, 'ไม่มีอะไรใหม่ที่ต้องลงบันทึกในช่วงนี้'), checked);
@@ -985,6 +1057,7 @@ function approveBody(task, card) {
     return { image: picked ? Number(picked.dataset.image) : 0 };
   }
   if (task.agent === 'caption') return { caption: card.querySelector('[data-caption]').value };
+  if (task.agent === 'catalog') return { keep: [...card.querySelectorAll('[data-catalog-keep]')].filter((el) => el.checked).map((el) => Number(el.dataset.catalogKeep)) };
   if (task.agent === 'website') {
     const entries = task.result?.entries || [];
     return {
@@ -1049,6 +1122,7 @@ const PASS_EFFECT = {
   productvideo: 'ไอเดียที่ติ๊ก ✓ จะกลายเป็นการ์ดในคอลัมน์ไอเดียของบอร์ด VDO',
   caption: 'แคปชันในกล่อง (ที่คุณแก้ได้) จะถูกบันทึกลงการ์ด',
   website: 'รายการที่ติ๊กไว้จะลงบันทึกเว็บไซต์',
+  catalog: 'ค่าที่ติ๊กไว้จะถูกเขียนลงสเปกบนเว็บทันที (สำรองค่าเดิมไว้ก่อน) แล้วติ๊กว่าซิงก์กับ Catalog นี้แล้ว',
   image: 'ภาพจะแนบเข้าการ์ด Graphic Design (ถ้างานนี้มาจากไอเดียแอด) ถ้าไม่ได้ผูกการ์ดจะเก็บไว้เฉยๆ',
   motion: 'เก็บคลิปนี้ไว้',
   assemble: 'เก็บไฟล์ที่แก้และจำเฉพาะบทเรียนที่คุณตรวจแล้ว ประกอบจะอ่านบทเรียนเมื่อรับงานแก้ครั้งถัดไป',
@@ -1301,9 +1375,20 @@ document.getElementById('teamAdjustBtn').addEventListener('click', async (e) => 
 // ─── Chat: her messages and the agents' replies, as bubbles ─────────────
 // The default view of the side panel. Behind-the-scenes events (thinking,
 // agent-to-agent handoffs) stay in the 📟 Log tab.
+const PREVIEW_MARK = /\n?🖼 (\d+) (\/uploads\/agent-images\/[^\s?]+\.png(?:\?v=\d+)?)/g;
+const FILE_MARK = /\n?📎 (\/uploads\/agent-images\/[^\s]+\.pdf)/;
 function chatBubble(e) {
   const time = timeText(e.createdAt);
-  const text = withNames(e.text || '');
+  const fileSrc = (FILE_MARK.exec(e.text || '') || [])[1];
+  const previews = [...(e.text || '').matchAll(PREVIEW_MARK)].map((m) => ({ page: m[1], url: m[2] }));
+  const text = withNames((e.text || '').replace(PREVIEW_MARK, '').replace(FILE_MARK, ''));
+  const previewRow = previews.length ? h('div', { class: 'chat-pdf-previews', style: 'display:flex;gap:8px;flex-wrap:wrap;margin:6px 0' },
+    ...previews.map((v) => h('a', { href: fileSrc || v.url, target: '_blank', rel: 'noopener', title: `หน้า ${v.page} · คลิกเพื่อเปิดไฟล์`, onclick: (ev) => { if (fileSrc && state.runner) { ev.preventDefault(); openInApp(fileSrc, ev.currentTarget, 'pdfcraft'); } } },
+      h('img', { src: v.url, alt: `หน้า ${v.page}`, style: 'width:230px;border:1px solid #ccd;border-radius:4px;display:block' }),
+      h('div', { class: 'team-muted', style: 'font-size:11px;text-align:center' }, `หน้า ${v.page}`)))) : null;
+  const fileRow = fileSrc ? h('div', { class: 'chat-actions-row' },
+    h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (ev) => openInApp(fileSrc, ev.currentTarget, 'pdfcraft') }, '📄 เปิดใน PDFCraft'),
+    h('a', { class: 'team-link', href: fileSrc, target: '_blank', rel: 'noopener' }, `⬇️ ${decodeURIComponent(fileSrc.split('/').pop())}`)) : null;
   const body = text.length > 520
     ? h('details', {}, h('summary', {}, `${text.slice(0, 520)}…`), h('div', { class: 'team-pre' }, text))
     : h('div', { class: 'team-pre' }, text);
@@ -1320,7 +1405,7 @@ function chatBubble(e) {
   return h('div', { class: `chat-row chat-agent${failed ? ' chat-error' : ''}` },
     from.avatar ? h('img', { src: from.avatar, alt: '', class: 'chat-avatar' }) : null,
     h('div', { class: 'chat-bubble' },
-      h('div', { class: 'chat-who' }, from.name), body, picture,
+      h('div', { class: 'chat-who' }, from.name), body, previewRow, fileRow, picture,
       e.taskId && e.toAgent === 'you' ? h('div', { class: 'chat-actions', 'data-actions': e.taskId, 'data-event': e.id }) : null,
       h('div', { class: 'chat-time' }, time)));
 }
@@ -1351,16 +1436,17 @@ function renderChatActions() {
     if (slot.dataset.sig === sig) continue;
     slot.dataset.sig = sig;
     if (task.status !== 'review') {
-      const label = { done: '✓ เอาแล้ว', rejected: '✕ ไม่เอา', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
-      slot.replaceChildren(label ? h('span', { class: 'chat-decided' }, label) : null);
+      const label = task.result?.superseded ? '🔁 ปิดแล้ว มีงานตรวจใหม่แทน' : { done: '✓ เอาแล้ว', rejected: '✕ ไม่เอา', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
+      slot.replaceChildren(...(label ? [h('span', { class: 'chat-decided' }, label)] : []));
       continue;
     }
     if (!state.runner || task.result?.stage === 'teaching') { slot.replaceChildren(); continue; }
     const quick = quickBody(task) !== null;
-    slot.replaceChildren(
+    slot.replaceChildren(...[
       decisionControls(task, { body: quick ? () => quickBody(task) : null, compact: true }),
       quick ? null : h('button', { type: 'button', class: 'team-link', onclick: () => showReviewFor([task.id]) }, 'ดูและเลือกไอเดีย ›'),
-      quick ? h('button', { type: 'button', class: 'team-link', onclick: () => showReviewFor([task.id]) }, 'ดูเต็ม ›') : null);
+      quick ? h('button', { type: 'button', class: 'team-link', onclick: () => showReviewFor([task.id]) }, 'ดูเต็ม ›') : null,
+    ].filter(Boolean));
   }
 }
 
@@ -1386,7 +1472,7 @@ function followLogBottom() {
 // Agents' instructions mention each other by internal id ("assemble",
 // "layout" …). Show the names she gave them instead. Quoted ids are always
 // agents; bare ones only when the id isn't also an everyday word.
-const BARE_IDS = new Set(['assemble', 'adideas', 'productvideo', 'chief']);
+const BARE_IDS = new Set(['assemble', 'adideas', 'productvideo']);
 function withNames(text) {
   if (!text) return text;
   return state.agents.reduce((t, a) => {
@@ -1530,6 +1616,7 @@ async function refresh() {
   renderStatus();
   if (first) { first = false; selectAgent(null); }
   renderRoster();
+  renderRoutines();
   renderOffice();
   renderReview();
   renderFollowUp();

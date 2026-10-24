@@ -8,10 +8,11 @@ function setup(reduced = false) {
     attrs = {}; children = []; style = {}; hidden = false;
     classList = { toggle: (name, value) => { this.hidden = value; } };
     setAttribute(key, value) { this.attrs[key] = value; }
+    getAttribute(key) { return this.attrs[key]; }
     append(child) { child.remove(); this.children.push(child); child.parent = this; }
     remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); }
     querySelector() { return this.seat ||= new Element(); }
-    querySelectorAll() { return [this.label ||= new Element()]; }
+    querySelectorAll(selector) { return selector === '[data-office-thought]' ? this.thoughts || [] : [this.label ||= new Element()]; }
   }
   let callback;
   const context = vm.createContext({ Intl, Map, Set, Math, Date, performance: { now: () => 0 },
@@ -21,7 +22,9 @@ function setup(reduced = false) {
   });
   context.window = context;
   for (const file of ['office.js', 'officeMotion.js']) vm.runInContext(fs.readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8'), context);
-  return { context, walker: context.createOfficeWalker(), svg: new Element(), nextSVG: () => new Element(), tick: (time) => callback(time) };
+  return { context, walker: context.createOfficeWalker(), svg: new Element(), nextSVG: () => new Element(), tick: (time) => callback(time),
+    thought(svg, id) { const el = new Element(); el.setAttribute('data-office-thought', id); (svg.thoughts ||= []).push(el); return el; },
+  };
 }
 const agents = [{ id: 'productvideo', name: 'VDO', avatar: 'vdo.png' }, { id: 'motion', name: 'EFF', avatar: 'eff.png' }];
 const event = (id, overrides = {}) => ({ id, agent: 'productvideo', toAgent: 'motion', kind: 'handoff', createdAt: new Date().toISOString(), ...overrides });
@@ -64,4 +67,40 @@ test('respects reduced motion and routes cross-room visits through the corridor'
   assert.ok(route.every((p) => p.every(Number.isFinite)));
   assert.equal(s.context.officeWalkRoute('you', 'motion'), null);
   assert.equal(s.context.officeWalkRoute('motion', 'motion'), null);
+});
+
+test('shows the recipient thought only on arrival and preserves timing across redraws', () => {
+  const s = setup();
+  const thought = s.thought(s.svg, 'motion');
+  s.walker.mount(s.svg); s.walker.observe([], agents);
+  s.walker.observe([event('delivery')], agents);
+  assert.equal(thought.style.visibility, 'hidden');
+  s.tick(1000);
+  assert.equal(thought.style.visibility, 'hidden');
+  const replacement = s.nextSVG();
+  const newThought = s.thought(replacement, 'motion');
+  s.walker.mount(replacement);
+  assert.equal(newThought.style.visibility, 'hidden');
+  const route = s.context.officeWalkRoute('productvideo', 'motion');
+  const length = route.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - route[i][0], p[1] - route[i][1]), 0);
+  const arrival = Math.max(2200, length / 150 * 1000);
+  s.tick(arrival - 1);
+  assert.equal(newThought.style.visibility, 'hidden');
+  s.tick(arrival);
+  assert.equal(newThought.style.visibility, '');
+  const afterArrival = s.nextSVG();
+  const finalThought = s.thought(afterArrival, 'motion');
+  s.walker.mount(afterArrival);
+  assert.equal(finalThought.style.visibility, '', 'stays visible when sender returns');
+});
+
+test('waits for queued visitors too and keeps other agents thoughts visible', () => {
+  const s = setup();
+  const recipient = s.thought(s.svg, 'motion');
+  const unrelated = s.thought(s.svg, 'caption');
+  s.walker.mount(s.svg); s.walker.observe([], agents);
+  s.context.document.hidden = true;
+  s.walker.observe([event('queued-delivery')], agents);
+  assert.equal(recipient.style.visibility, 'hidden');
+  assert.equal(unrelated.style.visibility, '');
 });

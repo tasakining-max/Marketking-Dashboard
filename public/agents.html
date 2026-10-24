@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ทีม AI — Marketing Dashboard</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=20261022-roster-sidebar" />
 <script>
   (function () {
     var stored = localStorage.getItem('theme');
@@ -34,22 +34,27 @@
   <main class="report-main team-main">
     <div id="teamStatus" class="team-status"></div>
 
-    <section class="report-section" id="teamOfficeSection">
-      <div class="report-section-header">
-        <h2>🏢 ห้องทำงานทีม AI</h2>
-        <button type="button" class="team-btn team-btn-small" id="teamOfficeToggle" aria-expanded="true">ซ่อนห้อง</button>
-      </div>
-      <div id="teamOffice" class="team-office" aria-live="polite"></div>
-    </section>
+    <div class="team-workspace">
+      <section class="report-section team-members-section" aria-labelledby="teamMembersTitle">
+        <div class="report-section-header">
+          <h2 id="teamMembersTitle">👥 สมาชิกในทีม</h2>
+          <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎของทั้งทีม</button>
+        </div>
+        <div id="teamRoster" class="team-roster"></div>
+        <div class="team-routines" aria-labelledby="teamRoutinesTitle">
+          <h3 id="teamRoutinesTitle">⏰ งานรูทีนที่ตั้งเวลาไว้</h3>
+          <div id="teamRoutines" class="team-routine-list"></div>
+        </div>
+      </section>
 
-    <section class="report-section">
-      <div class="report-section-header">
-        <h2>👥 สมาชิกในทีม</h2>
-        <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎของทั้งทีม</button>
-      </div>
-      <div id="teamRoster" class="team-roster"></div>
-    </section>
-
+      <section class="report-section" id="teamOfficeSection">
+        <div class="report-section-header">
+          <h2>🏢 ห้องทำงานทีม AI</h2>
+          <button type="button" class="team-btn team-btn-small" id="teamOfficeToggle" aria-expanded="true">ซ่อนห้อง</button>
+        </div>
+        <div id="teamOffice" class="team-office" aria-live="polite"></div>
+      </section>
+    </div>
 
     <section class="report-section">
       <div class="report-section-header">
@@ -199,8 +204,8 @@
     </div>
   </dialog>
 
-  <script src="office.js?v=20261021-department-blues"></script>
-  <script src="officeMotion.js?v=20261021-agent-walk"></script>
+  <script src="office.js?v=20261022-arrival-thoughts"></script>
+  <script src="officeMotion.js?v=20261022-arrival-thoughts"></script>
   <script src="agents.js?v=20261021-digital-clock"></script>
   <script src="tab-tracker.js"></script>
 </body>

@@ -23,7 +23,7 @@
     adideas: [1.4, 2.2], caption: [1.4, 5.0],
     layout: [10.8, 2.2], image: [14.1, 2.2], assemble: [12.4, 5.0],
     productvideo: [10.8, 11.4], motion: [10.8, 14.2],
-    chief: [4.7, 11.4], website: [1.4, 14.2], ads: [4.7, 14.2],
+    catalog: [4.7, 11.4], rival: [1.4, 11.4], website: [1.4, 14.2], ads: [4.7, 14.2],
   };
   const FRONT_SEATS = new Set(['ads', 'caption', 'assemble', 'motion', 'website']);
   const ZONES = [
@@ -314,14 +314,14 @@
 
       // overlays: speech cloud, review badge, settings gear
       const headY = ty - R - 78;
-      if (a.say && (working || status === 'review')) over.push(cloud(ax, headY, a.say, working));
+      if (a.say && (working || status === 'review')) over.push(`<g data-office-thought="${esc(a.id)}">${cloud(ax, headY, a.say, working)}</g>`);
       if (a.review) over.push(`<g class="office-badge office-hit" data-review="${esc(a.id)}" role="button" tabindex="0" aria-label="${esc(label)} มีงานรอตัดสิน ${a.review} งาน"><circle cx="${(ax - 40).toFixed(1)}" cy="${(ty - R + 8).toFixed(1)}" r="15" fill="#2b8a3e" stroke="#fff" stroke-width="3"/><text x="${(ax - 40).toFixed(1)}" y="${(ty - R + 13).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff">${a.review}</text></g>`);
       over.push(`<g class="office-gear office-hit" data-gear="${esc(a.id)}" role="button" tabindex="0" aria-label="ตั้งค่า${esc(label)}"><circle cx="${(ax + 42).toFixed(1)}" cy="${(ty - R + 8).toFixed(1)}" r="13" fill="#fff" stroke="#cfd8e3"/><text x="${(ax + 42).toFixed(1)}" y="${(ty - R + 14).toFixed(1)}" text-anchor="middle" font-size="15">⚙️</text></g>`);
     }
 
     // after hours the room is dim
     if (!meta.working) {
-      out.push(poly([P(0, 0, WALL), P(ROOM, 0, WALL), P(ROOM, ROOM), P(0, ROOM)], 'fill="#0b1d3a" opacity=".28" pointer-events="none"'));
+      out.push(poly([P(0, 0, WALL), P(ROOM, 0, WALL), P(ROOM, 0), P(ROOM, ROOM), P(0, ROOM), P(0, ROOM, WALL)], 'fill="#0b1d3a" opacity=".28" pointer-events="none"'));
     }
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ห้องทำงานทีม AI" font-family="'Sukhumvit Set','Thonburi','Noto Sans Thai',sans-serif">${out.join('')}${over.join('')}</svg>`;
   }
