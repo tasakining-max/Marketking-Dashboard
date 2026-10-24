@@ -165,7 +165,7 @@
     const allText = [
       `Campaign: ${c.name}`, `Objective: ${c.objective}`, `Budget: ${c.budget}`, '',
       ...plan.adSetSettings.map((x) => `${x.label}: ${x.value}`), '',
-      `Ad sets: ${plan.adSets.map((x) => x.name).join(', ')}`, '',
+      ...plan.adSets.map((x) => `Ad set: ${x.name}${x.detailed ? ` · Detailed targeting: ${x.detailed}` : ''}`), '',
       ...plan.ads.map((a) => `[${a.adSet}] ${a.name}\n  URL: ${a.fullUrl}`),
     ].join('\n');
     const box = h('input', { type: 'checkbox', checked: data.audience.done, 'aria-label': 'ตั้งใน Ads Manager แล้ว' });
@@ -177,9 +177,10 @@
       h('div', { class: 'campaign-plan-top' }, h('span', { class: 'campaign-muted' }, `กลุ่มเป้าหมาย: ${data.campaign.audience || '-'}`), copyBtn(allText, 'คัดลอกทั้งแผน')),
       h('h4', {}, '1 · Campaign'),
       copyRow('ชื่อแคมเปญ', c.name, true), copyRow('Objective', c.objective), copyRow('งบ', c.budget),
-      h('h4', {}, '2 · Ad set (ตั้งค่าเหมือนกันทุกชุด)'),
-      plan.adSets.map((x) => copyRow('ชื่อชุดโฆษณา', x.name, true)),
+      h('h4', {}, '2 · Ad set (ตั้งค่าทั่วไปเหมือนกันทุกชุด)'),
       plan.adSetSettings.map((x) => copyRow(x.label, x.value)),
+      h('h4', {}, '2.1 · ชื่อชุดโฆษณา + Detailed targeting (ใส่ในช่อง include เดียวกัน ไม่ใช่ narrow)'),
+      plan.adSets.map((x) => h('div', { class: 'campaign-plan-ad' }, copyRow('ชื่อชุดโฆษณา', x.name, true), x.detailed ? copyRow('Detailed targeting', x.detailed) : null)),
       h('h4', {}, '3 · โฆษณา + ลิงก์ติด UTM'),
       plan.ads.map((a) => h('div', { class: 'campaign-plan-ad' },
         h('div', { class: 'campaign-plan-ad-head' }, h('b', {}, a.adSet), h('span', { class: 'campaign-muted' }, `utm_content = ${a.utmContent}`)),
