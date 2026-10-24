@@ -31,6 +31,26 @@
   </header>
 
   <main class="report-main ads-main">
+    <div class="ads-tabs" role="tablist" aria-label="หน้า Ads">
+      <button type="button" class="ads-tab active" role="tab" id="adsTabBtnCampaign" data-tab="campaign" aria-selected="true">🎯 แคมเปญ</button>
+      <button type="button" class="ads-tab" role="tab" id="adsTabBtnResults" data-tab="results" aria-selected="false">📊 ผลโฆษณาทั้งหมด</button>
+    </div>
+
+    <div id="adsPanelCampaign" class="ads-panel" role="tabpanel" aria-labelledby="adsTabBtnCampaign">
+      <section class="report-section">
+        <div class="report-section-header">
+          <h2>🎯 เตรียมแคมเปญก่อนยิงจริง</h2>
+          <div class="report-nav">
+            <select id="campaignSelect" class="ads-funnel-select" aria-label="เลือกแคมเปญ"></select>
+            <button id="campaignAddBtn" class="report-nav-btn" type="button" title="เพิ่มแคมเปญใหม่">＋</button>
+            <button id="campaignRefreshBtn" class="report-nav-btn" type="button" title="Refresh">🔄</button>
+          </div>
+        </div>
+        <div id="campaignBody" class="campaign-body"><p class="key-messages-hint">กำลังโหลด…</p></div>
+      </section>
+    </div>
+
+    <div id="adsPanelResults" class="ads-panel" role="tabpanel" aria-labelledby="adsTabBtnResults" hidden>
     <section class="report-section">
       <div class="report-section-header">
         <h2>📈 ผลโฆษณา Facebook</h2>
@@ -163,10 +183,12 @@
       <div id="adActionLogEmpty" class="key-messages-hint" hidden>ยังไม่มีบันทึกกิจกรรม</div>
       <ul id="adActionLogList" class="ads-action-log-list"></ul>
     </section>
+    </div>
   </main>
 
   <script src="utm-journey.js"></script>
   <script src="ads.js"></script>
+  <script src="campaign.js"></script>
   <script src="tab-tracker.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
 import { registerAgentTeam } from './lib/agentTeam.js';
+import { registerCampaigns } from './lib/campaigns.js';
 import { latestGraphicAgentImages } from './lib/graphicAgentImages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2040,6 +2041,7 @@ app.get('/api/tab-views', async (req, res) => {
 });
 
 registerAgentTeam(app, { prisma, invalidateCache, tasakiWebPool });
+registerCampaigns(app, { prisma, tasakiWebPool });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5050;
