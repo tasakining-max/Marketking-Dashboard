@@ -3926,6 +3926,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 .team-images img { width: 100%; border-radius: 6px; border: 1px solid var(--border); display: block; }
 
 .team-tasks { display: flex; flex-direction: column; gap: 10px; }
+
 .team-task { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
 .team-task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
 .team-task-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -4371,6 +4372,8 @@ div.campaign-reel-media.campaign-empty { background: var(--bg); border-radius: 0
 .campaign-fbbar small { color: #65676b; }
 .campaign-webnav { display: flex; align-items: center; gap: 16px; padding: 8px 14px; background: #0079bf; color: #fff; font-size: 13px; }
 .campaign-webnav b { margin-right: auto; font-size: 15px; }
+.campaign-webpage.theme-dark { background: #0b1420; color: #e4e9f0; border-color: #263a4d; }
+.campaign-webpage.theme-dark .campaign-webnav { background: #0b1420; color: #e4e9f0; }
 .campaign-webhero .campaign-cover-img { width: 100%; aspect-ratio: 16 / 7; object-fit: cover; display: block; border-radius: 0; border: none; }
 .campaign-cover figcaption { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
 .campaign-cover-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }

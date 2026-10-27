@@ -127,7 +127,7 @@
         } }, 'ใช้ภาพเดียวกับอีกอัน') : null);
     const frame = kind === 'fb'
       ? h('div', { class: 'campaign-fbpage' }, h('div', { class: 'campaign-fbcover' }, inner), h('div', { class: 'campaign-fbbar' }, h('span', { class: 'campaign-fbavatar' }, 'T'), h('b', {}, 'Tasaki Air'), h('small', {}, 'เพจ · เครื่องปรับอากาศ')))
-      : h('div', { class: 'campaign-webpage' }, h('div', { class: 'campaign-webnav' }, h('b', {}, 'Tasaki'), h('span', {}, 'สินค้า'), h('span', {}, 'ตัวแทน'), h('span', {}, 'ติดต่อ')), h('div', { class: 'campaign-webhero' }, inner));
+      : h('div', { class: `campaign-webpage${kind === 'web-dark' ? ' theme-dark' : ''}` }, h('div', { class: 'campaign-webnav' }, h('b', {}, 'Tasaki'), h('span', {}, 'สินค้า'), h('span', {}, 'ตัวแทน'), h('span', {}, 'ติดต่อ')), h('div', { class: 'campaign-webhero' }, inner));
     frame.addEventListener('click', () => (c.image ? zoom(h('img', { src: c.image, alt: c.title })) : file.click()));
     const box = h('input', { type: 'checkbox', checked: c.done, 'aria-label': `${c.title} เสร็จแล้ว` });
     const note = h('input', { type: 'text', class: 'campaign-note', placeholder: 'โน้ต (ไม่บังคับ)', value: c.note, 'aria-label': `โน้ต ${c.title}` });
@@ -235,7 +235,9 @@
       section('🎬 วิดีโอ', `พร้อม ${data.videos.ready} · ต้องการ ${data.videos.min}–${data.videos.max}`, data.videos.done,
         h('div', { class: 'campaign-reel-grid' }, vids.map((it, i) => videoTile(it, i + 1)))),
       section('🌐 Cover และหน้าแรก', `${data.covers.filter((c) => c.done).length}/${data.covers.length} (ติ๊กเอง)`, data.covers.every((c) => c.done),
-        h('div', { class: 'campaign-cover-grid' }, data.covers.map((c) => coverTile(c, c.key === 'fbCover' ? 'fb' : 'web', data.covers.find((o) => o !== c))))),
+        h('div', { class: 'campaign-cover-grid' }, data.covers.map((c) => coverTile(c,
+          c.key === 'fbCover' ? 'fb' : c.key === 'webHeroDark' ? 'web-dark' : 'web',
+          data.covers.find((o) => o.key === (c.key === 'webHero' ? 'webHeroDark' : 'webHero')))))),
       h('details', { class: 'campaign-web' },
         h('summary', {}, mark(web.done), `ตรวจเว็บ + Catalog — ${web.total ? `ผ่านครบ ${web.readyCount}/${web.total} รุ่น` : 'ยังไม่พบสินค้า'}`, webLeft ? h('span', { class: 'campaign-muted' }, ' (กดดูรายละเอียด)') : null),
         web.products.map((x) => h('div', { class: 'campaign-product' },
