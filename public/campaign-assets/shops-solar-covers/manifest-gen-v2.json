@@ -1,0 +1,23 @@
+{
+  "campaign": "solar-hybrid",
+  "method": "built-in image_gen + native VectorCraft composition",
+  "scene": "/campaign-assets/shops-solar-covers/generated/shops-solar-scene-v2.png",
+  "prompt": "/campaign-assets/shops-solar-covers/generated/prompt.txt",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-gen-v2.vectorcraft",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-gen-v2.png",
+      "width": 1640,
+      "height": 624,
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792833560069.png"
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-gen-v2.png",
+      "width": 1920,
+      "height": 840,
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792833560091.png"
+    }
+  ]
+}

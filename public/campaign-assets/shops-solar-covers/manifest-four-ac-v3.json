@@ -1,0 +1,17 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-four-ac-v3.vectorcraft",
+  "products": "/campaign-assets/shops-solar-covers/products/used-products-v3.json",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-four-ac-v3.png",
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792833994603.png"
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-four-ac-v3.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792833994624.png"
+    }
+  ]
+}

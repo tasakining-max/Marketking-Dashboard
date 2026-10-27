@@ -1,0 +1,19 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-light-dark-v4.vectorcraft",
+  "facebook": "/uploads/campaigns/solar-hybrid-fbCover-1792833994603.png",
+  "website": [
+    {
+      "key": "webHero",
+      "theme": "Light",
+      "file": "solar-hybrid-website-light-v4.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792834419118.png"
+    },
+    {
+      "key": "webHeroDark",
+      "theme": "Dark",
+      "file": "solar-hybrid-website-dark-v4.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHeroDark-1792834419142.png"
+    }
+  ]
+}

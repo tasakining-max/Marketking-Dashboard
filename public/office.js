@@ -21,11 +21,11 @@
   // Opposing seats share a room; front seats face back across the table group.
   const SEATS = {
     adideas: [1.4, 2.2], caption: [1.4, 5.0],
-    layout: [10.8, 2.2], image: [14.1, 2.2], assemble: [12.4, 5.0],
+    layout: [10.8, 2.2], image: [14.1, 2.2], assemble: [11.0, 5.0], vector: [14.1, 5.0],
     productvideo: [10.8, 11.4], motion: [10.8, 14.2],
     catalog: [4.7, 11.4], rival: [1.4, 11.4], website: [1.4, 14.2], ads: [4.7, 14.2],
   };
-  const FRONT_SEATS = new Set(['ads', 'caption', 'assemble', 'motion', 'website']);
+  const FRONT_SEATS = new Set(['ads', 'caption', 'assemble', 'vector', 'motion', 'website']);
   const ZONES = [
     { label: 'ไอเดีย · เนื้อหา', x0: 0.4, x1: 7.6, y0: 0.8, y1: 8.0, fill: '#EDF6FC' },
     { label: 'สตูดิโอภาพ', x0: 9.8, x1: 17.5, y0: 0.8, y1: 8.0, fill: '#CBE7F8' },

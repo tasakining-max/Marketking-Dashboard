@@ -1,0 +1,26 @@
+{
+  "campaign": "solar-hybrid",
+  "source": "/uploads/agent-images/shops-solar-ad/export-20261024/shops-solar-live.vectorcraft",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-1640x624-v1.png",
+      "size": "1640×624",
+      "label": "Cover Facebook",
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792833022658.png",
+      "bytes": 728404
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-1920x840-v1.png",
+      "size": "1920×840",
+      "label": "แบนเนอร์หน้าเว็บ",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792833022679.png",
+      "bytes": 1011143
+    }
+  ],
+  "editable": {
+    "facebook": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-facebook.vectorcraft",
+    "website": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-website.vectorcraft"
+  }
+}

@@ -755,6 +755,16 @@ function resultView(task, editable) {
           verdictCard(r),
           tools.length ? h('div', { class: 'team-image-tools' }, ...tools) : null));
     }
+    case 'vector':
+      // Each picture is Codex's own side-by-side check: source | rebuilt vector.
+      return h('div', { class: 'team-result' },
+        h('div', { class: `team-images${(r.images || []).length > 1 ? ' multi' : ''}` }, ...(r.images || []).map((src, i) => h('figure', { class: 'team-image' },
+          pictureLink(src, r.svgs?.[i], { alt: 'ต้นฉบับ | เวกเตอร์', loading: 'lazy' }),
+          h('figcaption', { class: 'team-tags' },
+            r.svgs?.[i] ? h('a', { href: r.svgs[i], target: '_blank', class: 'team-btn team-btn-small' }, 'SVG') : null,
+            state.runner && r.svgs?.[i] ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (e) => openInApp(r.svgs[i].split('?')[0], e.currentTarget, 'vectorcraft') }, 'เปิดใน VectorCraft') : null)))),
+        (r.missing || []).length ? h('p', { class: 'team-muted' }, `ไม่สำเร็จ: ${r.missing.join(', ')}`) : null,
+        r.note ? foldText(r.note, 200, 'team-muted') : null);
     case 'motion':
       return h('div', { class: 'team-result' },
         r.video ? h('video', { src: r.video, controls: true, muted: true, loop: true, playsinline: true, class: 'team-video' }) : null,
@@ -1048,7 +1058,11 @@ function fullscreenVideo(btn) {
 
 // Clicking a picture opens its layered file in VectorCraft (the picture
 // itself if it has none). View-only visitors still get the picture in a tab.
-const docFor = (src) => String(src || '').split('?')[0].replace(/\/(r\d+[a-z]?)-1\.png$/, '/$1.vectorcraft');
+// The picture shown → the real file behind it: an image job's layered
+// .vectorcraft, or เวก's SVG behind its "source | vector" comparison.
+const docFor = (src) => String(src || '').split('?')[0]
+  .replace(/\/(r\d+[a-z]?)-1\.png$/, '/$1.vectorcraft')
+  .replace(/-compare\.png$/, '.svg');
 
 async function openPicture(el, src, doc) {
   const say = (m) => { el.dataset.msg = m; clearTimeout(el._t); el._t = setTimeout(() => { delete el.dataset.msg; }, 2600); };
@@ -1239,17 +1253,7 @@ function stepper(status) {
   return h('ol', { class: 'team-steps' }, ...STEPS.map((s, i) => h('li', { class: i < idx ? 'past' : i === idx ? 'now' : '' }, s.label)));
 }
 
-function renderTasks() {
-  const box = document.getElementById('teamTasks');
-  // Don't rebuild under a pending (undoable) action, or its ย้อนกลับ button vanishes.
-  if (box.querySelector('.team-pending')) return;
-  const open = new Set([...box.querySelectorAll('details[open]')].map((d) => d.dataset.id));
-  const tasks = state.tasks.filter((t) => t.status !== 'review');
-  if (!tasks.length) {
-    box.replaceChildren(h('p', { class: 'team-muted' }, 'ยังไม่มีงาน'));
-    return;
-  }
-  box.replaceChildren(...tasks.map((task) => {
+function taskCard(task, open) {
     const a = agentById(task.agent);
     const msg = h('span', { class: 'team-muted' });
     const finished = ['done', 'rejected', 'failed'].includes(task.status);
@@ -1273,7 +1277,19 @@ function renderTasks() {
           ['failed', 'waiting'].includes(task.status) ? h('button', { type: 'button', class: 'team-btn', onclick: () => act(`/api/agents/tasks/${task.id}/retry`, {}, msg) }, 'ลองใหม่') : null,
           h('button', { type: 'button', class: 'team-btn', onclick: async (e) => { e.currentTarget.disabled = true; try { await api(`/api/agents/tasks/${task.id}/reject`, {}); } catch (err) { e.currentTarget.title = err.message; } reviewKey = ''; refresh(); } }, task.status === 'queued' ? 'ยกเลิก' : 'ทิ้ง'),
         ) : null));
-  }));
+}
+
+function renderTasks() {
+  const box = document.getElementById('teamTasks');
+  // Don't rebuild under a pending (undoable) action, or its ย้อนกลับ button vanishes.
+  if (box.querySelector('.team-pending')) return;
+  const open = new Set([...box.querySelectorAll('details[open]')].map((d) => d.dataset.id));
+  const tasks = state.tasks.filter((t) => t.status !== 'review');
+  if (!tasks.length) {
+    box.replaceChildren(h('p', { class: 'team-muted' }, 'ยังไม่มีงาน'));
+    return;
+  }
+  box.replaceChildren(...tasks.map((task) => taskCard(task, open)));
 }
 
 // ─── Agent settings dialog ──────────────────────────────────────────────

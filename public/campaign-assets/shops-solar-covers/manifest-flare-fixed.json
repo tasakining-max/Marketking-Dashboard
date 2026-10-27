@@ -1,0 +1,22 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-light-dark-v4.vectorcraft",
+  "change": "Aligned only the horizontal sun flare to the sun core center on all three artboards.",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-flare-fixed.png",
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792835022427.png"
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-light-flare-fixed.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792835022451.png"
+    },
+    {
+      "key": "webHeroDark",
+      "file": "solar-hybrid-website-dark-flare-fixed.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHeroDark-1792835022478.png"
+    }
+  ]
+}

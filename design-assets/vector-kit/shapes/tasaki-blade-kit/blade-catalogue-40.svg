@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="680" height="620" viewBox="0 0 680 620" role="img"><title>Catalogue / 40%</title><defs>
+<path id="blade-shape" d="M128 30 C300 40 540 170 645 305 C668 335 660 350 635 352 C420 375 210 450 55 585 C40 598 28 592 29 572 C30 400 70 160 108 48 C113 34 120 30 128 30 Z"/>
+<linearGradient id="original-blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1764A0"/><stop offset=".36" stop-color="#1879BF"/><stop offset=".7" stop-color="#176DA2"/><stop offset="1" stop-color="#165E82"/></linearGradient>
+<linearGradient id="cyan-fade" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8FE3FF"/><stop offset="1" stop-color="#8FE3FF" stop-opacity="0"/></linearGradient>
+<clipPath id="blade-photo-clip" clipPathUnits="userSpaceOnUse"><path d="M128 30 C300 40 540 170 645 305 C668 335 660 350 635 352 C420 375 210 450 55 585 C40 598 28 592 29 572 C30 400 70 160 108 48 C113 34 120 30 128 30 Z"/></clipPath>
+<clipPath id="corner-crop"><rect width="1360" height="256"/></clipPath>
+
+</defs><g id="blade-catalogue-40"><g opacity=".4" transform=""><use href="#blade-shape" fill="#F5F5F5"/></g></g></svg>

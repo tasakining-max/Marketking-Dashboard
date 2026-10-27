@@ -1,0 +1,25 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-light-dark-v4.vectorcraft",
+  "change": "Centered the sun, bloom, rays and aligned horizontal flare over the row of four shops on all three artboards.",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-centered-sun.png",
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792835872786.png",
+      "sha256": "d24fc50ed0210ae1c5f9fa5b0279ec48938c32f90aae339b32afa9b5ce776cd6"
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-light-centered-sun.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792835872811.png",
+      "sha256": "85eb477616a69218c5c7a462de7f7daa589dcfe859e64cd8b3c29b31ba6af1de"
+    },
+    {
+      "key": "webHeroDark",
+      "file": "solar-hybrid-website-dark-centered-sun.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHeroDark-1792835872829.png",
+      "sha256": "327eb11624e934fe5fcded7e1b6eb081acfd36a7e5ed6e631622ad4036806b36"
+    }
+  ]
+}

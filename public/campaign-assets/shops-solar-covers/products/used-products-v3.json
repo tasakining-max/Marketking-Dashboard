@@ -1,0 +1,40 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/Users/marketingengineer/marketing-dashboard/public/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-four-ac-v3.vectorcraft",
+  "types": [
+    {
+      "label": "ติดผนัง",
+      "model": "FWCE-I-AF1M Solar Hybrid",
+      "source": "wall.png"
+    },
+    {
+      "label": "ฝังฝ้า 4 ทิศ",
+      "model": "FCME-I-AF1 Solar Hybrid",
+      "source": "cassette.webp"
+    },
+    {
+      "label": "ตั้งแขวน",
+      "model": "FUNE-I-AF2 Solar Hybrid",
+      "source": "ceiling.webp"
+    },
+    {
+      "label": "ซ่อนในฝ้า",
+      "model": "FIDE-I-AF2 Solar Hybrid",
+      "source": "duct.webp"
+    }
+  ],
+  "files": [
+    {
+      "key": "facebook",
+      "width": 1640,
+      "height": 624,
+      "file": "solar-hybrid-facebook-four-ac-v3.png"
+    },
+    {
+      "key": "website",
+      "width": 1920,
+      "height": 840,
+      "file": "solar-hybrid-website-four-ac-v3.png"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "campaign": "solar-hybrid",
+  "vectorDocument": "/uploads/agent-images/shops-solar-ad/covers-20261024/solar-hybrid-covers-light-dark-v4.vectorcraft",
+  "change": "Removed AC frames and AC type labels; kept four real products and connected airflow on each of three artboards.",
+  "files": [
+    {
+      "key": "fbCover",
+      "file": "solar-hybrid-facebook-no-ac-frames.png",
+      "image": "/uploads/campaigns/solar-hybrid-fbCover-1792835670775.png",
+      "sha256": "ece70843d0fb05fa032636508980cb7e5bc165838a40f88981a2aa01839dc311"
+    },
+    {
+      "key": "webHero",
+      "file": "solar-hybrid-website-light-no-ac-frames.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHero-1792835670796.png",
+      "sha256": "e730bcc9139877916c89fcd0bef5f321ef5d8b0ef7237959bbf570c5dd658301"
+    },
+    {
+      "key": "webHeroDark",
+      "file": "solar-hybrid-website-dark-no-ac-frames.png",
+      "image": "/uploads/campaigns/solar-hybrid-webHeroDark-1792835670813.png",
+      "sha256": "5817394f0fe222da3ab41d59999b3c44923c82870f975025969167f3649cf03b"
+    }
+  ]
+}
