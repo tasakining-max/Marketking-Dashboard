@@ -24,5 +24,15 @@
 badge-*.vectorcraft / .svg 8 ชิ้น: solar, chilled-water, wifi, 6in1-filter, pm25, self-clean, plasma-option, anti-corrosion
 แกะด้วย Image Trace ของ VectorCraft (ไอคอน+ตัวอักษร) แล้วประกอบกรอบเงิน พื้นดำ เงาสะท้อน ด้วยเลเยอร์เวกเตอร์ แยกเลเยอร์: frame / plate / icon ต้นทางคือ public/badges/all-badges.webp ของเว็บ (ภาพต้นฉบับความละเอียดต่ำ ขอบตัวอักษรจึงไม่คมเท่าไฟล์ออกแบบจริง)
 
+- badge-warranty-5y.svg / .vectorcraft (2026-10-29): ป้าย "5 YEARS WARRANTY COMPRESSOR" เวกเตอร์ 480×376 สร้างใหม่ตามภาพที่หนิงส่งมา (ไม่ได้ trace) ป้ายเงินตัดมุมซ้ายล่าง ตัวหนังสือ Frutiger (5/WARRANTY Bold, YEARS/COMPRESSOR Regular หนาขึ้นด้วยเส้นขอบ) แปลงเป็น outline แล้ว แยกเลเยอร์ plate / years-box / text ใช้ได้เฉพาะรุ่นที่รับประกันคอมเพรสเซอร์ 5 ปีจริง
+- badge-warranty-10y / -5y-parts / -2y-parts / -1y / -1y-parts (.svg / .vectorcraft, 2026-10-29): ชุดป้ายประกันดีไซน์เดียวกับป้าย 5 ปี ตามหมายเหตุ Price list 2026 Rev03
+  - 10 YEARS WARRANTY COMPRESSOR: FWEE-I-AF1M เท่านั้น (ป้ายกว้าง 653 เพราะเลขสองหลัก)
+  - 5 YEARS WARRANTY COMPRESSOR (ป้ายเดิม) + 5 YEARS WARRANTY PARTS: FWCE-AF2M, FWCE-I-AF1M, FWCE-I-AF1M Solar (คอมเพรสเซอร์และอุปกรณ์อื่น 5 ปี)
+  - 5 YEARS WARRANTY COMPRESSOR (ป้ายเดิม) + 2 YEARS WARRANTY PARTS: FUNE, FCHE/FCAE/FCME, FSCE, FIDE, FFSE ทุกรุ่นรวม Solar
+  - 1 YEAR WARRANTY COMPRESSOR + 1 YEAR WARRANTY PARTS: FDS, FFS-C-AD2, AHU -AD2/-CD2, WCB, ACP, CVB, AWHP, Chiller, Panel Air (คอมเพรสเซอร์และอุปกรณ์อื่น 1 ปี)
+  - 1 YEAR WARRANTY PARTS อย่างเดียว: ระบบน้ำ FUL, FCC, FCD, FCE, FFS-AW1, AHU -AW1/-CW1 (รับประกันอุปกรณ์ 1 ปี ไม่มีคอมเพรสเซอร์)
+  - ทุกแบบแยกป้ายคอมเพรสเซอร์กับอุปกรณ์เป็น 2 ใบ
+  - ใส่ในแอดต้องมีตัวเล็ก "ตามเงื่อนไขการรับประกันของบริษัทฯ"
+
 ## shapes/ (2026-10-24)
 - tasaki-corner-shape.svg / .vectorcraft / .png — ใบพัดโลโก้ Tasaki 1 ใบ ไล่เฉดน้ำเงิน (#1764A0 → #1879BF → #176DA2 → #165E82) เงาตกกระทบนุ่ม องค์ประกอบหลัก ใช้ได้เสมอ: เปลี่ยนสี (ชุดสีแบรนด์) ย่อ ขยาย หมุน ล้นขอบ ทำโปร่งใส หรือเหลือแต่เส้นขอบ ใช้แทนกล่องสี่เหลี่ยมใส่รูป (เป็นกรอบ/มาสก์รูป ป้าย ไอคอน มุมภาพ) ห้ามเปลี่ยนสัดส่วนรูปทรง

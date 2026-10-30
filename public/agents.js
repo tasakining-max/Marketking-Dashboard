@@ -386,7 +386,7 @@ function selectAgent(id) {
   document.getElementById('teamDateRow').hidden = id !== 'website';
   document.getElementById('teamDaysRow').hidden = id !== 'ads';
   document.getElementById('teamProductRow').hidden = id !== 'image';
-  if (id === 'image') fillProducts();
+  if (id === 'image') { fillProducts(); fillCampaigns(); }
   if (id === 'website' && !document.getElementById('teamDateInput').value) document.getElementById('teamDateInput').value = bangkokToday();
   if (a?.needsCard) loadCards();
   renderFollowUp();
@@ -520,6 +520,10 @@ document.getElementById('teamCommandForm').addEventListener('submit', async (e) 
   if (target.needsCard) input.cardId = document.getElementById('teamCardSelect').value;
   if (target.id === 'website') input.date = document.getElementById('teamDateInput').value;
   if (target.id === 'ads') input.days = Number(document.getElementById('teamDaysInput').value) || 7;
+  if (target.id === 'image' && document.getElementById('teamCampaignSelect').value) {
+    input.campaignId = document.getElementById('teamCampaignSelect').value;
+    input.adSet = document.getElementById('teamAdSetSelect').value;
+  }
   if (target.id === 'image' && document.getElementById('teamProductSelect').value) {
     input.productModel = document.getElementById('teamProductSelect').value;
     input.headline = document.getElementById('teamHeadlineInput').value.trim();
@@ -881,6 +885,22 @@ function workingText(t) {
   return `${who?.name || t.agent} ${doing || 'กำลังทำงาน'}`;
 }
 
+// Campaign + ad: the server fills in the rest from the campaign's brief.
+let campaignList = null;
+async function fillCampaigns() {
+  const select = document.getElementById('teamCampaignSelect');
+  const adSelect = document.getElementById('teamAdSetSelect');
+  if (!campaignList) {
+    campaignList = (await api('/api/campaigns').catch(() => ({ campaigns: [] }))).campaigns.filter((c) => c.studio);
+    select.append(...campaignList.map((c) => h('option', { value: c.id }, c.name)));
+    select.addEventListener('change', () => {
+      const ads = campaignList.find((c) => c.id === select.value)?.plan?.ads || [];
+      adSelect.replaceChildren(...ads.map((a) => h('option', { value: a.adSet }, `${a.name}${a.model ? ` · ${a.model}` : ''}`)));
+      adSelect.hidden = !ads.length;
+    });
+  }
+}
+
 function fillProducts() {
   const select = document.getElementById('teamProductSelect');
   if (select.options.length > 1 || !state.products?.length) return;
@@ -896,7 +916,7 @@ let vectorPinned = null;
 
 function vectorTasks() {
   return state.tasks
-    .filter((t) => t.result?.document?.endsWith('.vectorcraft') && !['queued', 'running'].includes(t.status) && t.result?.stage !== 'teaching')
+    .filter((t) => /\.(vectorcraft|ai)$/i.test(t.result?.document || '') && !['queued', 'running'].includes(t.status) && t.result?.stage !== 'teaching')
     .sort((a, b) => (a.status === 'review') - (b.status === 'review') || new Date(a.updatedAt) - new Date(b.updatedAt))
     .reverse();
 }
@@ -919,9 +939,39 @@ function fillVectorSources() {
         current.result.images?.[0] ? h('img', { src: current.result.images[0], alt: '' }) : null,
         h('span', {}, h('b', {}, pinned ? 'ภาพที่เลือก: ' : 'ภาพล่าสุด: '), (current.prompt || 'งานภาพ').slice(0, 70)),
         pinned ? h('button', { type: 'button', class: 'team-link', onclick: () => { vectorPinned = null; fillVectorSources(); } }, '✕ ใช้ภาพล่าสุด') : null,
+        importVectorButton(),
       ]
-      : [h('span', { class: 'team-muted' }, 'ยังไม่มีภาพแยกเลเยอร์ สั่ง @พิมพ์ ทำภาพก่อน')]));
+      : [h('span', { class: 'team-muted' }, 'ยังไม่มีภาพแยกเลเยอร์ สั่ง @พิมพ์ ทำภาพก่อน'), importVectorButton()]));
   }
+}
+
+// 📂 A .ai / .vectorcraft made outside the team (e.g. a dealer promo):
+// upload a copy, then ประกอบ edits it like its own work.
+function importVectorButton() {
+  const input = h('input', { type: 'file', accept: '.ai,.vectorcraft', hidden: true });
+  const btn = h('button', { type: 'button', class: 'team-link', disabled: !state.runner, onclick: () => input.click() }, '📂 นำไฟล์ .ai เข้า');
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    btn.disabled = true;
+    btn.textContent = 'กำลังนำเข้า…';
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+        reader.readAsDataURL(file);
+      });
+      const task = await api('/api/agents/vector-import', { name: file.name, data });
+      await refresh();
+      chooseVectorSource(task.id);
+    } catch (err) {
+      document.getElementById('teamCommandMsg').textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = '📂 นำไฟล์ .ai เข้า';
+    }
+  });
+  return h('span', {}, btn, input);
 }
 
 // A picture's "✏️ ให้ประกอบแก้ภาพนี้": pin it and start an @ประกอบ message.
@@ -999,6 +1049,8 @@ function vectorResultView(task, editable) {
   // and the tools right.
   const pictures = r.mode === 'study'
     ? [[`ไฟล์ที่เรียนรู้: ${r.studied || ''}`, r.images?.[0]]]
+    : r.mode === 'import' ? [[`ไฟล์ที่นำเข้า: ${r.imported || ''}`, r.images?.[0]]]
+    : r.noChange ? [['ภาพปัจจุบัน (รอบนี้ไม่ได้แก้)', r.images?.[0]]]
     : [['ก่อนแก้', r.beforeImage], ['หลังแก้', r.images?.[0]]];
   const tools = r.document && r.mode !== 'study' ? [
     state.runner ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (e) => openInApp(r.document, e.currentTarget, 'vectorcraft') }, 'เปิดตรวจใน VectorCraft') : null,
@@ -1013,6 +1065,9 @@ function vectorResultView(task, editable) {
         h('figcaption', { class: 'team-muted' }, label)))),
     h('div', { class: 'team-image-side' },
       r.summary ? h('div', { class: 'team-vec-reply' }, foldText(r.summary, 150)) : null,
+      r.selfCheck && !r.selfCheck.pass ? h('div', { class: 'team-vec-warn' },
+        h('b', {}, `⚠️ ตรวจเองแล้วยังไม่ผ่าน (${r.selfCheck.rounds} รอบ)`),
+        h('ul', {}, ...r.selfCheck.problems.map((p) => h('li', {}, p)))) : null,
       r.lesson ? h('details', { class: 'team-vec-lesson tv-more' },
         h('summary', {}, editable ? `📘 บทเรียนที่เสนอ${r.lesson.title ? `: ${clip(r.lesson.title, 50)}` : ''} (ดู/แก้ก่อนกดผ่าน)` : '📘 บทเรียนที่บันทึก'),
         r.lesson.title ? h('strong', {}, r.lesson.title) : null,

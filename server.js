@@ -580,7 +580,7 @@ app.get('/api/graphic-cards', async (req, res) => {
         if (card.column === 'in_progress' && process.env.AGENT_RUNNER === '1' && document?.startsWith('/uploads/agent-images/')) {
           const file = path.resolve(__dirname, 'public', `.${document}`);
           if (file.startsWith(path.join(__dirname, 'public', 'uploads', 'agent-images') + path.sep)
-            && file.endsWith('.vectorcraft') && fs.existsSync(file)) card.vectorDocument = document;
+            && /\.(vectorcraft|ai)$/i.test(file) && fs.existsSync(file)) card.vectorDocument = document;
         }
         return card;
       }).filter((c) => !req.query.column || c.column === req.query.column);

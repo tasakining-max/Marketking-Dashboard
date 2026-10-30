@@ -4199,6 +4199,8 @@ body.team-resizing { cursor: col-resize; user-select: none; }
 #teamNameMsg { margin: 6px 0 0; font-size: 12px; }
 .team-vec-reply { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.55; }
 .team-vec-reply p { margin: 0; }
+.team-vec-warn { border: 1px solid var(--danger, #ef4444); border-radius: 12px; padding: 10px 14px; font-size: 14px; line-height: 1.55; }
+.team-vec-warn ul { margin: 6px 0 0; padding-left: 18px; }
 .team-vec-lesson { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .team-vec-lesson label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .team-vec-lesson p { margin: 0; color: var(--text); }
