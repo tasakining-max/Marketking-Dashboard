@@ -1020,7 +1020,7 @@ function renderChangelogEntries(container, entries) {
     }
     item.appendChild(topRow);
     const feature = document.createElement('p');
-    feature.className = 'changelog-feature';
+    feature.className = 'changelog-feature' + (entry.multiline ? ' multiline' : '');
     feature.textContent = entry.feature;
     feature.addEventListener('click', () => feature.classList.toggle('expanded'));
     item.appendChild(feature);
@@ -1029,8 +1029,62 @@ function renderChangelogEntries(container, entries) {
 }
 
 function renderWebsiteChangelog(entries) {
-  renderChangelogEntries(websiteChangelogList, entries);
+  renderChangelogEntries(websiteChangelogList, [...entries, ...featureDayEntries]);
 }
+
+// ─── Feature แต่ละสินค้า → one entry per day in โซนรวมอัพเดท ──────────────
+// Feature cards changed on the same (Bangkok) day become a single timeline
+// entry: models first, and when opened, each model's features with times.
+let websiteFeaturesSig = null;
+let featureDayEntries = [];
+
+const bangkokDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+const bangkokTime = (iso) => new Date(iso).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
+
+function buildFeatureDayEntries(products) {
+  const days = new Map();
+  for (const p of products) {
+    for (const f of p.features) {
+      if (!f.lastUpdate) continue;
+      const day = bangkokDay(f.lastUpdate);
+      if (!days.has(day)) days.set(day, new Map());
+      const models = days.get(day);
+      if (!models.has(p.id)) models.set(p.id, { ...p, cards: [] });
+      models.get(p.id).cards.push(f);
+    }
+  }
+  return [...days.values()].map((byModel) => {
+    const models = [...byModel.values()].sort((a, b) => a.typeId - b.typeId || a.model.localeCompare(b.model));
+    const all = models.flatMap((m) => m.cards.map((c) => c.lastUpdate)).sort();
+    const lines = models.map((m) => {
+      const times = m.cards.map((c) => c.lastUpdate).sort();
+      const range = [...new Set([bangkokTime(times[0]), bangkokTime(times[times.length - 1])])].join('–');
+      const cards = [...m.cards].sort((a, b) => a.lastUpdate.localeCompare(b.lastUpdate))
+        .map((c) => `   – ${c.title}${c.optional ? ' (ตัวเลือก)' : ''}${c.removed ? ' (เอาออก)' : ''} · ${bangkokTime(c.lastUpdate)}`);
+      return [`• ${m.model} (${m.type}) ${range}`, ...cards].join('\n');
+    });
+    return {
+      datetime: all[all.length - 1],
+      multiline: true,
+      feature: `✨ Feature หน้าสินค้า อัปเดต ${models.length} รุ่น: ${models.map((m) => m.model).join(', ')}\n\n${lines.join('\n')}`,
+    };
+  });
+}
+
+async function fetchWebsiteFeatures() {
+  const res = await fetch('/api/website-features');
+  if (!res.ok) return;
+  const data = await res.json();
+  const sig = JSON.stringify(data.products);
+  if (sig === websiteFeaturesSig) return;
+  websiteFeaturesSig = sig;
+  featureDayEntries = buildFeatureDayEntries(data.products);
+  renderWebsiteChangelog(websiteEntries);
+}
+
+fetchWebsiteFeatures();
+registerPoll(fetchWebsiteFeatures);
+document.getElementById('websiteChangelogRefreshBtn').addEventListener('click', () => { websiteFeaturesSig = null; fetchWebsiteFeatures(); });
 
 fetchWebsiteChangelog();
 registerPoll(fetchWebsiteChangelog);

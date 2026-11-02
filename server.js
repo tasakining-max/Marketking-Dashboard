@@ -13,6 +13,7 @@ import { registerAgentTeam } from './lib/agentTeam.js';
 import { registerCampaigns } from './lib/campaigns.js';
 import { registerTabTracker } from './lib/tabTracker.js';
 import { latestGraphicAgentImages } from './lib/graphicAgentImages.js';
+import { featureReport } from './lib/featureTracker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -862,6 +863,13 @@ app.put('/api/key-messages/reorder', async (req, res) => {
     if (reordered.length !== messages.length) return res.status(400).json({ error: 'order must include every existing message id exactly once' });
     res.json({ messages: reordered });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Website feature report ───────────────────────────────────────────────
+// Each product's feature cards on the website with when each was last changed.
+app.get('/api/website-features', async (req, res) => {
+  try { res.json(await featureReport(prisma, tasakiWebPool)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Website Changelog ─────────────────────────────────────────────────────

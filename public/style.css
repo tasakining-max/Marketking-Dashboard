@@ -446,6 +446,9 @@ header h1 {
   overflow: visible;
   -webkit-line-clamp: unset;
 }
+.changelog-entry .changelog-feature.multiline.expanded {
+  white-space: pre-line;
+}
 
 
 /* ── Website Zones ── */
@@ -475,6 +478,8 @@ header h1 {
   border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
   border-bottom: none;
 }
+
+
 
 .website-issues-count {
   font-weight: 400;
