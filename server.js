@@ -14,6 +14,7 @@ import { registerCampaigns } from './lib/campaigns.js';
 import { registerTabTracker } from './lib/tabTracker.js';
 import { latestGraphicAgentImages } from './lib/graphicAgentImages.js';
 import { featureReport } from './lib/featureTracker.js';
+import { judgeContactIntent } from './lib/contactIntent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1527,7 +1528,7 @@ app.get('/api/ad-funnel', async (req, res) => {
     const [total, daily, ads] = await Promise.all([
       graphGet(`${account}/insights?level=campaign&filtering=${filtering}&time_range=${timeRange}&fields=${fields}`),
       graphGet(`${account}/insights?level=campaign&filtering=${filtering}&time_range=${timeRange}&time_increment=1&fields=${fields}&limit=200`),
-      graphGet(`${account}/ads?fields=campaign{name},creative{url_tags}&limit=200`),
+      graphGet(`${account}/ads?fields=name,campaign{name},creative{url_tags}&limit=200`),
     ]);
     const utmCampaigns = [...new Set((ads.data || [])
       .filter((a) => a.campaign?.name === campaign)
@@ -1538,7 +1539,7 @@ app.get('/api/ad-funnel', async (req, res) => {
     const sinceUtc = new Date(`${since}T00:00:00+07:00`);
     const untilUtc = new Date(`${until}T23:59:59.999+07:00`);
     const { rows: sessions } = utmCampaigns.length ? await tasakiWebPool.query(`
-      SELECT "sessionId", min("createdAt") AS t0, count(*)::int AS views,
+      SELECT "sessionId", min("createdAt") AS t0, count(*)::int AS views, min("utmContent") AS ad,
         max("maxScrollPct")::int AS scroll, bool_or("dealerCtaSeen") AS seen, bool_or("dealerCtaClicked") AS clicked
       FROM "PageView"
       WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND "utmMedium" = 'paid' AND "utmCampaign" = ANY($3)
@@ -1574,6 +1575,102 @@ app.get('/api/ad-funnel', async (req, res) => {
     } catch (e) {
       if (e.code !== '42703') throw e;
     }
+    // Ad visitors who opened the dealer finder (/dealers, /dealers/<region>) at any point.
+    const adSessionIds = sessions.map((s) => s.sessionId).filter(Boolean);
+    const { rows: [dealerViews] } = adSessionIds.length ? await tasakiWebPool.query(`
+      SELECT count(DISTINCT "sessionId")::int AS n FROM "PageView"
+      WHERE "sessionId" = ANY($1) AND path LIKE '/dealers%'
+    `, [adSessionIds]) : { rows: [{ n: 0 }] };
+    // Every contact tap / dealer-page view / dealer-button press, newest first,
+    // so each tile on the Ads page can list who did what (dealer, area, ad).
+    const adNameByUtm = new Map((ads.data || [])
+      .filter((a) => a.campaign?.name === campaign)
+      .map((a) => [new URLSearchParams(a.creative?.url_tags || '').get('utm_content'), a.name]));
+    const adBySession = new Map(sessions.map((s) => [s.sessionId, adNameByUtm.get(s.ad) || s.ad || '']));
+    let contactEvents = [];
+    if (adSessionIds.length) {
+      const { rows } = await tasakiWebPool.query(`
+        SELECT * FROM (
+          SELECT c."sessionId", c."createdAt" AS t, c.label, c.path, d.region, coalesce(pr."nameTh", '') AS product
+          FROM "ClickEvent" c LEFT JOIN "Dealer" d ON trim(d.name) = trim(split_part(c.label, ':', 3))
+            LEFT JOIN "Product" pr ON pr.id = split_part(c.path, '/', 4)
+          WHERE c."sessionId" = ANY($1)
+            AND (c.label LIKE 'DealerContact:%' OR c.label IN ('FloatingContact:LINE', 'FloatingContact:Phone', 'FloatingContact:Facebook'))
+          UNION ALL
+          SELECT p."sessionId", p."createdAt", CASE WHEN p.path LIKE '/dealers%' THEN 'DealerView' ELSE 'DealerCta' END, p.path, '', coalesce(pr."nameTh", '')
+          FROM "PageView" p LEFT JOIN "Product" pr ON pr.id = split_part(p.path, '/', 4)
+          WHERE p."sessionId" = ANY($1) AND (p.path LIKE '/dealers%' OR p."dealerCtaClicked")
+        ) e ORDER BY t DESC LIMIT 500
+      `, [adSessionIds]);
+      const typeOf = (label) => ({
+        'FloatingContact:LINE': 'line', 'FloatingContact:Phone': 'phone', 'FloatingContact:Facebook': 'facebook',
+        DealerView: 'dealerView', DealerCta: 'cta',
+      }[label] || (label.startsWith('DealerContact:phone:') ? 'dealerPhone' : 'directions'));
+      // One row per person per action (a dealer-page visitor's region pages are
+      // merged into one row); repeat taps add to `count` instead of new rows.
+      const merged = new Map();
+      for (const r of rows) {
+        const type = typeOf(r.label);
+        const dealer = r.label.startsWith('DealerContact:') ? r.label.split(':').slice(2).join(':').trim() : '';
+        const key = `${r.sessionId}|${type}|${dealer}`;
+        const region = type === 'dealerView' ? (r.path.split('/')[2] || '') : (r.region || '');
+        const e = merged.get(key);
+        if (!e) {
+          merged.set(key, { sessionId: r.sessionId, t: r.t, tFirst: r.t, type, dealer, regions: region ? [region] : [], page: type === 'dealerView' ? '' : (r.product || r.path), ad: adBySession.get(r.sessionId) || '', count: 1 });
+        } else {
+          e.count += 1;
+          e.tFirst = r.t; // rows are newest first, so the last one seen is the first tap
+          if (region && !e.regions.includes(region)) e.regions.push(region);
+        }
+      }
+
+      // Each contacting visitor's full path on the site (pages with scroll,
+      // taps), plus where each dealer sits in its region's list, so the page
+      // can show why a tap looks meant or accidental.
+      const contactSessionIds = [...new Set([...merged.values()].map((e) => e.sessionId))];
+      const [{ rows: steps }, { rows: dealerOrder }] = await Promise.all([
+        tasakiWebPool.query(`
+          SELECT "sessionId", t, kind, path, label, scroll FROM (
+            SELECT p."sessionId", p."createdAt" AS t, 'page' AS kind, p.path, coalesce(pr."nameTh", '') AS label, p."maxScrollPct" AS scroll
+            FROM "PageView" p LEFT JOIN "Product" pr ON pr.id = split_part(p.path, '/', 4)
+            WHERE p."sessionId" = ANY($1)
+            UNION ALL
+            SELECT c."sessionId", c."createdAt", 'tap', c.path, c.label, 0
+            FROM "ClickEvent" c WHERE c."sessionId" = ANY($1)
+          ) z ORDER BY t
+        `, [contactSessionIds]),
+        tasakiWebPool.query(`SELECT trim(name) AS name, region, row_number() OVER (PARTITION BY region ORDER BY "sortOrder", name)::int AS rank FROM "Dealer"`),
+      ]);
+      const journeys = new Map();
+      for (const st of steps) {
+        if (!journeys.has(st.sessionId)) journeys.set(st.sessionId, []);
+        journeys.get(st.sessionId).push(st.kind === 'tap' ? { ...st, type: typeOf(st.label) } : st);
+      }
+      const rankByDealer = new Map(dealerOrder.map((d) => [d.name, d]));
+      const pageName = (st) => {
+        if (st.label) return st.label + (/^\/products\/\d+\/[^/]+\/\d+/.test(st.path) ? ` ${st.path.split('/')[4]} BTU` : '');
+        if (st.path === '/products/11') return 'หน้ารวมแอร์ Solar Hybrid';
+        const regionTh = { bkk: 'กรุงเทพฯ', central: 'ภาคกลาง', north: 'ภาคเหนือ', northeast: 'ภาคอีสาน', east: 'ภาคตะวันออก', west: 'ภาคตะวันตก', south: 'ภาคใต้' };
+        if (st.path.startsWith('/dealers')) return st.path === '/dealers' ? 'หน้าร้านตัวแทน' : `หน้าร้านตัวแทน · ${regionTh[st.path.split('/')[2]] || st.path.split('/')[2]}`;
+        if (st.path === '/') return 'หน้าแรก';
+        return st.path;
+      };
+      contactEvents = [...merged.values()].map((e) => {
+        const journey = journeys.get(e.sessionId) || [];
+        const { sessionId, ...rest } = e;
+        return {
+          ...rest,
+          page: rest.page.startsWith('/') ? pageName({ label: '', path: rest.page }) : rest.page,
+          intent: judgeContactIntent(e, journey, e.dealer ? rankByDealer.get(e.dealer) || null : null),
+          journey: journey.slice(0, 80).map((st) => ({
+            t: st.t,
+            kind: st.kind,
+            text: st.kind === 'page' ? pageName(st) : st.label.split(':').slice(0, 3).join(' · ').replace('FloatingContact', 'ปุ่มลอย').replace('DealerContact', 'ร้านตัวแทน'),
+            scroll: st.scroll,
+          })),
+        };
+      });
+    }
     const contactCount = (key) => (contacts ? [...contacts.values()].filter((c) => c[key]).length : null);
     // Every row in `contacts` tapped at least one contact button (dealer
     // phone/directions or floating LINE/Phone/Facebook) — one person per session.
@@ -1593,6 +1690,8 @@ app.get('/api/ad-funnel', async (req, res) => {
       // this union keeps the funnel step >= the Contact step below it).
       acted: sessions.filter((s) => s.clicked || anyContact(s.sessionId)).length,
       multiPage: sessions.filter((s) => s.views > 1).length,
+      dealerPageViews: dealerViews.n,
+      contactEvents,
       contacted: contacts ? contacts.size : null,
       contactBreakdown: {
         phone: contactCount('phone'),
@@ -1603,6 +1702,9 @@ app.get('/api/ad-funnel', async (req, res) => {
       },
       contactTrackingSince,
     };
+    const spendFrom = (day) => (daily.data || [])
+      .filter((r) => !day || r.date_start >= day)
+      .reduce((sum, r) => sum + Number(r.spend || 0), 0);
     const meta = {
       reach: Number(t.reach || 0),
       impressions: Number(t.impressions || 0),
@@ -1615,6 +1717,11 @@ app.get('/api/ad-funnel', async (req, res) => {
       linkClicks: Number(t.inline_link_clicks || 0),
       landingPageViews: actionValue(t, 'landing_page_view'),
       leads: actionValue(t, 'lead'),
+      // Spend from the day each kind of tracking started, so cost per person
+      // isn't divided over days that couldn't be counted (contact taps from
+      // contactTrackingSince, dealer-button clicks from 2026-09-29).
+      spendSinceContactTracking: spendFrom(contactTrackingSince),
+      spendSinceCtaTracking: spendFrom('2026-09-29'),
     };
 
     const days = new Map();

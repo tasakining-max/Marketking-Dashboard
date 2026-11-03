@@ -418,6 +418,7 @@ function renderSpendChart(entries) {
 // site stages come from tasaki-web's own tracker.
 const SITE_REDESIGN_DATE = '2026-10-02'; // mobile product page + dealer button update
 const SCROLL_TRACKING_START = '2026-09-29';
+let adFunnelSince = ''; // first day of the funnel's current range
 let adFunnelCampaignChoice = null;
 let adFunnelRequestId = 0;
 
@@ -608,6 +609,120 @@ function drawHoloFunnel(canvas, stages, { stacked }) {
   return { layout, cx, statsLeft: funnelW + 20 };
 }
 
+// One tile per contact button, for the campaign picked in the funnel. A person
+// who tapped several buttons counts once in "รวม" but once in each tile.
+function renderContactTiles(campaign, meta, site) {
+  const box = document.getElementById('adContactBox');
+  if (site.contacted === null) { box.hidden = true; return; }
+  const b = site.contactBreakdown;
+  // Cost per person only counts spend from the day that kind of tap started
+  // being recorded; earlier days had no way to log it.
+  const partly = (start, amount) => ({ amount, since: start && start > adFunnelSince ? start : null });
+  const contactSpend = partly(site.contactTrackingSince, meta.spendSinceContactTracking ?? meta.spend);
+  const ctaSpend = partly(SCROLL_TRACKING_START, meta.spendSinceCtaTracking ?? meta.spend);
+  const groups = [
+    ['adContactGrid', [
+      { label: 'ติดต่อรวม (คน)', value: site.contacted, types: ['line', 'phone', 'facebook', 'dealerPhone', 'directions'], spend: contactSpend },
+      { label: 'LINE', value: b.floatingLine, types: ['line'], spend: contactSpend },
+      { label: 'โทรหา Tasaki', value: b.floatingPhone, types: ['phone'], spend: contactSpend },
+      { label: 'Facebook', value: b.floatingFacebook, types: ['facebook'], spend: contactSpend },
+    ]],
+    ['adDealerContactGrid', [
+      { label: 'กดปุ่มหาตัวแทน', value: site.ctaClicked, types: ['cta'], spend: ctaSpend },
+      { label: 'ดูหน้าร้านตัวแทน', value: site.dealerPageViews, types: ['dealerView'], spend: { amount: meta.spend } },
+      { label: 'โทรหาร้านตัวแทน', value: b.phone, types: ['dealerPhone'], spend: contactSpend },
+      { label: 'เปิดแผนที่/นำทาง', value: b.directions, types: ['directions'], spend: contactSpend },
+    ]],
+  ];
+  document.getElementById('adContactCampaign').textContent = campaign;
+  groups.forEach(([id, tiles]) => {
+    const grid = document.getElementById(id);
+    const detail = document.getElementById(`${id}Detail`);
+    grid.innerHTML = '';
+    detail.hidden = true;
+    tiles.forEach((t) => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'ads-stat-tile ads-stat-tile-btn';
+      tile.disabled = !t.value;
+      tile.innerHTML = `<p class="ads-stat-label">${escapeHtml(t.label)}</p>`
+        + `<p class="ads-stat-value">${fmtNum(t.value || 0)}</p>`
+        + `<p class="ads-stat-sub">${t.value ? `${fmtBaht(t.spend.amount / t.value)} ต่อคน${t.spend.since ? ` (งบตั้งแต่ ${fmtDate(t.spend.since)})` : ''} · กดดูรายละเอียด` : '–'}</p>`;
+      tile.onclick = () => {
+        const open = tile.classList.contains('is-open');
+        grid.querySelectorAll('.is-open').forEach((el) => el.classList.remove('is-open'));
+        if (open) { detail.hidden = true; return; }
+        tile.classList.add('is-open');
+        renderContactDetail(detail, t.label, (site.contactEvents || []).filter((e) => t.types.includes(e.type)));
+      };
+      grid.appendChild(tile);
+    });
+  });
+  box.hidden = false;
+}
+
+const CONTACT_TYPE_LABELS = {
+  line: 'LINE', phone: 'โทรหา Tasaki', facebook: 'Facebook', cta: 'กดปุ่มหาตัวแทน',
+  dealerView: 'ดูหน้าร้านตัวแทน', dealerPhone: 'โทรหาร้านตัวแทน', directions: 'นำทาง',
+};
+const DEALER_REGION_LABELS = {
+  bkk: 'กรุงเทพฯ และปริมณฑล', central: 'ภาคกลาง', north: 'ภาคเหนือ', northeast: 'ภาคอีสาน',
+  east: 'ภาคตะวันออก', west: 'ภาคตะวันตก', south: 'ภาคใต้',
+};
+
+// Table of the people behind one contact tile: when, which ad, and what
+// (dealer + area for dealer taps, regions opened for dealer-page views,
+// the page they were on for LINE/phone/Facebook/dealer-button taps).
+// Each row opens to the meant-or-slip verdict, its reasons and the
+// person's whole path on the site.
+function renderContactDetail(el, title, events) {
+  const fmtTime = (t) => new Date(t).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const fmtClock = (t) => new Date(t).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const regionText = (codes) => codes.map((c) => DEALER_REGION_LABELS[c] || c).join(', ');
+  const mixed = new Set(events.map((e) => e.type)).size > 1;
+  const cols = mixed ? 5 : 4;
+  const tally = { intent: 0, mistake: 0, unsure: 0, broken: 0 };
+  events.forEach((e) => { if (e.intent) tally[e.intent.verdict] += 1; });
+  const rows = events.map((e, i) => {
+    let what;
+    if (e.dealer) what = `<strong>${escapeHtml(e.dealer)}</strong>${e.regions.length ? ` <span class="ads-contact-muted">· ${escapeHtml(regionText(e.regions))}</span>` : ''}`;
+    else if (e.type === 'dealerView') what = e.regions.length ? escapeHtml(regionText(e.regions)) : '<span class="ads-contact-muted">หน้ารวม ยังไม่ได้เลือกภาค</span>';
+    else what = `<span class="ads-contact-muted">จากหน้า</span> ${escapeHtml(e.page || '–')}`;
+    const v = e.intent;
+    const badge = v ? `<span class="ads-intent-badge is-${v.verdict}">${escapeHtml(v.label)}</span>` : '';
+    const reasons = v ? v.reasons.map((r) => `<li class="is-${{ '+': 'plus', '-': 'minus', '!': 'warn' }[r.sign] || 'note'}">${escapeHtml(r.text)}</li>`).join('') : '';
+    const tapAt = new Date(e.tFirst || e.t).getTime();
+    const steps = (e.journey || []).map((st) => {
+      const isThis = st.kind === 'tap' && Math.abs(new Date(st.t).getTime() - tapAt) < 1000;
+      return `<li class="${st.kind === 'tap' ? 'is-tap' : ''}${isThis ? ' is-this' : ''}"><span class="ads-contact-muted">${fmtClock(st.t)}</span> `
+        + `${st.kind === 'tap' ? '👆 ' : ''}${escapeHtml(st.text)}${st.kind === 'page' && st.scroll ? ` <span class="ads-contact-muted">· เลื่อน ${st.scroll}%</span>` : ''}</li>`;
+    }).join('');
+    return `<tr class="ads-contact-row" data-i="${i}"><td><span class="ads-contact-caret">▸</span> ${fmtTime(e.t)}</td><td>${badge}</td>${mixed ? `<td>${escapeHtml(CONTACT_TYPE_LABELS[e.type] || e.type)}</td>` : ''}`
+      + `<td>${what}${e.count > 1 ? ` <span class="ads-contact-muted">×${e.count}</span>` : ''}</td><td>${escapeHtml(e.ad || '–')}</td></tr>`
+      + `<tr class="ads-contact-why" data-i="${i}" hidden><td colspan="${cols}"><div class="ads-contact-why-grid">`
+      + `<div><p class="ads-contact-why-title">ทำไมถึงคิดว่า${v ? escapeHtml(v.label) : ''}</p><ul class="ads-intent-reasons">${reasons || '<li class="is-note">ไม่มีข้อมูลพอ</li>'}</ul></div>`
+      + `<div><p class="ads-contact-why-title">เส้นทางในเว็บของคนนี้</p><ol class="ads-journey">${steps}</ol></div>`
+      + '</div></td></tr>';
+  }).join('');
+  const summary = [
+    tally.intent && `ตั้งใจ ${tally.intent}`, tally.unsure && `ไม่แน่ใจ ${tally.unsure}`,
+    tally.mistake && `น่าจะกดพลาด ${tally.mistake}`, tally.broken && `ปุ่มอาจไม่ทำงาน ${tally.broken}`,
+  ].filter(Boolean).join(' · ');
+  el.innerHTML = `<p class="ads-contact-title">${escapeHtml(title)} · ${fmtNum(events.length)} รายการ${summary ? ` <span class="ads-contact-muted">(${summary})</span>` : ''}</p>`
+    + (events.length
+      ? `<p class="key-messages-hint">กดแต่ละแถวเพื่อดูเหตุผลและเส้นทางในเว็บ ระบบเดาจากเวลาที่อยู่ในหน้า ระยะที่เลื่อน และสิ่งที่ทำก่อน/หลังกด</p>`
+        + `<div class="ads-contact-table-wrap"><table class="ads-contact-table"><thead><tr><th>เวลา</th><th>ตั้งใจไหม</th>${mixed ? '<th>ช่องทาง</th>' : ''}<th>รายละเอียด</th><th>โฆษณา</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : '<p class="key-messages-hint">ไม่มีรายการ</p>');
+  el.querySelectorAll('.ads-contact-row').forEach((row) => {
+    row.onclick = () => {
+      const why = el.querySelector(`.ads-contact-why[data-i="${row.dataset.i}"]`);
+      why.hidden = !why.hidden;
+      row.classList.toggle('is-open', !why.hidden);
+    };
+  });
+  el.hidden = false;
+}
+
 async function renderAdFunnel(entries) {
   const funnelEl = document.getElementById('adFunnel');
   const dailyEl = document.getElementById('adFunnelDaily');
@@ -641,12 +756,15 @@ async function renderAdFunnel(entries) {
     data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);
   } catch (e) {
+    if (requestId === adFunnelRequestId) document.getElementById('adContactBox').hidden = true;
     if (requestId === adFunnelRequestId) funnelEl.innerHTML = `<p class="key-messages-hint">โหลดกรวยไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
     return;
   }
   if (requestId !== adFunnelRequestId) return; // a newer filter change already re-rendered
 
   const { meta, site } = data;
+  adFunnelSince = since;
+  renderContactTiles(adFunnelCampaignChoice, meta, site);
   const partlyUnmeasured = since < SCROLL_TRACKING_START && site.measured < site.visitors;
   const pct = (n, base) => {
     if (!base) return '';
