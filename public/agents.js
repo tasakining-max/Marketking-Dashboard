@@ -584,11 +584,19 @@ function ideaCard(task, idea, i, editable, single = false) {
       idea.visual ? h('p', { class: 'team-muted' }, h('b', {}, 'ภาพ (ไอเดียเดิม): '), idea.visual) : null,
       h('p', { class: 'team-muted' }, idea.why),
     ]
-    : [
-      h('div', { class: 'team-tags' }, h('span', { class: 'team-tag-plain' }, idea.productModel)),
-      h('ol', {}, ...(idea.scenes || []).map((sc) => h('li', {}, sc))),
-      h('p', { class: 'team-muted' }, idea.why),
-    ];
+    : task.agent === 'footage'
+      ? [
+        h('p', {}, idea.story),
+        h('ol', {}, ...(idea.segments || []).map((sg) => h('li', {}, `${sg.clip} ${sg.in}–${sg.out} วิ: ${sg.say}`))),
+        (idea.keywords || []).length ? h('div', { class: 'team-tags' }, ...idea.keywords.map((k) => h('span', { class: 'team-tag-plain' }, k))) : null,
+        (idea.warnings || []).length ? h('p', { class: 'team-waiting' }, `⚠️ ${idea.warnings.join(' · ')}`) : null,
+        h('p', { class: 'team-muted' }, idea.why),
+      ]
+      : [
+        h('div', { class: 'team-tags' }, h('span', { class: 'team-tag-plain' }, idea.productModel)),
+        h('ol', {}, ...(idea.scenes || []).map((sc) => h('li', {}, sc))),
+        h('p', { class: 'team-muted' }, idea.why),
+      ];
   if (!editable) {
     return h('div', { class: `team-idea${decision ? (decision.picked ? ' picked' : ' skipped') : ''}` },
       h('strong', {}, `${decision ? (decision.picked ? '✓ ' : '✕ ') : ''}${idea.title}`),
@@ -657,6 +665,20 @@ function resultView(task, editable) {
   switch (task.agent) {
     case 'assemble':
       return vectorResultView(task, editable);
+    case 'reelcut':
+      return h('div', { class: 'team-result' },
+        h('strong', {}, `🎬 ${r.title || ''} (${r.seconds || '?'} วิ)`),
+        r.summary ? foldText(r.summary, 220, '') : null,
+        (r.unsure || []).length ? h('p', { class: 'team-waiting' }, `⚠️ ช่วยเช็ค: ${r.unsure.join(' · ')}`) : null,
+        r.video ? h('p', { class: 'team-muted' }, `📎 ${r.video}`) : null,
+        r.project ? h('p', { class: 'team-muted' }, `🎞 ${r.project}`) : null);
+    case 'reelpack':
+      return h('div', { class: 'team-result' },
+        r.cover ? h('p', { class: 'team-muted' }, `🖼 ปก: ${r.cover}`) : null,
+        editable ? h('textarea', { class: 'team-edit', rows: 8, 'data-caption': '', value: r.caption || '' }) : h('p', { class: 'team-pre' }, r.caption || ''),
+        (r.todos || []).length ? h('ul', {}, ...r.todos.map((t) => h('li', {}, t))) : null,
+        r.note ? h('p', { class: 'team-muted' }, r.note) : null);
+    case 'footage':
     case 'adideas':
     case 'productvideo':
       return h('div', { class: 'team-result' },
@@ -1156,7 +1178,7 @@ function approveBody(task, card) {
     rule: card.querySelector('[data-vector-rule]')?.value,
     condition: card.querySelector('[data-vector-condition]')?.value,
   };
-  if (task.agent === 'adideas' || task.agent === 'productvideo') {
+  if (task.agent === 'adideas' || task.agent === 'productvideo' || task.agent === 'footage') {
     const ideas = [...card.querySelectorAll('.team-idea')];
     const decisions = ideas.map((el) => ({ picked: el.dataset.choice === 'pick', reason: el.querySelector('[data-reason]')?.value || '' }));
     if (ideas.some((el) => !el.dataset.choice)) throw new Error('เลือก ✓ หรือ ✕ ให้ครบทุกไอเดียก่อน');
@@ -1166,7 +1188,7 @@ function approveBody(task, card) {
     const picked = card.querySelector('[data-image]:checked');
     return { image: picked ? Number(picked.dataset.image) : 0 };
   }
-  if (task.agent === 'caption') return { caption: card.querySelector('[data-caption]').value };
+  if (task.agent === 'caption' || task.agent === 'reelpack') return { caption: card.querySelector('[data-caption]').value };
   if (task.agent === 'catalog') return { keep: [...card.querySelectorAll('[data-catalog-keep]')].filter((el) => el.checked).map((el) => Number(el.dataset.catalogKeep)) };
   if (task.agent === 'website') {
     const entries = task.result?.entries || [];
@@ -1235,6 +1257,9 @@ const PASS_EFFECT = {
   catalog: 'ค่าที่ติ๊กไว้จะถูกเขียนลงสเปกบนเว็บทันที (สำรองค่าเดิมไว้ก่อน) แล้วติ๊กว่าซิงก์กับ Catalog นี้แล้ว',
   image: 'ภาพจะแนบเข้าการ์ด Graphic Design (ถ้างานนี้มาจากไอเดียแอด) ถ้าไม่ได้ผูกการ์ดจะเก็บไว้เฉยๆ',
   motion: 'เก็บคลิปนี้ไว้',
+  footage: 'เรื่องที่ติ๊ก ✓ จะส่งให้คัตตัดใน FilmCraft ทีละเรื่อง ส่วนที่ ✕ จะเก็บเหตุผลไว้ให้ฟุตเรียนรู้',
+  reelcut: 'คลิปนี้ผ่าน แพ็คจะทำปกและเขียนแคปชั่นต่อ',
+  reelpack: 'คลิป ปก แคปชั่น (ที่คุณแก้ได้) และ Todo จะลงการ์ดชื่อเดียวกัน ถ้ายังไม่มีจะสร้างในคอลัมน์ Clip',
   assemble: 'เก็บไฟล์ที่แก้และจำเฉพาะบทเรียนที่คุณตรวจแล้ว ประกอบจะอ่านบทเรียนเมื่อรับงานแก้ครั้งถัดไป',
 };
 
@@ -1280,7 +1305,7 @@ function decisionControls(task, { body, compact = false, onDone } = {}) {
     h('div', { class: 'chat-actions-row' },
       okBtn,
       mk('✎ ส่งแก้', 'team-fix', () => api(`/api/agents/tasks/${task.id}/revise`, { feedback: comment.value.trim() }), true),
-      mk('✕ ไม่อนุมัติ', 'team-skip', () => ((task.agent === 'adideas' || task.agent === 'productvideo') && (task.result?.ideas || []).length
+      mk('✕ ไม่อนุมัติ', 'team-skip', () => ((task.agent === 'adideas' || task.agent === 'productvideo' || task.agent === 'footage') && (task.result?.ideas || []).length
         ? api(`/api/agents/tasks/${task.id}/approve`, { decisions: task.result.ideas.map(() => ({ picked: false, reason: comment.value.trim() })) })
         : api(`/api/agents/tasks/${task.id}/reject`, { reason: comment.value.trim() })))),
     msg);
@@ -1528,7 +1553,7 @@ function chatBubble(e) {
 // lesson to edit) opens the full card in a dialog instead.
 function quickBody(task) {
   const r = task.result || {};
-  if (task.agent === 'adideas' || task.agent === 'productvideo') return (r.ideas || []).length === 1 ? { decisions: [{ picked: true, reason: '' }] } : null;
+  if (task.agent === 'adideas' || task.agent === 'productvideo' || task.agent === 'footage') return (r.ideas || []).length === 1 ? { decisions: [{ picked: true, reason: '' }] } : null;
   if (task.agent === 'image') return { image: 0 };
   if (task.agent === 'caption') return { caption: r.caption || '' };
   if (task.agent === 'website') return { entries: (r.entries || []).map((en) => ({ date: en.date, section: en.section || 'website', method: en.method || '', text: en.text })) };
