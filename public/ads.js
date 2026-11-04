@@ -1304,6 +1304,11 @@ function renderAdInsights(entries) {
     calViewYear = view.getFullYear();
     calViewMonth = view.getMonth();
     calInitialized = true;
+    // Default view is this month (her choice, 2026-11-04); "ทั้งหมด" is one click away.
+    const matched = datesInPreset('thisMonth', [...dataDatesSet]);
+    filterDates = matched.length ? new Set(matched) : new Set(['__none__']);
+    const now = new Date(); calViewYear = now.getFullYear(); calViewMonth = now.getMonth();
+    document.querySelectorAll('.cal-filter-btn').forEach((b) => b.classList.toggle('active', b.dataset.range === 'thisMonth'));
   }
   renderDatePicker();
   applyFiltersAndRender();
