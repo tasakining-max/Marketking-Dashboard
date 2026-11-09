@@ -10,10 +10,17 @@ if (!AD_ACCOUNT_ID || !ACCESS_TOKEN) {
   process.exit(1);
 }
 
-function yesterday() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+// A date in the ad account's timezone (Bangkok), offset by whole days.
+function bangkokDay(offsetDays) {
+  return new Date(Date.now() + (7 + offsetDays * 24) * 3600000).toISOString().slice(0, 10);
+}
+
+// At login this job can start before the dashboard is listening.
+async function waitForServer() {
+  for (let i = 0; i < 40; i++) {
+    try { await fetch(`http://localhost:${PORT}/api/ad-insights`); return; }
+    catch { await new Promise((r) => setTimeout(r, 3000)); }
+  }
 }
 
 async function fetchInsights(since, until) {
@@ -73,9 +80,13 @@ async function postInsight(row, thumbnails) {
   return res.json();
 }
 
-const since = process.argv[2] || yesterday();
-const until = process.argv[3] || since;
+// No args: the last 7 complete days, so days missed while the Mac was off get
+// filled in by the next run. Rows are replaced per day, and today is left out
+// because a partial day would read as a drop in spend.
+const since = process.argv[2] || bangkokDay(-7);
+const until = process.argv[3] || (process.argv[2] ? since : bangkokDay(-1));
 
+await waitForServer();
 const [rows, thumbnails] = await Promise.all([fetchInsights(since, until), fetchCreativeThumbnails()]);
 console.log(`Fetched ${rows.length} insight row(s) for ${since}..${until}`);
 for (const row of rows) {
