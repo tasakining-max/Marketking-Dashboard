@@ -87,7 +87,52 @@
     return h('figure', { class: `campaign-feed${item && item.ready ? ' ready' : ''}` },
       media,
       tall ? h('div', { class: 'campaign-legend' }, h('span', { class: 'r45' }, '┄ 4:5 เห็นเฉพาะในเส้นนี้'), h('span', { class: 'r11' }, '┄ 1:1 เห็นเฉพาะในเส้นนี้')) : null,
-      h('figcaption', {}, item ? [badge(item.ready, COLUMN_LABEL[item.column] || item.column), item.title, item.sizes ? h('small', {}, 'คลิกดูทั้ง 3 ขนาด') : null] : ''));
+      h('figcaption', {}, item ? [badge(item.ready, COLUMN_LABEL[item.column] || item.column), item.title, item.sizes ? h('small', {}, 'คลิกดูทั้ง 3 ขนาด') : null] : ''),
+      item && item.copy ? adCopy(item.id, item.copy) : null);
+  }
+
+  // The words that go with the picture in Ads Manager, each with its own copy
+  // button. Folded until clicked; stays open across reloads of the page data.
+  const openCopies = new Set();
+  // Caption is hers to edit: type, then save. Copy always takes what's in the box.
+  function captionField(id, c) {
+    const text = h('textarea', { class: 'campaign-adcopy-text long campaign-adcopy-edit', rows: 9 }, c.primary || '');
+    const copy = h('button', { type: 'button', class: 'campaign-copy' }, 'คัดลอก');
+    copy.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      try { await copyText(text.value); copy.textContent = '✓ คัดลอกแล้ว'; setTimeout(() => { copy.textContent = 'คัดลอก'; }, 1500); }
+      catch { copy.textContent = 'คัดลอกไม่ได้'; }
+    });
+    const save = h('button', { type: 'button', class: 'campaign-copy', hidden: true }, 'บันทึก');
+    text.addEventListener('input', () => { save.hidden = text.value === c.primary; save.textContent = 'บันทึก'; });
+    save.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      save.textContent = 'กำลังบันทึก…';
+      try {
+        const r = await call(`/api/campaigns/${encodeURIComponent(current)}/adcopy/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primary: text.value }) });
+        c.primary = r.primary; text.value = r.primary;
+        save.textContent = '✓ บันทึกแล้ว'; setTimeout(() => { save.hidden = true; }, 1200);
+      } catch (e) { save.textContent = 'บันทึก'; alert(e.message); }
+    });
+    return h('div', { class: 'campaign-adcopy-field' },
+      h('div', { class: 'campaign-adcopy-head' }, h('b', {}, 'Caption (Primary text) ✏️ แก้ได้'), h('span', {}, save, ' ', copy)),
+      text);
+  }
+  function adCopy(id, c) {
+    const field = (label, value, long) => value ? h('div', { class: 'campaign-adcopy-field' },
+      h('div', { class: 'campaign-adcopy-head' }, h('b', {}, label), copyBtn(value)),
+      h('div', { class: long ? 'campaign-adcopy-text long' : 'campaign-adcopy-text' }, value)) : null;
+    const box = h('details', { class: 'campaign-adcopy', onclick: (ev) => ev.stopPropagation() },
+      h('summary', {}, `📝 ข้อความโฆษณา${c.adSet ? ` · ชุดโฆษณา: ${c.adSet}` : ''}`),
+      captionField(id, c),
+      field('Headline', c.headline),
+      field('Description', c.description),
+      field('ปุ่ม CTA', c.cta),
+      field('Website URL', c.url),
+      field('URL parameters', c.urlParams));
+    box.open = openCopies.has(id);
+    box.addEventListener('toggle', () => (box.open ? openCopies.add(id) : openCopies.delete(id)));
+    return box;
   }
 
   function videoTile(item, n) {
