@@ -83,8 +83,22 @@ async function postInsight(row, thumbnails) {
 // No args: the last 7 complete days, so days missed while the Mac was off get
 // filled in by the next run. Rows are replaced per day, and today is left out
 // because a partial day would read as a drop in spend.
-const since = process.argv[2] || bangkokDay(-7);
-const until = process.argv[3] || (process.argv[2] ? since : bangkokDay(-1));
+// --today: today's numbers so far, only while an ad is actually delivering
+// (the hourly launchd job). The next no-args run replaces them with the full day.
+const todayMode = process.argv[2] === '--today';
+const since = todayMode ? bangkokDay(0) : process.argv[2] || bangkokDay(-7);
+const until = todayMode ? since : process.argv[3] || (process.argv[2] ? since : bangkokDay(-1));
+
+if (todayMode) {
+  const status = encodeURIComponent('["ACTIVE"]');
+  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${AD_ACCOUNT_ID}/ads?effective_status=${status}&fields=id&limit=1&access_token=${ACCESS_TOKEN}`);
+  const json = await res.json();
+  if (json.error) throw new Error(`Graph API error: ${json.error.message}`);
+  if (!json.data?.length) {
+    console.log(`${new Date().toISOString()} No active ads; skipped.`);
+    process.exit(0);
+  }
+}
 
 await waitForServer();
 const [rows, thumbnails] = await Promise.all([fetchInsights(since, until), fetchCreativeThumbnails()]);

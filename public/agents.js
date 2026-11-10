@@ -104,7 +104,7 @@ function renderStatus() {
       ? h('span', { class: `team-pill ${working && !state.paused ? 'team-pill-on' : 'team-pill-off'}` }, state.paused ? '⏸ ทีมหยุดอยู่ ไม่มีงานเริ่มจนกว่าจะกดให้ทำงานต่อ' : working ? '● ทีมกำลังเข้างาน' : '○ นอกเวลางาน งานใหม่จะรอคิวถึงเช้าวันทำงาน')
       : h('span', { class: 'team-pill team-pill-off' }, 'ดูได้อย่างเดียว ทีม AI สั่งงานได้เฉพาะบนเครื่อง Mac ของฝ่ายการตลาด'),
     h('span', { class: 'team-muted' }, `เวลางาน ${hoursText}`),
-    state.tasks?.some((t) => t.status === 'review') ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => { if (!reviewDialog.open) reviewDialog.showModal(); } }, `✅ รอตัดสิน ${state.tasks.filter((t) => t.status === 'review').length}`) : null,
+    state.tasks?.some((t) => t.status === 'review') ? h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: () => { if (!reviewDialog.open) reviewDialog.showModal(); } }, `✅ รอตัดสิน ${state.tasks.filter((t) => t.status === 'review').length}`) : '',
     runner ? (() => {
       const n = (state.tasks || []).filter((t) => ['queued', 'waiting'].includes(t.status)).length;
       return h('button', { type: 'button', class: 'team-btn team-btn-small', disabled: !n, title: n ? 'ยกเลิกงานที่รอคิวทั้งหมด (งานที่กำลังทำไม่ถูกแตะ)' : 'ไม่มีงานค้าง', onclick: clearPending }, n ? `🧹 ล้างงานค้าง ${n}` : '🧹 ล้างงานค้าง');
