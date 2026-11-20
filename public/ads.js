@@ -510,6 +510,8 @@ function drawHoloFunnel(canvas, stages, { stacked }) {
 
   // Glass body: one horizontal gradient per scanline, scaled to that
   // scanline's radius so the bright edges follow the silhouette.
+  ctx.save();
+  ctx.clip(silhouette);
   for (let y = Math.floor(y0); y <= y1 + R1 * TILT; y++) {
     const r = rAt(y);
     const fade = (1 - 0.35 * ((y - y0) / (y1 - y0))) * C.bodyAlpha;
@@ -520,14 +522,15 @@ function drawHoloFunnel(canvas, stages, { stacked }) {
     g.addColorStop(0.5, `rgba(${C.mid}, ${0.14 * fade})`);
     g.addColorStop(0.88, `rgba(${C.fill}, ${0.2 * fade})`);
     g.addColorStop(1, `rgba(${C.edge}, ${0.48 * fade})`);
-    ctx.save();
-    ctx.clip(silhouette);
     ctx.fillStyle = g;
     ctx.fillRect(cx - r - 1, y, r * 2 + 2, 1.2);
-    ctx.restore();
   }
+  ctx.restore();
 
-  // Dots.
+  // Dots. Tens of thousands of glowing dots drawn one fill() each froze the
+  // page on every filter change (each shadowed fill is its own blur pass), so
+  // dots are batched into a few brightness buckets: one path + one fill each.
+  const BUCKETS = 8;
   const layout = [];
   stages.forEach((st, i) => {
     const ya = cuts[i], yb = cuts[i + 1];
@@ -540,18 +543,23 @@ function drawHoloFunnel(canvas, stages, { stacked }) {
     ctx.globalCompositeOperation = C.blend;
     ctx.shadowColor = C.dotGlow;
     ctx.shadowBlur = 3;
+    const paths = Array.from({ length: BUCKETS }, () => new Path2D());
     for (let n = 0, guard = 0; n < st.value && guard < st.value * 30; guard++) {
       const dx = (rand() * 2 - 1) * rTop;
       const y = ya + rand() * (yb - ya + rTop * TILT);
       if (Math.abs(dx) > rAt(y) - 2) continue;
       if (y < frontY(ya, dx) + 1 || y > frontY(yb, dx) - 1) continue;
       const tw = rand();
-      ctx.fillStyle = C.dotCore(tw);
-      ctx.beginPath();
-      ctx.arc(cx + dx, y, 0.45 + tw * 0.45, 0, Math.PI * 2);
-      ctx.fill();
+      const r = 0.45 + tw * 0.45;
+      const p = paths[Math.min(BUCKETS - 1, Math.floor(tw * BUCKETS))];
+      p.moveTo(cx + dx + r, y);
+      p.arc(cx + dx, y, r, 0, Math.PI * 2);
       n++;
     }
+    paths.forEach((p, b) => {
+      ctx.fillStyle = C.dotCore((b + 0.5) / BUCKETS);
+      ctx.fill(p);
+    });
     ctx.restore();
   });
 
@@ -1360,9 +1368,33 @@ async function renderAdBudgets(fresh) {
   }
 }
 
-fetchAdInsights();
+// Each new date range costs a live Meta call (~1s) in the funnel box. Ask for
+// every preset range in the background so the server's 5-minute funnel cache
+// is already warm when she clicks a filter; re-warm before that cache expires.
+async function prefetchFunnelRanges() {
+  if (!rawEntries.length) return;
+  const avail = [...dataDatesSet];
+  const ranges = [rawEntries, ...['today', 'yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth'].map((mode) => {
+    const days = new Set(datesInPreset(mode, avail));
+    return rawEntries.filter((e) => days.has(dateKey(e.date)));
+  })];
+  const seen = new Set();
+  for (const entries of ranges) {
+    const campaigns = aggregateByCampaign(entries).sort((a, b) => b.spend - a.spend).map((c) => c.campaignName);
+    if (!campaigns.length) continue;
+    const campaign = campaigns.includes(adFunnelCampaignChoice) ? adFunnelCampaignChoice : campaigns[0];
+    const days = entries.filter((e) => e.campaignName === campaign).map((e) => dateKey(e.date)).sort();
+    const params = new URLSearchParams({ campaign, since: days[0], until: days[days.length - 1] }).toString();
+    if (seen.has(params)) continue;
+    seen.add(params);
+    try { await fetch(`/api/ad-funnel?${params}`); } catch { /* best effort */ }
+  }
+}
+
+fetchAdInsights().then(prefetchFunnelRanges);
 renderAdBudgets();
 setInterval(() => { if (!document.hidden) { fetchAdInsights(); renderAdBudgets(); } }, 30000);
+setInterval(() => { if (!document.hidden) prefetchFunnelRanges(); }, 4 * 60 * 1000);
 
 document.getElementById('adInsightsRefreshBtn').addEventListener('click', () => {
   adInsightsSignature = null;

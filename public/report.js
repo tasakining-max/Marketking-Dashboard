@@ -226,6 +226,14 @@ const WORKING_SATURDAYS_2026 = new Set([
   '2026-10-24',
 ]);
 
+// Days she took leave (ลางาน) — shown on the calendar like a holiday so gaps
+// in shoots/posts on those days make sense at a glance.
+const MY_LEAVE_DAYS = new Set([
+  '2026-11-13',
+  '2026-11-16',
+  '2026-11-17',
+]);
+
 function renderCalendar() {
   const today = new Date();
   const year = today.getFullYear();
@@ -315,13 +323,23 @@ function renderCalendar() {
       + (calFilters.has('plan') ? planned.length : 0)
       + (calFilters.has('shoot') ? shoots.length : 0);
     if (visibleCount) cell.classList.add('cal-has-content');
+    const isLeave = MY_LEAVE_DAYS.has(dateKey);
     if (holidayName || isWeekend) cell.classList.add('cal-holiday');
     if (isWorkingSaturday) cell.classList.add('cal-workday');
+    if (isLeave) cell.classList.add('cal-leave');
 
     const num = document.createElement('span');
     num.className = 'cal-day-num';
     num.textContent = d;
     cell.appendChild(num);
+
+    if (isLeave) {
+      const label = document.createElement('span');
+      label.className = 'cal-leave-label';
+      label.textContent = '🏖 ลางาน';
+      label.title = 'ลางาน';
+      cell.appendChild(label);
+    }
 
     if (holidayName) {
       const label = document.createElement('span');

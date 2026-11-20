@@ -108,26 +108,63 @@ const plannerMailer = process.env.SMTP_USER && process.env.SMTP_PASS
     })
   : null;
 
-function notifyPlanner(card) {
-  if (!plannerMailer || !process.env.PLANNER_EMAIL_TO) return;
-  const shouldSync = Boolean(card.plannedPublishDate) || Boolean(card.publishedAt) || Boolean(card.shootDate) || card.column === 'published';
-  if (!shouldSync) return;
-  const payload = {
-    id: card.id,
-    title: card.title,
-    description: card.description,
-    column: card.column,
-    plannedPublishDate: card.plannedPublishDate || null,
-    publishedAt: card.publishedAt || null,
-    shootDate: card.shootDate || null,
-    shootNote: card.shootNote || '',
-  };
-  plannerMailer.sendMail({
-    from: process.env.SMTP_USER,
-    to: process.env.PLANNER_EMAIL_TO,
-    subject: 'PlannerSync',
-    text: Buffer.from(JSON.stringify(payload)).toString('base64'),
-  }).catch((e) => console.error('Planner sync email failed:', e.message));
+// Calendar sync (free Power Automate → "Marketing Calendar" in Outlook): one
+// mail per changed event, subject "PlannerSync", body = base64 JSON:
+//   { action: 'upsert' | 'delete', subject, start, end, allDay, body,
+//     oldSubject, oldFrom, oldTo }
+// The flow first deletes events in [oldFrom, oldTo) whose subject equals
+// oldSubject (the event as it was before this change), then creates the new
+// one when action is 'upsert'. So a moved date, renamed card or new shoot time
+// replaces the old event, and a deleted/rejected card removes it.
+// kinds: 'shoot' | 'plan' | 'public'.
+const pad2 = (n) => String(n).padStart(2, '0');
+const nextDay = (ymd) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+function calendarEvent(card, kind) {
+  if (!card || card.status === 'rejected' || (kind === 'public' && card.column !== 'published')) return null;
+  const ymd = kind === 'shoot' ? card.shootDate : kind === 'plan' ? card.plannedPublishDate
+    : card.publishedAt ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date(card.publishedAt)) : null;
+  const day = ymd ? String(ymd).slice(0, 10) : null;
+  if (!day) return null;
+  const label = { shoot: '🎬 ถ่าย', plan: '📅 Plan', public: '✅ Public' }[kind];
+  const ev = { id: card.id, kind, subject: `${label}: ${card.title}`, body: [card.shootNote && kind === 'shoot' ? card.shootNote : '', card.description || ''].filter(Boolean).join('\n\n'), allDay: true, start: `${day}T00:00:00`, end: `${nextDay(day)}T00:00:00` };
+  // A shoot note like "09:00–11:00 น." or "14:00 น." gives the real time.
+  const m = kind === 'shoot' && String(card.shootNote || '').match(/(\d{1,2})[:.](\d{2})(?:\s*(?:[–\-]|ถึง)\s*(\d{1,2})[:.](\d{2}))?/);
+  if (m) {
+    const sh = Number(m[1]); const sm = Number(m[2]);
+    const eh = m[3] ? Number(m[3]) : Math.min(sh + 1, 23); const em = m[3] ? Number(m[4]) : sm;
+    if (sh < 24 && eh < 24 && sm < 60 && em < 60 && eh * 60 + em > sh * 60 + sm) {
+      Object.assign(ev, { allDay: false, start: `${day}T${pad2(sh)}:${pad2(sm)}:00`, end: `${day}T${pad2(eh)}:${pad2(em)}:00` });
+    }
+  }
+  return ev;
+}
+const sameEvent = (a, b) => a && b && a.subject === b.subject && a.start === b.start && a.end === b.end && a.allDay === b.allDay;
+// before = the card as it was (null when new), after = as it is now (null when deleted).
+function syncCalendar(before, after) {
+  if (!plannerMailer || !process.env.PLANNER_EMAIL_TO) {
+    console.warn('Calendar sync skipped: SMTP_USER/SMTP_PASS or PLANNER_EMAIL_TO is empty in .env');
+    return;
+  }
+  for (const kind of ['shoot', 'plan', 'public']) {
+    const old = calendarEvent(before, kind);
+    const now = calendarEvent(after, kind);
+    if ((!old && !now) || sameEvent(old, now)) continue;
+    const ref = old || now;
+    const day = ref.start.slice(0, 10);
+    const msg = {
+      action: now ? 'upsert' : 'delete',
+      ...(now || { subject: old.subject, start: old.start, end: old.end, allDay: old.allDay, body: '' }),
+      oldSubject: old ? old.subject : '',
+      oldFrom: `${day}T00:00:00+07:00`,
+      oldTo: `${nextDay(day)}T00:00:00+07:00`,
+    };
+    plannerMailer.sendMail({
+      from: process.env.SMTP_USER,
+      to: process.env.PLANNER_EMAIL_TO,
+      subject: 'PlannerSync',
+      text: Buffer.from(JSON.stringify(msg)).toString('base64'),
+    }).catch((e) => console.error('Calendar sync email failed:', e.message));
+  }
 }
 
 // ─── Auto-post to Facebook/Instagram ────────────────────────────────────────
@@ -402,7 +439,7 @@ app.post('/api/cards', async (req, res) => {
         caption: typeof caption === 'string' ? caption.trim() : '',
       },
     });
-    notifyPlanner(card);
+    syncCalendar(null, card);
     invalidateCache('cards');
     res.status(201).json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -430,7 +467,7 @@ app.put('/api/cards/reorder', async (req, res) => {
         }
       }
       const updated = await prisma.card.update({ where: { id }, data, omit: { imageUrl: true } });
-      if (data.column) notifyPlanner(updated);
+      syncCalendar(card, updated);
       if (enteringPublished) postToFacebook(updated).catch((e) => console.error('postToFacebook failed:', e.message));
     }));
     invalidateCache('cards');
@@ -772,7 +809,9 @@ app.patch('/api/cards/:id', async (req, res) => {
     if (pinned !== undefined) data.pinned = Boolean(pinned);
 
     const updated = await prisma.card.update({ where: { id: req.params.id }, data, omit: { imageUrl: true } });
-    notifyPlanner(updated);
+    // Only events whose title/date/time actually changed are mailed, so ticking
+    // a todo or editing the description sends nothing.
+    syncCalendar(card, updated);
     invalidateCache('cards');
     if (enteringPublished) postToFacebook(updated).catch((e) => console.error('postToFacebook failed:', e.message));
     res.json(serializeCard(updated));
@@ -785,6 +824,7 @@ app.delete('/api/cards/:id', async (req, res) => {
     if (!card) return res.status(404).json({ error: 'card not found' });
     if (card.videoUrl) fs.unlink(path.join(__dirname, 'public', card.videoUrl), () => {});
     await prisma.card.delete({ where: { id: req.params.id } });
+    syncCalendar(card, null);
     invalidateCache('cards');
     res.json(serializeCard(card));
   } catch (e) { res.status(500).json({ error: e.message }); }

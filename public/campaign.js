@@ -84,12 +84,60 @@
       ? h('div', { class: 'campaign-ad-media', role: 'button', tabindex: '0', title: item.sizes ? 'คลิกเพื่อดูทั้ง 3 ขนาด' : 'คลิกเพื่อดูภาพใหญ่', onclick: open, onkeydown: (ev) => { if (ev.key === 'Enter') open(); } },
         h('img', { src, alt: item.title, class: 'campaign-ad-img' }), tall ? guides() : null)
       : h('div', { class: 'campaign-empty campaign-ad-media' }, item ? [h('b', {}, '🎨 ยังไม่มีภาพ'), h('span', {}, item.brief || item.title)] : [h('b', {}, `ภาพแอดที่ ${n}`), h('span', {}, 'ยังไม่ได้ทำ')]);
-    return h('figure', { class: `campaign-feed${item && item.ready ? ' ready' : ''}` },
+    const meta = item && item.meta;
+    if (meta && meta.hero && media.classList.contains('campaign-ad-media')) media.append(h('span', { class: 'campaign-hero' }, '⭐ HERO AD'));
+    return h('figure', { class: `campaign-feed${item && item.ready ? ' ready' : ''}${meta && meta.hero ? ' hero' : ''}${meta && meta.state === 'closed' && !meta.hero ? ' closed' : ''}` },
       media,
       tall ? h('div', { class: 'campaign-legend' }, h('span', { class: 'r45' }, '┄ 4:5 เห็นเฉพาะในเส้นนี้'), h('span', { class: 'r11' }, '┄ 1:1 เห็นเฉพาะในเส้นนี้')) : null,
-      h('figcaption', {}, item ? [badge(item.ready, COLUMN_LABEL[item.column] || item.column), item.title, item.sizes ? h('small', {}, 'คลิกดูทั้ง 3 ขนาด') : null] : ''),
+      h('figcaption', {}, item ? [badge(item.ready, COLUMN_LABEL[item.column] || item.column), meta ? adStateChip(meta) : null, item.title, item.sizes ? h('small', {}, 'คลิกดูทั้ง 3 ขนาด') : null] : ''),
+      meta ? metaControls(item, metaAdList) : null,
       item && item.copy ? adCopy(item.id, item.copy) : null);
   }
+
+  // Live delivery status of the Meta ads this picture went into.
+  const AD_STATE = {
+    running: ['🟢 กำลังรันแอด', 'running'],
+    review: ['⏳ รอ Meta ตรวจ / มีปัญหา', 'review'],
+    closed: ['⏸ ปิดแอดแล้ว', 'closed'],
+    none: ['ยังไม่ได้ยิงแอด', 'none'],
+    unknown: ['เช็กสถานะ Meta ไม่ได้', 'none'],
+  };
+  function adStateChip(meta) {
+    const [text, cls] = AD_STATE[meta.state] || AD_STATE.unknown;
+    const title = meta.ads.map((a) => `${a.name}: ${a.status || '?'}`).join('\n') || 'ยังไม่ได้ผูกกับแอดใน Meta';
+    return h('span', { class: `campaign-adstate ${cls}`, title }, text);
+  }
+  let metaAdList = null;
+  // HERO toggle + which Meta ads this picture is (ticked by hand; Meta re-encodes
+  // uploads, so pictures can't be matched to ads automatically).
+  function metaControls(item, list) {
+    const save = async (body) => {
+      try { await call(`/api/campaigns/${encodeURIComponent(current)}/admap/${encodeURIComponent(item.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); loadCampaign(); }
+      catch (e) { alert(e.message); }
+    };
+    const linked = new Set(item.meta.ads.map((a) => a.name));
+    const choices = list ? [...list.map((a) => a.name), ...[...linked].filter((n) => !list.some((a) => a.name === n))] : [...linked];
+    const status = (n) => (list || []).find((a) => a.name === n)?.status || '';
+    const boxes = choices.map((n) => {
+      const cb = h('input', { type: 'checkbox', checked: linked.has(n) });
+      cb.addEventListener('change', () => {
+        const next = new Set(linked);
+        if (cb.checked) next.add(n); else next.delete(n);
+        save({ ads: [...next] });
+      });
+      return h('label', { class: 'campaign-metaad' }, cb, h('span', {}, n), status(n) ? h('small', {}, status(n)) : null);
+    });
+    return h('div', { class: 'campaign-metactl', onclick: (ev) => ev.stopPropagation() },
+      h('button', { type: 'button', class: 'campaign-link-btn', onclick: () => save({ hero: !item.meta.hero }) }, item.meta.hero ? '✕ เอา HERO AD ออก' : '⭐ ตั้งเป็น HERO AD'),
+      h('details', {},
+        h('summary', {}, `🔗 แอดใน Meta: ${item.meta.ads.length ? item.meta.ads.map((a) => a.name).join(', ') : 'ยังไม่ได้ผูก'}`),
+        boxes.length ? boxes : h('p', { class: 'campaign-muted' }, list ? 'ไม่พบแอดของแคมเปญนี้ใน Meta' : 'เชื่อมต่อ Meta ไม่ได้')));
+  }
+
+  // Pictures whose ads have all been switched off are hidden unless she asks;
+  // HERO ADs always stay. Remembered per browser.
+  let showClosed = false;
+  try { showClosed = localStorage.getItem('campaignShowClosed') === '1'; } catch {}
 
   // The words that go with the picture in Ads Manager, each with its own copy
   // button. Folded until clicked; stays open across reloads of the page data.
@@ -257,6 +305,19 @@
     // Only ads that have a picture get a tile; the rest are just counted in a line.
     const ads = data.adImages.items.filter((i) => i.imageUrl || (i.sizes && (i.sizes.r916 || i.sizes.r45 || i.sizes.r11)));
     const adsPending = data.adImages.items.length - ads.length + Math.max(0, data.adImages.min - data.adImages.items.length);
+    metaAdList = data.adImages.metaAds || null;
+    const isClosed = (it) => it.meta && it.meta.state === 'closed' && !it.meta.hero;
+    const closedCount = ads.filter(isClosed).length;
+    // HERO first, then running, then the rest in their usual order.
+    const rank = (it) => (it.meta && it.meta.hero ? 0 : it.meta && it.meta.state === 'running' ? 1 : 2);
+    const shownAds = ads.filter((it) => showClosed || !isClosed(it)).map((it, i) => [it, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([it]) => it);
+    const closedToggle = closedCount ? h('div', { class: 'campaign-closed-row' },
+      h('span', { class: 'campaign-muted' }, showClosed ? `แสดงทุกภาพ (รวม ${closedCount} ภาพที่ปิดแอดแล้ว)` : `แสดงเฉพาะภาพที่กำลังรันแอด · ซ่อน ${closedCount} ภาพที่ปิดแอดแล้ว`),
+      h('button', { type: 'button', class: 'campaign-link-btn', onclick: () => {
+        showClosed = !showClosed;
+        try { localStorage.setItem('campaignShowClosed', showClosed ? '1' : '0'); } catch {}
+        render(data);
+      } }, showClosed ? 'ซ่อนภาพที่ปิดแอดแล้ว' : `ดูภาพที่ปิดแอดแล้ว (${closedCount})`)) : null;
     const vids = Array.from({ length: slots(data.videos) }, (_, i) => data.videos.items[i] || null);
     const web = data.web;
     const webLeft = web.products.filter((x) => !x.ready).length;
@@ -275,7 +336,8 @@
         h('summary', { class: 'campaign-section-head' }, h('h3', {}, '🚀 แผนตั้งแคมเปญ (กดคัดลอกไปวางใน Ads Manager)'), h('span', { class: `campaign-count ${data.audience.who && data.audience.done ? 'ok' : ''}` }, data.audience.who && data.audience.done ? 'ตั้งแล้ว' : 'ยังไม่ได้ตั้ง'), h('span', { class: 'campaign-muted' }, '(กดเพื่อขยาย)')),
         planBlock(data) || h('p', { class: 'key-messages-hint' }, 'แคมเปญนี้ยังไม่มีแผน')),
       section('🖼️ ภาพแอด (9:16 พร้อมเส้นครอป)', `พร้อม ${data.adImages.ready} · ต้องการ ${data.adImages.min}–${data.adImages.max}`, data.adImages.done,
-        ads.length ? h('div', { class: 'campaign-feed-grid' }, ads.map((it, i) => feedAd(it, i + 1))) : null,
+        closedToggle,
+        shownAds.length ? h('div', { class: 'campaign-feed-grid' }, shownAds.map((it, i) => feedAd(it, i + 1))) : null,
         adsPending ? h('p', { class: 'campaign-pending' }, `ยังไม่มีภาพอีก ${adsPending} ภาพ`) : null),
       section('🎬 วิดีโอ', `พร้อม ${data.videos.ready} · ต้องการ ${data.videos.min}–${data.videos.max}`, data.videos.done,
         h('div', { class: 'campaign-reel-grid' }, vids.map((it, i) => videoTile(it, i + 1)))),
