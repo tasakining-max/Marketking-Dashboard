@@ -19,10 +19,14 @@
     '/agents.html': '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4.5M9.5 4.5h5"/><circle cx="9.3" cy="13.5" r="1.1"/><circle cx="14.7" cy="13.5" r="1.1"/><path d="M1.5 13v3M22.5 13v3"/>',
     more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   };
-  const SHORT = { '/graphic-design.html': 'Graphic', '/competitors.html': 'คู่แข่ง' };
+  const SHORT = { '/agents.html': 'ทีม AI', '/graphic-design.html': 'Graphic', '/competitors.html': 'คู่แข่ง' };
   const PRIMARY = 4; // first N links stay in the bottom bar; the rest go to "More"
 
-  const links = [...nav.querySelectorAll('a.nav-link')];
+  // Order: the first 4 are the bottom-bar tabs on the folded screen.
+  const ORDER = ['/index.html', '/report.html', '/ads.html', '/agents.html', '/graphic-design.html', '/insights.html', '/website.html', '/competitors.html'];
+  const rank = (a) => { const i = ORDER.indexOf(a.getAttribute('href')); return i < 0 ? 99 : i; };
+  const links = [...nav.querySelectorAll('a.nav-link')].sort((a, b) => rank(a) - rank(b));
+  links.forEach((a) => nav.appendChild(a));
   links.forEach((a, i) => {
     const href = a.getAttribute('href');
     const label = a.textContent.replace(/^[^\p{L}\p{N}]+/u, '').trim(); // drop leading emoji
