@@ -101,85 +101,61 @@ function niceMax(value) {
   return step * magnitude;
 }
 
-// ─── Before/after comparison (หนิง started 2026-06-24) ────────────────
-const START_DATE = new Date('2026-06-24T00:00:00');
+// ─── Period filter (by post date) ──────────────────────────────────────
+// เดือนนี้ / เดือนก่อน / 3 เดือนล่าสุด / 6 เดือน / 1 ปี count calendar months
+// including the current one; the dropdown picks one specific month.
+const TH_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const monthName = (key) => { const [y, m] = key.split('-').map(Number); return `${TH_MONTHS[m - 1]} ${y + 543}`; };
 
-function splitBeforeAfter(videos) {
-  const before = videos.filter((v) => new Date(v.createdTime) < START_DATE);
-  const after = videos.filter((v) => new Date(v.createdTime) >= START_DATE);
-  return { before, after };
-}
+let currentRange = (() => { try { return localStorage.getItem('insightsRange') || 'this'; } catch { return 'this'; } })();
 
-function periodMonths(videos, isBefore) {
-  if (!videos.length) return 0;
-  const dates = videos.map((v) => new Date(v.createdTime));
-  if (isBefore) {
-    const earliest = new Date(Math.min(...dates));
-    return (START_DATE - earliest) / (1000 * 60 * 60 * 24 * 30);
+function rangeBounds(range) {
+  const now = new Date();
+  if (range.startsWith('m:')) {
+    const [y, m] = range.slice(2).split('-').map(Number);
+    return { from: new Date(y, m - 1, 1), to: new Date(y, m, 1), label: monthName(range.slice(2)) };
   }
-  return (new Date() - START_DATE) / (1000 * 60 * 60 * 24 * 30);
+  if (range === 'last') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { from, to: new Date(now.getFullYear(), now.getMonth(), 1), label: `เดือนก่อน (${monthName(monthKey(from))})` };
+  }
+  const n = range === 'this' ? 1 : Number(range);
+  const from = new Date(now.getFullYear(), now.getMonth() - (n - 1), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const label = n === 1 ? `เดือนนี้ (${monthName(monthKey(from))})` : `${monthName(monthKey(from))} – ${monthName(monthKey(now))}`;
+  return { from, to, label };
 }
 
-function renderComparison(videos) {
-  const { before, after } = splitBeforeAfter(videos);
-  document.getElementById('beforeRangeLabel').textContent = before.length
-    ? `${fmtDate(Math.min(...before.map((v) => new Date(v.createdTime))))} – 23 มิ.ย. 2569`
-    : '';
-  document.getElementById('afterRangeLabel').textContent = `24 มิ.ย. 2569 – ${fmtDate(new Date())}`;
+function filterByRange(videos, range) {
+  const { from, to } = rangeBounds(range);
+  return videos.filter((v) => { const d = new Date(v.createdTime); return d >= from && d < to; });
+}
 
-  const sum = (arr, key) => arr.reduce((s, v) => s + v[key], 0);
-  const beforeMonths = periodMonths(before, true) || 1;
-  const afterMonths = periodMonths(after, false) || 1;
-
-  const rows = [
-    { label: 'จำนวนคลิปที่โพสต์', before: before.length, after: after.length, fmt: fmtNum },
-    { label: 'ยอดวิวรวม', before: sum(before, 'views'), after: sum(after, 'views'), fmt: fmtNum },
-    { label: 'เฉลี่ยวิว/คลิป', before: before.length ? sum(before, 'views') / before.length : 0, after: after.length ? sum(after, 'views') / after.length : 0, fmt: fmtNum },
-    { label: 'ไลก์รวม', before: sum(before, 'likes'), after: sum(after, 'likes'), fmt: fmtNum },
-    { label: 'คอมเมนต์รวม', before: sum(before, 'comments'), after: sum(after, 'comments'), fmt: fmtNum },
-    { label: 'แชร์รวม', before: sum(before, 'shares'), after: sum(after, 'shares'), fmt: fmtNum },
-    { label: 'คลิปโพสต์/เดือน (เฉลี่ย)', before: before.length / beforeMonths, after: after.length / afterMonths, fmt: (n) => n.toFixed(1) },
-  ];
-
-  const tbody = document.getElementById('comparisonTableBody');
-  tbody.innerHTML = '';
-  rows.forEach((r) => {
-    const tr = document.createElement('tr');
-
-    const labelTd = document.createElement('td');
-    labelTd.textContent = r.label;
-    tr.appendChild(labelTd);
-
-    const beforeTd = document.createElement('td');
-    beforeTd.className = 'ads-num';
-    beforeTd.textContent = r.fmt(r.before);
-    tr.appendChild(beforeTd);
-
-    const afterTd = document.createElement('td');
-    afterTd.className = 'ads-num';
-    afterTd.textContent = r.fmt(r.after);
-    tr.appendChild(afterTd);
-
-    const deltaTd = document.createElement('td');
-    if (r.before > 0) {
-      const pct = ((r.after - r.before) / r.before) * 100;
-      const badge = document.createElement('span');
-      badge.className = `ads-status-badge ${pct >= 0 ? 'is-success' : 'is-failed'}`;
-      badge.textContent = `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`;
-      deltaTd.appendChild(badge);
-    } else if (r.after > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'ads-status-badge is-success';
-      badge.textContent = '▲ ใหม่';
-      deltaTd.appendChild(badge);
-    } else {
-      deltaTd.textContent = '—';
-    }
-    tr.appendChild(deltaTd);
-
-    tbody.appendChild(tr);
+function renderRangeControls(videos) {
+  const select = document.getElementById('insightsMonthSelect');
+  const months = [...new Set([monthKey(new Date()), ...videos.map((v) => monthKey(new Date(v.createdTime)))])].sort().reverse();
+  select.innerHTML = '<option value="">เลือกเดือน…</option>'
+    + months.map((k) => `<option value="m:${k}">${monthName(k)}</option>`).join('');
+  select.value = currentRange.startsWith('m:') ? currentRange : '';
+  select.classList.toggle('active', currentRange.startsWith('m:'));
+  document.querySelectorAll('.insights-range-row [data-range]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.range === currentRange);
   });
 }
+
+function setRange(range) {
+  currentRange = range;
+  try { localStorage.setItem('insightsRange', range); } catch { /* ignore */ }
+  if (lastVideos) renderRange(lastVideos);
+}
+
+document.querySelectorAll('.insights-range-row [data-range]').forEach((btn) => {
+  btn.addEventListener('click', () => setRange(btn.dataset.range));
+});
+document.getElementById('insightsMonthSelect').addEventListener('change', (e) => {
+  if (e.target.value) setRange(e.target.value);
+});
 
 // ─── KPI tiles ──────────────────────────────────────────────────────────
 function renderStatTiles(videos) {
@@ -491,12 +467,22 @@ function render(rawVideos) {
   }
   insightsEmpty.hidden = true;
   insightsBody.hidden = false;
-  renderComparison(videos);
-  const { after } = splitBeforeAfter(videos);
-  renderStatTiles(after);
-  renderInsights(after);
-  renderTopVideosChart(after);
-  renderTable(after);
+  lastVideos = videos;
+  renderRange(videos);
+}
+
+let lastVideos = null;
+
+function renderRange(videos) {
+  renderRangeControls(videos);
+  const inRange = filterByRange(videos, currentRange);
+  document.getElementById('insightsRangeLabel').textContent = inRange.length
+    ? `👇 ${rangeBounds(currentRange).label} · ${inRange.length} คลิป (นับตามวันที่โพสต์)`
+    : `${rangeBounds(currentRange).label} · ยังไม่มีคลิปที่โพสต์ในช่วงนี้`;
+  renderStatTiles(inRange);
+  renderInsights(inRange);
+  renderTopVideosChart(inRange);
+  renderTable(inRange);
 }
 
 let videoIdToCardId = new Map();

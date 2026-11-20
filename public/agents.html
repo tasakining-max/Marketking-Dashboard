@@ -2,9 +2,9 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>ทีม AI — Marketing Dashboard</title>
-<link rel="stylesheet" href="style.css?v=20261024-proven-badge" />
+<link rel="stylesheet" href="style.css?v=20261120-shell" />
 <script>
   (function () {
     var stored = localStorage.getItem('theme');
@@ -28,6 +28,7 @@
     </nav>
     <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
   </header>
+  <script src="shell.js?v=20261120b"></script>
 
   <div class="team-layout">
   <main class="report-main team-main">
@@ -36,8 +37,8 @@
     <div class="team-workspace">
       <section class="report-section team-members-section" aria-labelledby="teamMembersTitle">
         <div class="report-section-header">
-          <h2 id="teamMembersTitle">👥 สมาชิกในทีม</h2>
-          <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎของทั้งทีม</button>
+          <h2 id="teamMembersTitle">👥 <span class="team-title-long">สมาชิกใน</span>ทีม</h2>
+          <button type="button" class="team-btn team-btn-small" onclick="openSettings('all')">⚙️ กฎ<span class="team-title-long">ของทั้ง</span>ทีม</button>
         </div>
         <div id="teamRoster" class="team-roster"></div>
       </section>
@@ -212,9 +213,9 @@
     </div>
   </dialog>
 
-  <script src="office.js?v=20261103-reel-team"></script>
+  <script src="office.js?v=20261120-oneroom3"></script>
   <script src="officeMotion.js?v=20261022-arrival-thoughts"></script>
-  <script src="agents.js?v=20261103reel-20261024-proven-badge"></script>
+  <script src="agents.js?v=20261120-loglayout"></script>
   <script src="tab-tracker.js"></script>
 </body>
 </html>

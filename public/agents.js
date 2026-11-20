@@ -1776,3 +1776,20 @@ function updateOfficeClock() {
 setInterval(updateOfficeClock, 1000);
 document.addEventListener('visibilitychange', updateOfficeClock);
 setInterval(() => { if (!document.hidden) { refresh(); refreshLog(); } }, POLL_MS);
+
+// Narrow / portrait window (≤1000px): the chat & log sits right after the office
+// room instead of at the very bottom of the page. Wide: back in its right column.
+(function placeTeamLog() {
+  const log = document.querySelector('.team-log');
+  const office = document.getElementById('teamOfficeSection');
+  const layout = document.querySelector('.team-layout');
+  if (!log || !office || !layout) return;
+  const mq = window.matchMedia('(max-width: 1000px)');
+  const apply = () => {
+    if (mq.matches) { if (office.nextElementSibling !== log) office.after(log); }
+    else if (log.parentElement !== layout) layout.appendChild(log);
+    followLogBottom();
+  };
+  apply();
+  mq.addEventListener('change', apply);
+})();

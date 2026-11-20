@@ -790,7 +790,10 @@ function renderCard(card) {
       const cb = document.createElement('button');
       cb.type = 'button';
       cb.className = `inline-todo-check ${todo.status === 'done' ? 'checked' : todo.status === 'in_progress' ? 'in-progress' : ''}`;
-      cb.setAttribute('aria-label', todo.status === 'done' ? 'Mark incomplete' : 'Mark done');
+      // Click cycles like the edit dialog: ว่าง → ส้ม (กำลังทำ) → ✓ เสร็จ → ว่าง
+      const nextStatus = TODO_STATUS_CYCLE[todo.status] || 'in_progress';
+      cb.title = `กดเพื่อเปลี่ยนเป็น: ${TODO_STATUS_TITLES[nextStatus]}`;
+      cb.setAttribute('aria-label', `Mark ${TODO_STATUS_TITLES[nextStatus]}`);
       cb.innerHTML = todo.status === 'done'
         ? '<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         : todo.status === 'in_progress'
@@ -798,7 +801,7 @@ function renderCard(card) {
         : '';
       cb.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const newStatus = todo.status === 'done' ? 'pending' : 'done';
+        const newStatus = nextStatus;
         const updatedTodos = card.todos.map((t) =>
           t.id === todo.id ? { ...t, status: newStatus } : t
         );

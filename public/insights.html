@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Insights — Marketing Dashboard</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=20261120-shell" />
 <script>
   (function () {
     var stored = localStorage.getItem('theme');
@@ -28,6 +28,7 @@
     </nav>
     <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle dark/light theme" aria-label="Toggle dark/light theme">🌙</button>
   </header>
+  <script src="shell.js?v=20261120b"></script>
 
   <main class="report-main ads-main">
     <section class="report-section">
@@ -43,35 +44,28 @@
       <div id="insightsEmpty" class="key-messages-hint" hidden>ยังไม่มีข้อมูล — รัน <code>node scripts/sync-page-video-insights.mjs 6</code> เพื่อดึงข้อมูลก่อน</div>
 
       <div id="insightsBody" hidden>
-        <div class="report-list-wrap" style="margin-bottom:24px;">
-          <h3>📊 เปรียบเทียบ: ก่อน-หลังหนิงเริ่มงาน (24 มิ.ย. 2569)</h3>
-          <div class="ads-table-wrap">
-            <table class="ads-table ads-log-table">
-              <thead>
-                <tr>
-                  <th>ตัวชี้วัด</th>
-                  <th>ก่อนเริ่มงาน<br /><span class="ads-filter-label" id="beforeRangeLabel"></span></th>
-                  <th>ตั้งแต่เริ่มงาน<br /><span class="ads-filter-label" id="afterRangeLabel"></span></th>
-                  <th>เปลี่ยนแปลง</th>
-                </tr>
-              </thead>
-              <tbody id="comparisonTableBody"></tbody>
-            </table>
+        <div class="ads-filter-row insights-range-row">
+          <div class="cal-filter-group" role="group" aria-label="ช่วงเวลา">
+            <button type="button" class="cal-filter-btn" data-range="this">เดือนนี้</button>
+            <button type="button" class="cal-filter-btn" data-range="last">เดือนก่อน</button>
+            <button type="button" class="cal-filter-btn" data-range="3">3 เดือนล่าสุด</button>
+            <button type="button" class="cal-filter-btn" data-range="6">6 เดือน</button>
+            <button type="button" class="cal-filter-btn" data-range="12">1 ปี</button>
+            <select id="insightsMonthSelect" class="cal-filter-btn insights-month-select" aria-label="เลือกเดือน"></select>
           </div>
         </div>
-
-        <p class="key-messages-hint" style="margin-bottom:8px;">👇 ข้อมูลด้านล่างนี้คือช่วงที่หนิงทำงาน (ตั้งแต่ 24 มิ.ย. 2569 เป็นต้นมา) เท่านั้น</p>
+        <p id="insightsRangeLabel" class="key-messages-hint" style="margin-bottom:8px;"></p>
         <div id="videoStatGrid" class="ads-stat-grid"></div>
 
         <div id="videoInsightRows" class="ads-insights"></div>
 
         <div class="report-list-wrap" style="margin-bottom:24px;">
-          <h3>10 คลิปยอดวิวสูงสุด (ตั้งแต่หนิงเริ่มงาน)</h3>
+          <h3>10 คลิปยอดวิวสูงสุดในช่วงนี้</h3>
           <div id="topVideosChart" class="ads-chart-wrap"></div>
         </div>
 
         <div class="report-list-wrap">
-          <h3>วิดีโอตั้งแต่หนิงเริ่มงาน (เรียงตามวันที่โพสต์ล่าสุด)</h3>
+          <h3>วิดีโอในช่วงนี้ (เรียงตามวันที่โพสต์ล่าสุด)</h3>
           <div class="ads-table-wrap">
             <table class="ads-table ads-video-table">
               <thead>
@@ -96,7 +90,7 @@
     </section>
   </main>
 
-  <script src="insights.js"></script>
+  <script src="insights.js?v=20261120-range"></script>
   <script src="tab-tracker.js"></script>
 </body>
 </html>

@@ -5,12 +5,12 @@
   'use strict';
 
   const U = 48;          // px per grid unit along x
-  const ROOM = 18;       // room is ROOM x ROOM grid units
+  const ROOM = 12;       // one shared room, ROOM x ROOM grid units
   const WALL = 275;      // wall height in px
-  const OX = 900;        // screen position of grid (0,0): the back corner
+  const OX = 676;        // screen position of grid (0,0): the back corner
   const OY = 315;
-  const W = 1800;
-  const H = 1310;
+  const W = 1352;
+  const H = 990;
 
   // grid -> screen (isometric 2:1); z lifts a point straight up
   const P = (gx, gy, gz = 0) => [OX + (gx - gy) * U, OY + ((gx + gy) * U) / 2 - gz];
@@ -18,22 +18,17 @@
   const poly = (pts, attrs = '') => `<polygon points="${pts.map(pt).join(' ')}" ${attrs}/>`;
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  // Opposing seats share a room; front seats face back across the table group.
+  // One room: the four agents work at one desk cluster (back pair faces the
+  // viewer, front pair faces back across the desks); lounge on the right.
   const SEATS = {
-    adideas: [1.4, 2.2], caption: [1.4, 5.0],
-    layout: [10.8, 2.2], image: [14.1, 2.2], assemble: [11.0, 5.0], vector: [14.1, 5.0],
-    productvideo: [10.8, 11.4], motion: [10.8, 14.2], footage: [14.1, 11.4], reelcut: [14.1, 14.2],
-    reelpack: [4.7, 5.0],
-    catalog: [4.7, 11.4], rival: [1.4, 11.4], website: [1.4, 14.2], ads: [4.7, 14.2],
+    ads: [2.4, 3.4], website: [5.6, 3.4],
+    catalog: [2.4, 6.3], rival: [5.6, 6.3],
   };
-  const FRONT_SEATS = new Set(['ads', 'caption', 'assemble', 'vector', 'motion', 'website', 'reelcut', 'reelpack']);
+  const FRONT_SEATS = new Set(['catalog', 'rival']);
   const ZONES = [
-    { label: 'ไอเดีย · เนื้อหา', x0: 0.4, x1: 7.6, y0: 0.8, y1: 8.0, fill: '#EDF6FC' },
-    { label: 'สตูดิโอภาพ', x0: 9.8, x1: 17.5, y0: 0.8, y1: 8.0, fill: '#CBE7F8' },
-    { label: 'ผู้ช่วย · ดึง วิเคราะห์ Data', x0: 0.4, x1: 7.6, y0: 10.0, y1: 17.5, fill: '#D8E2EF' },
-    { label: 'วิดีโอ · แอนิเมชัน', x0: 9.8, x1: 17.5, y0: 10.0, y1: 17.5, fill: '#B9D4ED' },
+    { label: 'ห้องทำงานทีม AI', x0: 0.4, x1: 11.6, y0: 0.6, y1: 11.6, fill: '#E6F1FA' },
   ];
-  const FLOW = ['layout', 'image', 'assemble', 'motion'];
+  const AISLE_X = 8.3; // walkway between the desk cluster and the lounge
   const clockFormatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
   });
@@ -41,23 +36,11 @@
 
   function officeWalkRoute(from, to) {
     if (!SEATS[from] || !SEATS[to] || from === to) return null;
-    const exit = (id) => {
-      const [x, y] = SEATS[id];
-      const room = ZONES.find((z) => x >= z.x0 && x < z.x1 && y >= z.y0 && y < z.y1);
-      const seatY = FRONT_SEATS.has(id) ? y + 1.75 : y - .55;
-      const middle = (room.x0 + room.x1) / 2;
-      return { room, middle, corridor: room.y1 < 10 ? 9 : 17.85,
-        points: [[x + .95, seatY], [x - .5, seatY], [x - .5, room.y1 - .45], [middle, room.y1 - .45], [middle, room.y1 + .25]] };
-    };
-    const a = exit(from), b = exit(to);
-    let grid;
-    if (a.room === b.room) {
-      grid = [...a.points.slice(0, 3), ...b.points.slice(0, 3).reverse()];
-    } else {
-      grid = [...a.points, [a.middle, a.corridor], [8.7, a.corridor], [8.7, b.corridor], [b.middle, b.corridor], ...b.points.slice().reverse()];
-    }
-    return grid.filter((p, i) => !i || p[0] !== grid[i - 1][0] || p[1] !== grid[i - 1][1])
-      .map(([x, y]) => { const p = P(x, y); return [p[0], p[1] - 36]; });
+    // Stand point behind (back row) or in front of (front row) each desk.
+    const stand = (id) => { const [x, y] = SEATS[id]; return [x + .95, FRONT_SEATS.has(id) ? y + 1.75 : y - .55]; };
+    const a = stand(from), b = stand(to);
+    const grid = a[1] === b[1] ? [a, b] : [a, [AISLE_X, a[1]], [AISLE_X, b[1]], b];
+    return grid.map(([x, y]) => { const p = P(x, y); return [p[0], p[1] - 36]; });
   }
 
   // a box from grid (gx,gy) with size (w,d) between heights z0..z1.
@@ -137,12 +120,6 @@
     for (const z of ZONES) {
       out.push(poly([P(z.x0, z.y0), P(z.x1, z.y0), P(z.x1, z.y1), P(z.x0, z.y1)], `fill="${z.fill}" stroke="#159FE8" stroke-opacity=".3" stroke-width="1"`));
     }
-    // the picture line on the floor
-    const seatPt = (id) => P(SEATS[id][0] + 0.95, SEATS[id][1] + 1.35);
-    const flowPts = FLOW.map(seatPt);
-    out.push(`<polyline points="${flowPts.map(pt).join(' ')}" fill="none" stroke="${flowActive ? '#2f80ed' : '#9bb0c6'}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" class="office-flow${flowActive ? ' on' : ''}"/>`);
-    // Video planning and animation also share a collaboration route.
-    out.push(`<polyline points="${['productvideo', 'motion'].map((id) => pt(seatPt(id))).join(' ')}" fill="none" stroke="#9b87be" stroke-width="4" stroke-dasharray="8 7" opacity=".7"/>`);
     // Floor-to-ceiling glazing replaces the solid outer walls and windows.
     out.push(poly([P(0, 0, WALL), P(0, ROOM, WALL), P(0, ROOM), P(0, 0)], 'fill="url(#of-sky)" stroke="#68bbed" stroke-opacity=".6" stroke-width="1.5"'));
     out.push(poly([P(0, 0, WALL), P(ROOM, 0, WALL), P(ROOM, 0), P(0, 0)], 'fill="url(#of-sky)" stroke="#68bbed" stroke-opacity=".6" stroke-width="1.5"'));
@@ -163,7 +140,7 @@
     const wallDisplayTop = WALL - 34;
     const wallDisplayScale = .9;
     const wallDisplayMatrix = `${wallDisplayScale},${wallDisplayScale / 2},0,${wallDisplayScale}`;
-    const [hudX, hudY] = P(2.0, 0, wallDisplayTop);
+    const [hudX, hudY] = P(1.2, 0, wallDisplayTop);
     const hudColor = meta.paused ? '#ffbd75' : meta.working ? '#64c8ff' : '#9baec4';
     const hudStatus = meta.paused ? 'หยุดอยู่' : meta.working ? 'กำลังเข้างาน' : 'นอกเวลางาน';
     const metrics = [
@@ -193,64 +170,43 @@
     out.push('<path d="M160,136 H224" stroke="#64c8ff" stroke-width="2" stroke-linecap="round" opacity=".5"/></g>');
 
     // plants
-    for (const [gx, gy] of [[12.4, 0.7], [0.5, 12.4]]) {
+    for (const [gx, gy] of [[0.8, 7.6], [11.3, 3.6]]) {
       const [x, y] = P(gx, gy);
       out.push(`<ellipse cx="${x}" cy="${y + 4}" rx="20" ry="8" fill="rgba(0,0,0,.12)"/><rect x="${x - 12}" y="${y - 26}" width="24" height="28" rx="4" fill="#b5651d"/>`
         + `<circle cx="${x}" cy="${y - 46}" r="22" fill="#3b9d54"/><circle cx="${x - 14}" cy="${y - 38}" r="14" fill="#2f8a47"/><circle cx="${x + 14}" cy="${y - 40}" r="15" fill="#4cb868"/>`);
     }
 
-    // Glass room partitions with open doorways onto the central cross aisle.
-    for (const z of ZONES) {
-      const glass = (x0, y0, x1, y1) => {
-        out.push(poly([P(x0, y0, 0), P(x1, y1, 0), P(x1, y1, 92), P(x0, y0, 92)], 'fill="url(#of-sky)" stroke="#68bbed" stroke-opacity=".55" stroke-width="1.5"'));
-        const rim = [P(x0, y0, 92), P(x1, y1, 92)].map(pt).join(' ');
-        out.push(`<polyline points="${rim}" fill="none" stroke="#159fe8" stroke-opacity=".22" stroke-width="5" filter="url(#of-aura-glow)"/>`
-          + `<polyline points="${rim}" fill="none" stroke="#62c8ff" stroke-opacity=".75" stroke-width="1.5"/>`);
-      };
-      out.push(`<g class="office-room" aria-label="${esc(z.label)}">`);
-      glass(z.x0, z.y0, z.x1, z.y0);
-      glass(z.x0, z.y0, z.x0, z.y1);
-      // Transparent side panels and doorway openings keep each room distinct.
-      const mid = (z.x0 + z.x1) / 2;
-      for (const [x0, x1] of [[z.x0, mid - .7], [mid + .7, z.x1]]) {
-        glass(x0, z.y1, x1, z.y1);
-      }
-      glass(z.x1, z.y0, z.x1, z.y1);
-      const [lx, ly] = P(z.x0, z.y1 - .55, 64);
-      out.push(`<text transform="matrix(1,-0.5,0,1,${lx.toFixed(1)},${ly.toFixed(1)})" font-size="18" font-weight="700" fill="#415568">${esc(z.label)}</text></g>`);
-    }
-
     // Shared comforts sit inside the rooms, clear of the central walkways.
     out.push('<g class="office-decor" aria-label="มุมกาแฟ ชั้นหนังสือ และมุมพักผ่อน" pointer-events="none">');
-    // A compact bookcase in the content room.
+    // A compact bookcase against the back wall, under the clock.
     const shelf = { t: '#cdbfa8', a: '#e5d9c6', b: '#baaa91' };
-    out.push(box(5.4, 1.25, 1.5, .48, 0, 66, shelf));
+    out.push(box(9.4, .3, 1.5, .48, 0, 66, shelf));
     for (const z of [8, 31, 54]) {
-      out.push(box(5.5, 1.74, 1.3, .05, z, z + 3, { t: '#f4ebdf', a: '#bfae95', b: '#aa987e' }));
+      out.push(box(9.5, .79, 1.3, .05, z, z + 3, { t: '#f4ebdf', a: '#bfae95', b: '#aa987e' }));
       for (const [i, color] of ['#5eaaa3', '#e0ac75', '#859bb5', '#b494ae', '#8fa884'].entries()) {
-        out.push(box(5.56 + i * .22, 1.7, .14, .1, z + 3, z + 17 + i % 2 * 3, { t: color, a: color, b: color }));
+        out.push(box(9.56 + i * .22, .75, .14, .1, z + 3, z + 17 + i % 2 * 3, { t: color, a: color, b: color }));
       }
     }
-    out.push(plant(6.45, 1.48, .42));
+    out.push(plant(10.45, .53, .42));
     // Coffee counter: machine, cups and a small plant.
-    out.push(box(.95, 10.6, 1.8, .7, 0, 39, { t: '#e4ded4', a: '#b4c5bc', b: '#90a99b' }));
-    out.push(box(1.12, 10.72, .58, .4, 39, 67, { t: '#56616a', a: '#37434e', b: '#25323b' }));
-    out.push(box(1.24, 11.13, .26, .04, 45, 55, { t: '#b9d8d5', a: '#a4ceca', b: '#80b7b2' }));
-    out.push(plant(2.5, 10.9, .32));
-    const [coffeeX, coffeeY] = P(1.99, 11.0, 42);
+    out.push(box(.6, 9.6, 1.8, .7, 0, 39, { t: '#e4ded4', a: '#b4c5bc', b: '#90a99b' }));
+    out.push(box(.77, 9.72, .58, .4, 39, 67, { t: '#56616a', a: '#37434e', b: '#25323b' }));
+    out.push(box(.89, 10.13, .26, .04, 45, 55, { t: '#b9d8d5', a: '#a4ceca', b: '#80b7b2' }));
+    out.push(plant(2.15, 9.9, .32));
+    const [coffeeX, coffeeY] = P(1.64, 10.0, 42);
     out.push(`<ellipse cx="${coffeeX}" cy="${coffeeY + 3}" rx="9" ry="4" fill="#f8f6f0"/><rect x="${coffeeX - 5}" y="${coffeeY - 10}" width="10" height="12" rx="3" fill="#fff"/><ellipse cx="${coffeeX}" cy="${coffeeY - 9}" rx="5" ry="2" fill="#8c644c"/>`);
-    // A quiet lounge beside the video team.
-    out.push(poly([P(14, 11.3), P(17, 11.3), P(17, 16.2), P(14, 16.2)], 'fill="#cbdcd9" opacity=".65"'));
+    // A quiet lounge on the right of the desks.
+    out.push(poly([P(8.9, 6.4), P(11.6, 6.4), P(11.6, 11.3), P(8.9, 11.3)], 'fill="#cbdcd9" opacity=".65"'));
     const sofa = { t: '#2678b9', a: '#1d5e96', b: '#164b79' };
-    out.push(box(14.5, 11.7, 2.0, .95, 8, 29, sofa));
-    out.push(box(14.5, 11.7, 2.0, .18, 28, 54, sofa));
-    for (const x of [14.5, 16.3]) out.push(box(x, 11.7, .2, .95, 26, 43, sofa));
-    for (const x of [14.8, 15.6]) out.push(box(x, 11.95, .65, .52, 29, 33, { t: '#4b94cc', a: '#347bb3', b: '#28679a' }));
-    out.push(box(14.9, 14.0, 1.2, .85, 0, 21, { t: '#e8dcc9', a: '#c4b59e', b: '#b3a28a' }));
-    out.push(box(15.1, 14.2, .48, .34, 21, 24, { t: '#f5efe4', a: '#d6cab6', b: '#abbea9' }));
-    for (const [x, y] of [[6.7, 6.8], [16.8, 6.8], [6.7, 16.5], [16.7, 16.0]]) out.push(plant(x, y, .65));
+    out.push(box(9.3, 6.8, 2.0, .95, 8, 29, sofa));
+    out.push(box(9.3, 6.8, 2.0, .18, 28, 54, sofa));
+    for (const x of [9.3, 11.1]) out.push(box(x, 6.8, .2, .95, 26, 43, sofa));
+    for (const x of [9.6, 10.4]) out.push(box(x, 7.05, .65, .52, 29, 33, { t: '#4b94cc', a: '#347bb3', b: '#28679a' }));
+    out.push(box(9.7, 9.1, 1.2, .85, 0, 21, { t: '#e8dcc9', a: '#c4b59e', b: '#b3a28a' }));
+    out.push(box(9.9, 9.3, .48, .34, 21, 24, { t: '#f5efe4', a: '#d6cab6', b: '#abbea9' }));
+    for (const [x, y] of [[11.3, 5.6], [7.9, 11.2], [11.4, 11.4]]) out.push(plant(x, y, .65));
     // Digital wall clock; its text updates independently of office polling.
-    const [clockX, clockY] = P(14.0, 0, wallDisplayTop);
+    const [clockX, clockY] = P(9.0, 0, wallDisplayTop);
     out.push(`<g class="office-clock" transform="matrix(${wallDisplayMatrix},${clockX},${clockY})" role="timer" aria-label="เวลาประเทศไทย">
       <rect x="-3" y="-3" width="154" height="67" rx="10" fill="none" stroke="#159fe8" stroke-width="4" opacity=".3" filter="url(#of-aura-glow)"/>
       <rect width="148" height="61" rx="8" fill="#0b2038" stroke="#159fe8" stroke-width="2"/>
