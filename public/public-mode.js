@@ -8,7 +8,7 @@
     + 'box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:8px;align-items:center';
   const link = (href, text) => '<a href="' + base + href + '" style="color:#8FE3FF;text-decoration:underline">' + text + '</a>';
   fetch(base + '/__whoami', { cache: 'no-store' }).then((r) => r.json()).then((w) => {
-    bar.innerHTML = w.editor ? '✏️ แก้ไขได้ · ' + link('/__logout', 'ออกจากระบบ') : '👀 ดูอย่างเดียว · ' + link('/__login', 'เข้าสู่ระบบเพื่อแก้ไข');
+    bar.innerHTML = w.editor ? '✏️ แก้ไขได้' : '👀 ดูอย่างเดียว · ' + link('/__login', 'เข้าสู่ระบบเพื่อแก้ไข');
     document.body.appendChild(bar);
   }).catch(() => {});
 
