@@ -15,6 +15,7 @@ import { registerCampaigns } from './lib/campaigns.js';
 import { registerTabTracker } from './lib/tabTracker.js';
 import { featureReport } from './lib/featureTracker.js';
 import { judgeContactIntent } from './lib/contactIntent.js';
+import { calendarEvent, nextDay } from './lib/calendarEvent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,30 +119,6 @@ const plannerMailer = process.env.SMTP_USER && process.env.SMTP_PASS
 // one when action is 'upsert'. So a moved date, renamed card or new shoot time
 // replaces the old event, and a deleted/rejected card removes it.
 // kinds: 'shoot' | 'plan' | 'public'.
-const pad2 = (n) => String(n).padStart(2, '0');
-const nextDay = (ymd) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
-function calendarEvent(card, kind) {
-  if (!card || card.status === 'rejected' || (kind === 'public' && card.column !== 'published')) return null;
-  // Once published, the "✅ Public" event replaces the "📅 Plan" one, so the
-  // plan event is deleted instead of sitting next to it as a duplicate.
-  if (kind === 'plan' && card.column === 'published' && card.publishedAt) return null;
-  const ymd = kind === 'shoot' ? card.shootDate : kind === 'plan' ? card.plannedPublishDate
-    : card.publishedAt ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date(card.publishedAt)) : null;
-  const day = ymd ? String(ymd).slice(0, 10) : null;
-  if (!day) return null;
-  const label = { shoot: '🎬 ถ่าย', plan: '📅 Plan', public: '✅ Public' }[kind];
-  const ev = { id: card.id, kind, subject: `${label}: ${card.title}`, body: [card.shootNote && kind === 'shoot' ? card.shootNote : '', card.description || ''].filter(Boolean).join('\n\n'), allDay: true, start: `${day}T00:00:00`, end: `${nextDay(day)}T00:00:00` };
-  // A shoot note like "09:00–11:00 น." or "14:00 น." gives the real time.
-  const m = kind === 'shoot' && String(card.shootNote || '').match(/(\d{1,2})[:.](\d{2})(?:\s*(?:[–\-]|ถึง)\s*(\d{1,2})[:.](\d{2}))?/);
-  if (m) {
-    const sh = Number(m[1]); const sm = Number(m[2]);
-    const eh = m[3] ? Number(m[3]) : Math.min(sh + 1, 23); const em = m[3] ? Number(m[4]) : sm;
-    if (sh < 24 && eh < 24 && sm < 60 && em < 60 && eh * 60 + em > sh * 60 + sm) {
-      Object.assign(ev, { allDay: false, start: `${day}T${pad2(sh)}:${pad2(sm)}:00`, end: `${day}T${pad2(eh)}:${pad2(em)}:00` });
-    }
-  }
-  return ev;
-}
 // Health of the calendar sync, shown as a red bar on every dashboard page
 // (public/sync-alert.js) so a missing .env or failing mail is seen at once.
 const calSync = { lastOkAt: null, lastErrorAt: null, lastError: '' };
@@ -466,7 +443,9 @@ app.put('/api/cards/reorder', async (req, res) => {
   try {
     const now = new Date().toISOString();
     await Promise.all(order.map(async (id, index) => {
-      const card = await prisma.card.findUnique({ where: { id }, select: { column: true } });
+      // Whole card (not just column): syncCalendar needs the old title/dates to
+      // delete the old Outlook events, or every drag adds duplicates.
+      const card = await prisma.card.findUnique({ where: { id }, omit: { imageUrl: true } });
       if (!card) return;
       const data = { order: index, updatedAt: new Date() };
       let enteringPublished = false;
