@@ -122,6 +122,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const nextDay = (ymd) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 function calendarEvent(card, kind) {
   if (!card || card.status === 'rejected' || (kind === 'public' && card.column !== 'published')) return null;
+  // Once published, the "✅ Public" event replaces the "📅 Plan" one, so the
+  // plan event is deleted instead of sitting next to it as a duplicate.
+  if (kind === 'plan' && card.column === 'published' && card.publishedAt) return null;
   const ymd = kind === 'shoot' ? card.shootDate : kind === 'plan' ? card.plannedPublishDate
     : card.publishedAt ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date(card.publishedAt)) : null;
   const day = ymd ? String(ymd).slice(0, 10) : null;
