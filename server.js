@@ -1749,7 +1749,7 @@ app.get('/api/ad-funnel', async (req, res) => {
 
     const days = new Map();
     const day = (d) => {
-      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, acted: 0, contacted: 0 });
+      if (!days.has(d)) days.set(d, { date: d, reach: 0, engagement: 0, linkClicks: 0, visitors: 0, ctaClicked: 0, acted: 0, contacted: 0, measured: 0, read50: 0 });
       return days.get(d);
     };
     for (const r of daily.data || []) {
@@ -1761,6 +1761,7 @@ app.get('/api/ad-funnel', async (req, res) => {
     for (const s of sessions) {
       const d = day(bkkDate(s.t0));
       d.visitors += 1;
+      if (s.scroll > 0) { d.measured += 1; if (s.scroll >= 50) d.read50 += 1; }
       if (s.clicked) d.ctaClicked += 1;
       if (anyContact(s.sessionId)) d.contacted += 1;
       if (s.clicked || anyContact(s.sessionId)) d.acted += 1;
