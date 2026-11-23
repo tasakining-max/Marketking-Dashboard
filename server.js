@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { setupPublicAccess } from './lib/publicAccess.js';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -340,6 +341,7 @@ setInterval(() => postDueScheduledStories().catch((e) => console.error('postDueS
 
 const app = express();
 app.use(express.json({ limit: '15mb' }));
+setupPublicAccess(app, path.join(__dirname, 'public'));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
