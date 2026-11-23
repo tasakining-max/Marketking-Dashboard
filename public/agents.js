@@ -1518,11 +1518,26 @@ const FILE_MARK = /\n?📎 (\/uploads\/agent-images\/[^\s]+\.pdf)/;
 // real tables (the AD daily summary appends its numbers this way).
 function richText(text) {
   const blocks = []; let buf = []; let rows = [];
-  const flushText = () => { if (buf.join('').trim()) blocks.push(h('div', { class: 'team-pre' }, buf.join('\n').trim())); buf = []; };
+  const flushText = () => {
+    const lines = buf.join('\n').trim().split('\n');
+    // A heading line right above a table (📊/📞 …) is shown bold as its title.
+    const title = rows.length === 0 && /^[📊📞📍👥]/u.test(lines[lines.length - 1] || '') ? lines.pop() : null;
+    if (lines.join('').trim()) blocks.push(h('div', { class: 'team-pre' }, lines.join('\n').trim()));
+    if (title) blocks.push(h('div', { class: 'chat-table-title' }, title));
+    buf = [];
+  };
   const flushTable = () => {
     if (!rows.length) return;
     const cells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
     const [head, ...rest] = rows.filter((l) => !/^\|\s*:?-{2,}/.test(l.trim()));
+    // One row with many columns reads better standing up: label | value.
+    if (rest.length === 1 && cells(head).length >= 4) {
+      const vals = cells(rest[0]);
+      blocks.push(h('div', { class: 'chat-table-wrap chat-table-wrap-kv' }, h('table', { class: 'chat-table chat-table-kv' },
+        h('tbody', {}, ...cells(head).map((k, i) => h('tr', { class: /฿\s*\/\s*ติดต่อ/.test(k) ? 'key' : '' }, h('th', {}, k), h('td', {}, vals[i] ?? '')))))));
+      rows = [];
+      return;
+    }
     blocks.push(h('div', { class: 'chat-table-wrap' }, h('table', { class: 'chat-table' },
       h('thead', {}, h('tr', {}, ...cells(head).map((c) => h('th', {}, c)))),
       h('tbody', {}, ...rest.map((r) => h('tr', {}, ...cells(r).map((c) => h('td', {}, c))))))));
