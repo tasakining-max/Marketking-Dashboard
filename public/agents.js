@@ -210,7 +210,7 @@ function renderWorkSaturdays() {
 function renderRoutines() {
   const box = document.getElementById('teamRoutines');
   if (!box) return;
-  const days = (d, sat) => (d.length > 2 && d.every((x, i) => i === 0 || x === d[i - 1] + 1) ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(', ')) + (sat ? ' + เสาร์ทำงาน' : '');
+  const days = (d, sat) => d.length === 7 ? 'ทุกวัน' : (d.length > 2 && d.every((x, i) => i === 0 || x === d[i - 1] + 1) ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(', ')) + (sat ? ' + เสาร์ทำงาน' : '');
   const who = (id) => state.agents.find((a) => a.id === id) || { name: id, avatar: '' };
   box.replaceChildren(...(state.routines || []).map((r) => {
     const a = who(r.agent);
