@@ -1514,6 +1514,27 @@ document.getElementById('teamAdjustBtn').addEventListener('click', async (e) => 
 // agent-to-agent handoffs) stay in the 📟 Log tab.
 const PREVIEW_MARK = /\n?🖼 (\d+) (\/uploads\/agent-images\/[^\s?]+\.png(?:\?v=\d+)?)/g;
 const FILE_MARK = /\n?📎 (\/uploads\/agent-images\/[^\s]+\.pdf)/;
+// Text with markdown-style table lines ("| a | b |") → plain text blocks plus
+// real tables (the AD daily summary appends its numbers this way).
+function richText(text) {
+  const blocks = []; let buf = []; let rows = [];
+  const flushText = () => { if (buf.join('').trim()) blocks.push(h('div', { class: 'team-pre' }, buf.join('\n').trim())); buf = []; };
+  const flushTable = () => {
+    if (!rows.length) return;
+    const cells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const [head, ...rest] = rows.filter((l) => !/^\|\s*:?-{2,}/.test(l.trim()));
+    blocks.push(h('div', { class: 'chat-table-wrap' }, h('table', { class: 'chat-table' },
+      h('thead', {}, h('tr', {}, ...cells(head).map((c) => h('th', {}, c)))),
+      h('tbody', {}, ...rest.map((r) => h('tr', {}, ...cells(r).map((c) => h('td', {}, c))))))));
+    rows = [];
+  };
+  for (const line of text.split('\n')) {
+    if (/^\s*\|.*\|\s*$/.test(line)) { flushText(); rows.push(line); } else { flushTable(); buf.push(line); }
+  }
+  flushTable(); flushText();
+  return h('div', {}, ...blocks);
+}
+
 function chatBubble(e) {
   const time = timeText(e.createdAt);
   const fileSrc = (FILE_MARK.exec(e.text || '') || [])[1];
@@ -1526,9 +1547,11 @@ function chatBubble(e) {
   const fileRow = fileSrc ? h('div', { class: 'chat-actions-row' },
     h('button', { type: 'button', class: 'team-btn team-btn-small', onclick: (ev) => openInApp(fileSrc, ev.currentTarget, 'pdfcraft') }, '📄 เปิดใน PDFCraft'),
     h('a', { class: 'team-link', href: fileSrc, target: '_blank', rel: 'noopener' }, `⬇️ ${decodeURIComponent(fileSrc.split('/').pop())}`)) : null;
-  const body = text.length > 520
-    ? h('details', {}, h('summary', {}, `${text.slice(0, 520)}…`), h('div', { class: 'team-pre' }, text))
-    : h('div', { class: 'team-pre' }, text);
+  const body = /^\|.*\|\s*$/m.test(text)
+    ? richText(text)
+    : text.length > 520
+      ? h('details', {}, h('summary', {}, `${text.slice(0, 520)}…`), h('div', { class: 'team-pre' }, text))
+      : h('div', { class: 'team-pre' }, text);
   const picture = e.image ? pictureLink(e.image, docFor(e.image), { class: 'team-chat-pic', onload: followLogBottom }) : null;
   if (e.agent === 'you') {
     const to = e.toAgent ? speaker(e.toAgent) : null;

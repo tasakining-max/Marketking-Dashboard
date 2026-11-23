@@ -1765,6 +1765,26 @@ app.get('/api/ad-funnel', async (req, res) => {
       if (anyContact(s.sessionId)) d.contacted += 1;
       if (s.clicked || anyContact(s.sessionId)) d.acted += 1;
     }
+    // Same site numbers split per ad (by utm_content → ad name), so the AD
+    // agent can rank ads by real contacts, not just clicks.
+    const byAdMap = new Map();
+    const adRow = (name) => {
+      if (!byAdMap.has(name)) byAdMap.set(name, { ad: name, visitors: 0, measured: 0, read50: 0, acted: 0, contacted: 0, tapsMeant: 0, tapsMistake: 0, tapsUnsure: 0 });
+      return byAdMap.get(name);
+    };
+    for (const s of sessions) {
+      const r = adRow(adNameByUtm.get(s.ad) || s.ad || '(ไม่ทราบแอด)');
+      r.visitors += 1;
+      if (s.scroll > 0) { r.measured += 1; if (s.scroll >= 50) r.read50 += 1; }
+      if (s.clicked || anyContact(s.sessionId)) r.acted += 1;
+      if (anyContact(s.sessionId)) r.contacted += 1;
+    }
+    for (const e of contactEvents) {
+      const r = adRow(e.ad || '(ไม่ทราบแอด)');
+      const v = e.intent?.verdict;
+      if (v === 'intent' || v === 'broken') r.tapsMeant += 1; else if (v === 'mistake') r.tapsMistake += 1; else r.tapsUnsure += 1;
+    }
+    site.byAd = [...byAdMap.values()].sort((a, b) => b.visitors - a.visitors);
     const data = { campaign, since, until, utmCampaigns, meta, site, daily: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
     adFunnelCache.set(cacheKey, { data, expires: Date.now() + AD_FUNNEL_TTL_MS });
     res.json(data);
@@ -2162,6 +2182,35 @@ registerAgentTeam(app, { prisma, invalidateCache, tasakiWebPool });
 registerCampaigns(app, { prisma, tasakiWebPool });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+// Where the money went by age group and by placement (Feed, Stories,
+// Audience Network…) for the whole ad account, for the AD agent's review.
+app.get('/api/ad-breakdowns', async (req, res) => {
+  const since = String(req.query.since || ''); const until = String(req.query.until || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return res.status(400).json({ error: 'since and until (YYYY-MM-DD) are required' });
+  if (!process.env.FB_AD_ACCOUNT_ID || !process.env.FB_USER_ACCESS_TOKEN) return res.status(503).json({ error: 'Missing FB_AD_ACCOUNT_ID or FB_USER_ACCESS_TOKEN' });
+  try {
+    const account = process.env.FB_AD_ACCOUNT_ID;
+    const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
+    const fields = 'spend,impressions,inline_link_clicks,actions';
+    const [age, place] = await Promise.all([
+      graphGet(`${account}/insights?level=account&time_range=${timeRange}&breakdowns=age&fields=${fields}&limit=100`),
+      graphGet(`${account}/insights?level=account&time_range=${timeRange}&breakdowns=publisher_platform,platform_position&fields=${fields}&limit=100`),
+    ]);
+    const shape = (rows, keyOf) => {
+      const list = (rows.data || []).map((r) => ({ key: keyOf(r), spend: Number(r.spend || 0), impressions: Number(r.impressions || 0), linkClicks: Number(r.inline_link_clicks || 0), leads: actionValue(r, 'lead') }));
+      const total = list.reduce((a, r) => a + r.spend, 0) || 1;
+      return list.filter((r) => r.spend > 0).map((r) => ({
+        ...r,
+        spend: +r.spend.toFixed(2),
+        spendSharePct: +((r.spend / total) * 100).toFixed(1),
+        ctrPct: r.impressions ? +((r.linkClicks / r.impressions) * 100).toFixed(2) : 0,
+        costPerClick: r.linkClicks ? +(r.spend / r.linkClicks).toFixed(2) : null,
+      })).sort((a, b) => b.spend - a.spend);
+    };
+    res.json({ since, until, age: shape(age, (r) => r.age), placement: shape(place, (r) => `${r.publisher_platform} ${r.platform_position}`) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Calendar sync health for the red warning bar. A failure only counts while no
 // later send has succeeded.
 app.get('/api/health/sync', (req, res) => {
