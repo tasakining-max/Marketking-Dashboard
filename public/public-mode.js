@@ -8,7 +8,7 @@
     + 'box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:8px;align-items:center';
   const link = (href, text) => '<a href="' + base + href + '" style="color:#8FE3FF;text-decoration:underline">' + text + '</a>';
   fetch(base + '/__whoami', { cache: 'no-store' }).then((r) => r.json()).then((w) => {
-    bar.innerHTML = w.editor ? '✏️ แก้ไขได้' : '👀 ดูอย่างเดียว · ' + link('/__login', 'เข้าสู่ระบบเพื่อแก้ไข');
+    bar.innerHTML = w.editor ? '✏️ แก้ไขได้' : '👀 ดูอย่างเดียว (บัญชีนี้แก้ไขไม่ได้)';
     document.body.appendChild(bar);
   }).catch(() => {});
 
@@ -19,7 +19,7 @@
     const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
     if (res.status === 401 && method !== 'GET' && Date.now() - warned > 5000) {
       warned = Date.now();
-      if (window.confirm('โหมดดูอย่างเดียว: ต้องเข้าสู่ระบบก่อนแก้ไข\nไปหน้าเข้าสู่ระบบเลยมั้ย?')) location.href = base + '/__login';
+      window.alert('บัญชีนี้ดูได้อย่างเดียว แก้ไขไม่ได้');
     }
     return res;
   };
