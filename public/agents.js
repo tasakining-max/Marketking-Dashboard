@@ -1516,13 +1516,26 @@ const PREVIEW_MARK = /\n?🖼 (\d+) (\/uploads\/agent-images\/[^\s?]+\.png(?:\?v
 const FILE_MARK = /\n?📎 (\/uploads\/agent-images\/[^\s]+\.pdf)/;
 // Text with markdown-style table lines ("| a | b |") → plain text blocks plus
 // real tables (the AD daily summary appends its numbers this way).
+// "[up-good]" → green ▲, "[down-bad]" → red ▼, "-gray" → grey (AD tables).
+const TREND_MARK = /\[(up|down|flat)-(good|bad|gray)\]/g;
+function trendNodes(str) {
+  const out = []; let last = 0;
+  for (const m of str.matchAll(TREND_MARK)) {
+    if (m.index > last) out.push(str.slice(last, m.index));
+    out.push(h('span', { class: `trend-arrow trend-${m[2]}`, 'aria-label': m[2] === 'good' ? 'ดีขึ้น' : m[2] === 'bad' ? 'แย่ลง' : 'คงที่' }, m[1] === 'up' ? '▲' : m[1] === 'down' ? '▼' : '▬'));
+    last = m.index + m[0].length;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+}
+
 function richText(text) {
   const blocks = []; let buf = []; let rows = [];
   const flushText = () => {
     const lines = buf.join('\n').trim().split('\n');
     // A heading line right above a table (📊/📞 …) is shown bold as its title.
     const title = rows.length === 0 && /^[📊📞📍👥]/u.test(lines[lines.length - 1] || '') ? lines.pop() : null;
-    if (lines.join('').trim()) blocks.push(h('div', { class: 'team-pre' }, lines.join('\n').trim()));
+    if (lines.join('').trim()) blocks.push(h('div', { class: 'team-pre' }, ...trendNodes(lines.join('\n').trim())));
     if (title) blocks.push(h('div', { class: 'chat-table-title' }, title));
     buf = [];
   };
@@ -1540,7 +1553,7 @@ function richText(text) {
     }
     blocks.push(h('div', { class: 'chat-table-wrap' }, h('table', { class: 'chat-table' },
       h('thead', {}, h('tr', {}, ...cells(head).map((c) => h('th', {}, c)))),
-      h('tbody', {}, ...rest.map((r) => h('tr', {}, ...cells(r).map((c) => h('td', {}, c))))))));
+      h('tbody', {}, ...rest.map((r) => h('tr', {}, ...cells(r).map((c) => h('td', {}, ...trendNodes(c)))))))));
     rows = [];
   };
   for (const line of text.split('\n')) {
@@ -1607,12 +1620,28 @@ function renderChatActions() {
   for (const slot of slots) {
     const task = (state.tasks || []).find((x) => x.id === slot.dataset.actions);
     if (!task || newest.get(task.id) !== slot.dataset.event) { slot.replaceChildren(); continue; }
-    const sig = `${task.status}:${task.rounds}:${task.result?.stage || ''}:${state.runner}`;
+    const sig = `${task.status}:${task.rounds}:${task.result?.stage || ''}:${state.runner}:${task.result?.reverted ? 'rv' : ''}`;
     if (slot.dataset.sig === sig) continue;
     slot.dataset.sig = sig;
     if (task.status !== 'review') {
-      const label = task.result?.superseded ? '🔁 ปิดแล้ว มีงานตรวจใหม่แทน' : { done: '✓ อนุมัติแล้ว', rejected: '✕ ไม่อนุมัติ', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
-      slot.replaceChildren(...(label ? [h('span', { class: 'chat-decided' }, label)] : []));
+      const r = task.result || {};
+      const catalogApplied = task.agent === 'catalog' && task.status === 'done' && ((r.changes || []).length || r.uploaded);
+      const label = r.superseded ? '🔁 ปิดแล้ว มีงานตรวจใหม่แทน'
+        : r.reverted ? `↩️ ย้อนกลับแล้ว (${r.reverted.values} ค่า${r.reverted.pdf ? ' + ไฟล์ Catalog' : ''})`
+          : catalogApplied ? '✓ อัปเดตเว็บอัตโนมัติแล้ว'
+            : { done: '✓ อนุมัติแล้ว', rejected: '✕ ไม่อนุมัติ', queued: '⏳ รอคิว (กำลังแก้/ทำต่อ)', running: '⏳ กำลังทำ…', waiting: '⏳ รอไฟล์สินค้า' }[task.status];
+      // แคท updates the website on its own; this undoes one job if it was wrong.
+      const undo = catalogApplied && !r.reverted && state.runner ? h('button', {
+        type: 'button', class: 'team-btn team-btn-small', style: 'margin-left:8px',
+        onclick: async (ev) => {
+          const btn = ev.currentTarget;
+          if (!window.confirm('ย้อนกลับงานนี้? ค่าสเปกจะกลับเป็นค่าเดิม และ Catalog กลับเป็นไฟล์เดิม')) return;
+          btn.disabled = true; btn.textContent = 'กำลังย้อนกลับ…';
+          try { await api(`/api/agents/tasks/${task.id}/revert-catalog`, {}); await refresh(); }
+          catch (e) { btn.disabled = false; btn.textContent = '↩️ ย้อนกลับ'; alert(e.message || 'ย้อนกลับไม่สำเร็จ'); }
+        },
+      }, '↩️ ย้อนกลับ') : null;
+      slot.replaceChildren(...(label ? [h('span', { class: 'chat-decided' }, label)] : []), ...(undo ? [undo] : []));
       continue;
     }
     if (!state.runner || task.result?.stage === 'teaching') { slot.replaceChildren(); continue; }
