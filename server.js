@@ -138,6 +138,11 @@ function calendarEvent(card, kind) {
   }
   return ev;
 }
+// Health of the calendar sync, shown as a red bar on every dashboard page
+// (public/sync-alert.js) so a missing .env or failing mail is seen at once.
+const calSync = { lastOkAt: null, lastErrorAt: null, lastError: '' };
+const calSyncConfigured = () => Boolean(plannerMailer && process.env.PLANNER_EMAIL_TO);
+if (!calSyncConfigured()) console.warn('⚠ Calendar sync is OFF: SMTP_USER/SMTP_PASS or PLANNER_EMAIL_TO is empty in .env');
 const sameEvent = (a, b) => a && b && a.subject === b.subject && a.start === b.start && a.end === b.end && a.allDay === b.allDay;
 // before = the card as it was (null when new), after = as it is now (null when deleted).
 function syncCalendar(before, after) {
@@ -163,7 +168,11 @@ function syncCalendar(before, after) {
       to: process.env.PLANNER_EMAIL_TO,
       subject: 'PlannerSync',
       text: Buffer.from(JSON.stringify(msg)).toString('base64'),
-    }).catch((e) => console.error('Calendar sync email failed:', e.message));
+    }).then(() => { calSync.lastOkAt = new Date().toISOString(); })
+      .catch((e) => {
+        calSync.lastErrorAt = new Date().toISOString(); calSync.lastError = e.message;
+        console.error('Calendar sync email failed:', e.message);
+      });
   }
 }
 
@@ -2151,6 +2160,21 @@ registerAgentTeam(app, { prisma, invalidateCache, tasakiWebPool });
 registerCampaigns(app, { prisma, tasakiWebPool });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+// Calendar sync health for the red warning bar. A failure only counts while no
+// later send has succeeded.
+app.get('/api/health/sync', (req, res) => {
+  const failing = Boolean(calSync.lastErrorAt && (!calSync.lastOkAt || calSync.lastErrorAt > calSync.lastOkAt));
+  res.json({
+    calendar: {
+      configured: calSyncConfigured(),
+      failing,
+      lastError: failing ? calSync.lastError : '',
+      lastErrorAt: failing ? calSync.lastErrorAt : null,
+      lastOkAt: calSync.lastOkAt,
+    },
+  });
+});
+
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Dashboard running at http://localhost:${PORT}`));
 
