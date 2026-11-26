@@ -234,6 +234,13 @@ const MY_LEAVE_DAYS = new Set([
   '2026-11-17',
 ]);
 
+// Company events she must attend (training, drills) — not content, so no
+// card; shown as a label like ลางาน. Hover shows the details.
+const COMPANY_EVENTS = {
+  '2026-11-30': [{ label: '🧯 08:30 อบรมดับเพลิง', title: 'อบรมหลักสูตรดับเพลิงขั้นต้น 08.30–16.00 น.\nเช้า 08.30–12.00 ห้อง Auditorium (ห้องโรงหนัง)\nบ่าย 13.00–16.00 ลานจอดรถโรงโฟม' }],
+  '2026-12-02': [{ label: '🚨 10:30 ซ้อมอพยพหนีไฟ', title: 'ฝึกซ้อมอพยพหนีไฟ บริษัท บิทไว้ส์ (ประเทศไทย) จำกัด 10.30–11.30 น.\nพื้นที่โรงเหล็ก โรงแอร์ ตึก HQ\nจุดรวมพล: บริเวณหน้าน้ำตก' }],
+};
+
 function renderCalendar() {
   const today = new Date();
   const year = today.getFullYear();
@@ -340,6 +347,14 @@ function renderCalendar() {
       label.title = 'ลางาน';
       cell.appendChild(label);
     }
+
+    (COMPANY_EVENTS[dateKey] || []).forEach((ev) => {
+      const label = document.createElement('span');
+      label.className = 'cal-event-label';
+      label.textContent = ev.label;
+      label.title = ev.title;
+      cell.appendChild(label);
+    });
 
     if (holidayName) {
       const label = document.createElement('span');

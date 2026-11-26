@@ -3199,6 +3199,21 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
   line-height: 1.4;
 }
 
+.cal-event-label {
+  display: block;
+  background: color-mix(in srgb, #ef4444 30%, transparent);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 .cal-day-popover {
   margin-top: 10px;
   border: 1px solid #22c55e;
@@ -3695,6 +3710,7 @@ dialog::backdrop { background: rgba(9,30,66,0.5); }
 }
 .ads-tree-toggle:hover { color: var(--accent); }
 .ads-tree-toggle-spacer { display: inline-block; width: 18px; flex-shrink: 0; }
+.ads-tree-table td.ads-receipt-cell { white-space: nowrap; text-align: center; cursor: help; }
 .ads-tree-name { overflow: hidden; text-overflow: ellipsis; }
 .ads-tree-thumb {
   width: 24px;
