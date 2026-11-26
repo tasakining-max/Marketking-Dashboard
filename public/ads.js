@@ -152,12 +152,40 @@ function buildDateTree(entries) {
   }).sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
+// Which spend days are covered by a receipt already mailed to accounting.
+let adReceipts = null;
+let adReceiptsLoading = null;
+function loadAdReceipts() {
+  adReceiptsLoading ||= fetch('/api/ad-receipts').then((r) => r.json()).then((j) => { adReceipts = j.log || []; }).catch(() => { adReceipts = []; });
+  return adReceiptsLoading;
+}
+function bangkokDay(offsetDays = 0) {
+  return new Date(Date.now() + 7 * 3600e3 - offsetDays * 86400e3).toISOString().slice(0, 10);
+}
+function receiptStatus(day) {
+  const log = adReceipts || [];
+  const fmtSent = (iso) => new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const covering = log.filter((r) => r.from && r.from.slice(0, 10) <= day && r.to.slice(0, 10) >= day);
+  const tip = (list) => list.map((r) => `${r.invoice} ${r.amount} (ค่าโฆษณา ${r.from} – ${r.to}) ส่งถึง ${r.recipient} ${fmtSent(r.sentAt)}`).join('\n');
+  if (covering.some((r) => r.to.slice(0, 10) > day || r.to.slice(11) >= '23:59')) {
+    const last = covering.reduce((a, b) => (a.sentAt > b.sentAt ? a : b));
+    return { text: `✅ ส่งแล้ว ${fmtSent(last.sentAt)}`, title: tip(covering) };
+  }
+  if (covering.length) return { text: '🟡 ส่งไปบางส่วน', title: `${tip(covering)}\nส่วนที่เหลือของวันนี้จะอยู่ในใบเสร็จรอบถัดไป` };
+  const start = log.filter((r) => r.from).map((r) => r.from.slice(0, 10)).sort()[0];
+  // Days before the automatic sending started were sent by hand.
+  if (!start || day < start) return { text: '✅ ส่งแล้ว', title: 'ส่งเบิกเองก่อนเริ่มระบบส่งใบเสร็จอัตโนมัติ (เริ่ม 25 พ.ย. 2569)' };
+  if (day >= bangkokDay(1)) return { text: '⏳ รอตัดบัตร', title: 'Meta ตัดบัตรตอนเช้าของวันถัดไป แล้วระบบส่งใบเสร็จให้ฝ่ายทำเบิกเวลา 09:00' };
+  return { text: '⚠️ ยังไม่ส่ง', title: 'ยังไม่มีใบเสร็จที่ครอบคลุมวันนี้ถูกส่ง — ดูแจ้งเตือนในหน้าทีม AI' };
+}
+
 function renderCampaignTree(entries) {
+  if (adReceipts === null) { loadAdReceipts().then(() => renderCampaignTree(entries)); }
   const tbody = document.getElementById('adCampaignTreeBody');
   tbody.innerHTML = '';
   const tree = buildDateTree(entries);
 
-  function makeRow({ level, label, thumb, metrics, toggle, childRows, collapsed = false }) {
+  function makeRow({ level, label, thumb, metrics, toggle, childRows, collapsed = false, receipt = null }) {
     const tr = document.createElement('tr');
     tr.className = `ads-tree-row ads-tree-level-${level}`;
 
@@ -205,6 +233,16 @@ function renderCampaignTree(entries) {
       tr.appendChild(td);
     });
 
+    const receiptTd = document.createElement('td');
+    receiptTd.className = 'ads-receipt-cell';
+    // Icon only; the full status and receipt details show on hover.
+    if (receipt) {
+      const [icon, ...rest] = receipt.text.split(' ');
+      receiptTd.textContent = icon;
+      receiptTd.title = [rest.join(' '), receipt.title].filter(Boolean).join('\n');
+    }
+    tr.appendChild(receiptTd);
+
     return tr;
   }
 
@@ -215,7 +253,7 @@ function renderCampaignTree(entries) {
     const dateCollapsed = dateIndex > 0;
     tbody.appendChild(makeRow({
       level: 0, label: `📅 ${fmtDate(dateBucket.date)}`, metrics: dateBucket, toggle: true, childRows: dateChildRows,
-      collapsed: dateCollapsed,
+      collapsed: dateCollapsed, receipt: adReceipts ? receiptStatus(dateKey(dateBucket.date)) : { text: '…', title: '' },
     }));
 
     dateBucket.campaigns.forEach((campaign) => {

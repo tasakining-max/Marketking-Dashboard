@@ -12,6 +12,7 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import { registerAgentTeam } from './lib/agentTeam.js';
 import { registerCampaigns } from './lib/campaigns.js';
+import { receiptLog } from './lib/metaReceipts.js';
 import { registerTabTracker } from './lib/tabTracker.js';
 import { featureReport } from './lib/featureTracker.js';
 import { judgeContactIntent } from './lib/contactIntent.js';
@@ -1122,6 +1123,12 @@ app.delete('/api/website-todos/:id', async (req, res) => {
 // Will be populated by scripts/sync-ad-insights.mjs pulling the Facebook
 // Marketing Insights API on a daily launchd schedule, once Meta Business
 // Manager access to the Tasaki ad account is granted.
+// Meta ad receipts the dashboard mailed to accounting (lib/metaReceipts.js),
+// with the spend period each one pays for — shown per day on /ads.
+app.get('/api/ad-receipts', async (req, res) => {
+  try { res.json({ log: await receiptLog(prisma) }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ad-insights', async (req, res) => {
   try {
     const data = await cached('ad-insights', async () => {
